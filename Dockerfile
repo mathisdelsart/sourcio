@@ -29,6 +29,17 @@ COPY agent/ ./agent/
 COPY ingestion/ ./ingestion/
 COPY eval/ ./eval/
 
+# Run as an unprivileged user. The app reads no files it must own at runtime,
+# so a plain non-root user (owning /app) is enough.
+RUN useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
+
+# Probe the API liveness endpoint using the interpreter already in the image,
+# so no extra packages (curl/wget) are needed. A non-zero exit marks unhealthy.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=4).status == 200 else 1)"]
 
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
