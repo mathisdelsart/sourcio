@@ -49,14 +49,23 @@ def _cited_indices(text: str, count: int) -> list[int]:
     return seen
 
 
-def answer(question: str, *, k: int = 5) -> dict:
+def answer(
+    question: str,
+    *,
+    k: int = 5,
+    course: str | None = None,
+    chapter: str | None = None,
+) -> dict:
     """Answer a question grounded in the course, or refuse if uncovered.
 
     Returns a dict with the remapped ``answer``, the ``refused`` flag, the
     ``sources`` actually cited in the answer, and the unmapped ``raw`` model
     output (what the LLM literally produced, with [n] markers).
+
+    ``course`` and ``chapter`` optionally restrict retrieval to a single course
+    (and chapter); when both are None the whole collection is searched.
     """
-    results = retrieve(question, k=k)
+    results = retrieve(question, k=k, course=course, chapter=chapter)
     if not results:
         return {"answer": REFUSAL, "refused": True, "sources": [], "raw": REFUSAL}
 
