@@ -30,6 +30,9 @@ api = [
 obs = [
     "langfuse>=2.0",
 ]
+ui = [
+    "streamlit>=1.39",
+]
 
 [dependency-groups]
 dev = [
