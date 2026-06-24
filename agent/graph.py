@@ -6,6 +6,7 @@ router, the routing table, and the nodes stay importable (and unit-testable)
 without the optional ``agent`` extra installed.
 """
 
+import re
 from typing import get_args
 
 from agent.nodes.explain import explain
@@ -20,12 +21,21 @@ INTENTS: tuple[str, ...] = get_args(Intent)
 DEFAULT_INTENT: Intent = "explain"
 
 # Cheap, deterministic fallback used when the model output is unusable. Order
-# matters: more specific intents are checked before the catch-all explain.
+# matters: a "don't understand / again / rephrase / simpler" signal is the
+# strongest re-explain cue, so reexplain is checked before generate and grade
+# (otherwise "I don't understand this problem again" would match "problem" and
+# mis-route to generate). The catch-all explain stays last.
 _KEYWORDS: dict[Intent, tuple[str, ...]] = {
+    "reexplain": ("again", "rephrase", "simpler", "don't understand", "do not understand"),
     "generate": ("exercise", "exercice", "practice", "problem", "quiz"),
     "grade": ("grade", "correct", "my answer", "is this right", "evaluate", "mark"),
-    "reexplain": ("again", "rephrase", "simpler", "don't understand", "do not understand"),
 }
+
+
+def _contains_cue(text: str, cue: str) -> bool:
+    """Match a cue on word boundaries to avoid spurious substring hits."""
+    return re.search(rf"\b{re.escape(cue)}\b", text) is not None
+
 
 _ROUTER_SYSTEM = (
     "You classify a student's message into exactly one intent.\n"
@@ -41,7 +51,7 @@ def _keyword_intent(message: str) -> Intent:
     """Deterministic fallback classification based on keywords."""
     text = message.lower()
     for intent, words in _KEYWORDS.items():
-        if any(word in text for word in words):
+        if any(_contains_cue(text, word) for word in words):
             return intent
     return DEFAULT_INTENT
 
