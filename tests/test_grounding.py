@@ -1,12 +1,15 @@
 """Tests for the grounding guarantees that do not need a model or Qdrant."""
 
+from types import SimpleNamespace
+
+import answer as answer_mod
 from answer import _cited_indices, _remap_citations
 from ingestion.chunk import chunk_pages
 from ingestion.schema import Chunk, Page, Retrieved
 
 
-def _retrieved(page: int, score: float = 0.9) -> Retrieved:
-    chunk = Chunk(id=f"id{page}", course="Wavelet Transform", page=page, text="...")
+def _retrieved(page: int, score: float = 0.9, text: str = "...") -> Retrieved:
+    chunk = Chunk(id=f"id{page}", course="Wavelet Transform", page=page, text=text)
     return Retrieved(chunk=chunk, score=score)
 
 
@@ -33,6 +36,37 @@ def test_cited_indices_returns_only_used_sources_in_order():
     assert _cited_indices("Defined by formula [1].", count=2) == [1]
     # De-duplicates and ignores out-of-range indices.
     assert _cited_indices("[2] then [2] and bogus [9]", count=2) == [2]
+
+
+def test_answer_includes_retrieved_chunk_texts(monkeypatch):
+    # With retrieve and the LLM mocked (no Qdrant, no API), answer() must expose
+    # the raw retrieved passages so the faithfulness judge can verify support.
+    results = [
+        _retrieved(11, text="A wavelet is a localized oscillation."),
+        _retrieved(12, text="Multiresolution analysis decomposes a signal."),
+    ]
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
+    reply = SimpleNamespace(content="A wavelet is X [1].")
+    fake_llm = SimpleNamespace(invoke=lambda messages: reply)
+    monkeypatch.setattr(answer_mod, "get_llm", lambda role: fake_llm)
+
+    out = answer_mod.answer("what is a wavelet?")
+
+    assert out["refused"] is False
+    assert out["retrieved"] == [
+        "A wavelet is a localized oscillation.",
+        "Multiresolution analysis decomposes a signal.",
+    ]
+    # ``sources`` stays the citation labels, distinct from the chunk texts.
+    assert out["sources"] == ["(Wavelet Transform, p.11)"]
+
+
+def test_answer_retrieved_is_empty_on_refusal(monkeypatch):
+    # No retrieval hit -> refusal, and ``retrieved`` is an empty list (shape).
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: [])
+    out = answer_mod.answer("off-topic question")
+    assert out["refused"] is True
+    assert out["retrieved"] == []
 
 
 def test_chunk_pages_one_slide_one_chunk_drops_empty():

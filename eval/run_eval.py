@@ -326,13 +326,19 @@ def evaluate(
 def _source_texts(out: dict) -> list[str]:
     """Best-effort extraction of the source texts behind an answer.
 
-    Prefers the retrieved chunk texts when present; falls back to the citation
-    labels exposed in ``sources``.
+    Prefers the retrieved chunk texts when present so the judge sees the actual
+    passages: ``answer.answer`` exposes them as plain strings, which are used
+    as-is; ``Retrieved``-like objects are also supported by reading ``.chunk.text``.
+    Falls back to the citation labels in ``sources`` only when no retrieved text
+    is available (those labels carry no content the judge can verify against).
     """
     retrieved = out.get("retrieved")
     if retrieved:
         texts: list[str] = []
         for r in retrieved:
+            if isinstance(r, str):
+                texts.append(r)
+                continue
             chunk = getattr(r, "chunk", None)
             texts.append(getattr(chunk, "text", "") if chunk is not None else str(r))
         return texts
