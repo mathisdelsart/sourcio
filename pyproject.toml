@@ -33,6 +33,9 @@ obs = [
 ui = [
     "streamlit>=1.39",
 ]
+migrations = [
+    "alembic>=1.13",
+]
 
 [dependency-groups]
 dev = [
