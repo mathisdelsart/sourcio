@@ -15,11 +15,15 @@ from eval.run_eval import (
     evaluate,
     format_summary,
     load_dataset,
+    main,
+    metrics_to_dict,
     parse_verdict,
     passed,
     retrieval_hit,
     run_eval,
+    write_results,
 )
+from ui.metrics import format_metric_cards, load_metrics_file
 
 # --- dataset loader -------------------------------------------------------
 
@@ -398,3 +402,103 @@ class _DummyPath:
 
     def read_text(self, encoding: str = "utf-8") -> str:
         return self._text
+
+
+# --- results JSON reporting (no API) --------------------------------------
+
+
+def test_metrics_to_dict_exposes_all_fields():
+    metrics = Metrics(
+        refusal_accuracy=1.0,
+        faithfulness_rate=0.9,
+        relevance_rate=0.8,
+        retrieval_hit_rate=0.5,
+        judged=3,
+        total=4,
+        retrieval_checked=2,
+        failures=["unfaithful answer: 'q'"],
+    )
+    data = metrics_to_dict(metrics)
+    assert data == {
+        "refusal_accuracy": 1.0,
+        "faithfulness_rate": 0.9,
+        "relevance_rate": 0.8,
+        "retrieval_hit_rate": 0.5,
+        "judged": 3,
+        "total": 4,
+        "retrieval_checked": 2,
+        "failures": ["unfaithful answer: 'q'"],
+    }
+
+
+def test_metrics_to_dict_round_trips_through_load_metrics_file(tmp_path):
+    metrics = Metrics(
+        refusal_accuracy=1.0,
+        faithfulness_rate=0.75,
+        relevance_rate=1.0,
+        retrieval_hit_rate=0.5,
+        judged=2,
+        total=3,
+        retrieval_checked=2,
+    )
+    path = tmp_path / "results.json"
+    write_results(metrics, path)
+
+    loaded = load_metrics_file(path)
+    assert loaded == metrics_to_dict(metrics)
+    assert loaded["faithfulness_rate"] == 0.75
+    assert loaded["retrieval_hit_rate"] == 0.5
+    assert loaded["total"] == 3
+
+    # The loaded dict feeds the dashboard cards unchanged.
+    by_key = {c.key: c for c in format_metric_cards(loaded)}
+    assert by_key["faithfulness_rate"].display == "75%"
+    assert by_key["retrieval_hit_rate"].display == "50%"
+
+
+def test_write_results_creates_parent_directories(tmp_path):
+    path = tmp_path / "nested" / "dir" / "results.json"
+    write_results(Metrics(1.0, 1.0, 1.0), path)
+    assert path.exists()
+    assert load_metrics_file(path)["refusal_accuracy"] == 1.0
+
+
+def test_main_with_out_writes_results_file(tmp_path):
+    """``main --out`` writes the metrics JSON without any API call.
+
+    The whole evaluation is driven by monkeypatching ``run_eval`` so no answer
+    function, judge or retrieval is wired; only the JSON-writing path is tested.
+    """
+    import eval.run_eval as run_eval_module
+
+    metrics = Metrics(
+        refusal_accuracy=1.0,
+        faithfulness_rate=1.0,
+        relevance_rate=1.0,
+        retrieval_hit_rate=1.0,
+        judged=1,
+        total=2,
+    )
+    out_path = tmp_path / "results.json"
+    original = run_eval_module.run_eval
+    run_eval_module.run_eval = lambda **_kwargs: (metrics, True)
+    try:
+        code = main(["--out", str(out_path)])
+    finally:
+        run_eval_module.run_eval = original
+
+    assert code == 0
+    assert load_metrics_file(out_path) == metrics_to_dict(metrics)
+
+
+def test_main_without_out_does_not_write(tmp_path, monkeypatch):
+    """The default run (no --out) writes nothing, matching the prior behaviour."""
+    import eval.run_eval as run_eval_module
+
+    monkeypatch.setattr(
+        run_eval_module, "run_eval", lambda **_kwargs: (Metrics(1.0, 1.0, 1.0), True)
+    )
+    monkeypatch.chdir(tmp_path)
+    code = main([])
+    assert code == 0
+    assert not (tmp_path / "eval" / "results.json").exists()

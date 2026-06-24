@@ -7,7 +7,7 @@ SHELL := /bin/sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install qdrant lint fmt fmt-check test check api ui eval ingest ask up down clean
+.PHONY: help install qdrant lint fmt fmt-check test check api ui eval eval-report ingest ask up down clean
 
 help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*##"; printf "Available targets:\n"} \
@@ -41,6 +41,11 @@ ui: ## Run the Streamlit UI
 
 eval: ## Run the offline evaluation (faithfulness judge)
 	uv run python -m eval.run_eval
+
+# Run the eval and write metrics to eval/results.json for the dashboard.
+# NOTE: this calls the OpenAI API (judge), unlike the pure unit tests.
+eval-report: ## Run the eval and write eval/results.json (calls the API)
+	uv run python -m eval.run_eval --out eval/results.json
 
 # Ingest a PDF into Qdrant.
 # Usage: make ingest PDF=path/to/file.pdf COURSE="Course Name"

@@ -25,6 +25,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+# Default location of the metrics produced by the offline evaluation
+# (``eval/run_eval.py --out``). Resolved relative to the repository root so the
+# dashboard shows the real last run out of the box. Kept as a string here and
+# resolved lazily, so importing this module never touches the filesystem.
+DEFAULT_RESULTS_PATH = "eval/results.json"
+
 # Quality metrics we know how to render, in display order, with a label and
 # whether the value should be shown as a percentage. Keys mirror the fields of
 # ``eval.run_eval.Metrics`` plus an optional ``retrieval_hit_rate``.
@@ -115,6 +121,17 @@ def load_metrics_file(path: str | Path) -> dict[str, Any]:
     return obj if isinstance(obj, dict) else {}
 
 
+def load_default_metrics(path: str | Path | None = None) -> dict[str, Any]:
+    """Load quality metrics from the eval results file, defaulting to the last run.
+
+    With no ``path`` the dashboard reads :data:`DEFAULT_RESULTS_PATH`
+    (``eval/results.json``) so it shows the real last evaluation when one is
+    present. The source stays injectable for tests and for the sidebar override,
+    and a missing file gracefully yields an empty dict (no results yet).
+    """
+    return load_metrics_file(path if path is not None else DEFAULT_RESULTS_PATH)
+
+
 def gather_db_stats(session: Any) -> dict[str, int]:
     """Count the stored entities for the usage panel.
 
@@ -191,11 +208,11 @@ def main() -> None:  # pragma: no cover - thin UI wiring, not unit-tested
 
     with st.sidebar:
         st.header("Sources")
-        results_path = st.text_input("Eval results JSON", value="eval/results.json")
+        results_path = st.text_input("Eval results JSON", value=DEFAULT_RESULTS_PATH)
         database_url = st.text_input("Database URL (optional)", value="")
 
     st.subheader("Quality metrics")
-    metrics = load_metrics_file(results_path)
+    metrics = load_default_metrics(results_path or None)
     cards = format_metric_cards(metrics)
     if not any(card.value is not None for card in cards):
         st.info("No evaluation results found yet. Run the offline eval to populate them.")
