@@ -12,7 +12,7 @@ import pytest
 pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient  # noqa: E402
-from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy import create_engine, select  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import api.main as api_main  # noqa: E402
@@ -192,6 +192,7 @@ def test_exercise_returns_problem_without_solution(client, monkeypatch):
 
     def fake_generate(state):
         captured["message"] = state["message"]
+        captured["state"] = state
         return {
             "exercise": {"problem": "Compute X.", "solution": "X = 42.", "refused": False},
             "retrieved": ["(Course, p.7)"],
@@ -202,8 +203,10 @@ def test_exercise_returns_problem_without_solution(client, monkeypatch):
     response = client.post("/exercise", json={"student_id": "s1", "notion": "integrals"})
     assert response.status_code == 200
     body = response.json()
-    assert body == {"problem": "Compute X.", "refused": False}
+    assert body == {"problem": "Compute X.", "refused": False, "id": None}
     assert captured["message"] == "integrals"
+    # The student id is threaded to the node so it can persist the exercise.
+    assert captured["state"]["student_id"] == "s1"
     # The reference solution must never leak to the client.
     assert "solution" not in body
 
@@ -302,6 +305,106 @@ def test_grade_does_not_write_to_history(client, monkeypatch):
 def test_missing_required_field_is_422(client, path, body):
     response = client.post(path, json=body)
     assert response.status_code == 422
+
+
+# --- End-to-end persistence (real generate/grade nodes, no LLM/network) ------
+
+
+class _FakeMessage:
+    """Minimal stand-in for a chat model reply, exposing ``.content``."""
+
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+class _FakeLLM:
+    """A chat model whose ``invoke`` returns a fixed reply, no network."""
+
+    def __init__(self, reply: str) -> None:
+        self._reply = reply
+
+    def invoke(self, _messages):
+        return _FakeMessage(self._reply)
+
+
+def _make_retrieved(text: str):
+    """Build a single retrieval result so the real nodes do not refuse."""
+    from ingestion.schema import Chunk, Retrieved
+
+    chunk = Chunk(id="1", course="Algebra", page=7, text=text, chapter="Ch.2")
+    return [Retrieved(chunk=chunk, score=0.9)]
+
+
+def test_exercise_then_grade_persist_and_link(client, monkeypatch):
+    # Exercise the REAL generate/grade nodes end to end: only the LLM and the
+    # vector retrieval are mocked, so no OpenAI call and no Qdrant are needed.
+    # ``generate`` does ``from retrieval import retrieve`` lazily, so the source
+    # module is patched; the nodes import ``get_llm`` at module load.
+    monkeypatch.setattr("retrieval.retrieve", lambda *a, **k: _make_retrieved("Group axioms."))
+    monkeypatch.setattr(
+        "agent.nodes.generate.get_llm",
+        lambda role="default": _FakeLLM("EXERCISE:\nProve closure.\n\nSOLUTION:\nBy axiom 1."),
+    )
+    monkeypatch.setattr(
+        "agent.nodes.grade.get_llm",
+        lambda role="default": _FakeLLM('{"score": 90, "feedback": "Correct."}'),
+    )
+
+    # 1) Generate an exercise. It must be persisted and its id surfaced.
+    ex_response = client.post("/exercise", json={"student_id": "zoe", "notion": "groups"})
+    assert ex_response.status_code == 200
+    ex_body = ex_response.json()
+    assert ex_body["refused"] is False
+    exercise_id = ex_body["id"]
+    assert isinstance(exercise_id, int)
+
+    # The exercise row exists, with its reference solution stored server-side.
+    from db.models import Exercise, Grade
+    from db.session import get_session
+
+    with get_session(api_main._engine) as session:
+        exercise = session.get(Exercise, exercise_id)
+        assert exercise is not None
+        assert exercise.problem == "Prove closure."
+        assert exercise.reference_solution == "By axiom 1."
+
+    # 2) Grade an answer, round-tripping the exercise id back to /grade.
+    grade_response = client.post(
+        "/grade",
+        json={
+            "student_id": "zoe",
+            "message": "Closure holds by axiom 1.",
+            "exercise": {"id": exercise_id, "solution": "By axiom 1."},
+        },
+    )
+    assert grade_response.status_code == 200
+    assert grade_response.json() == {"score": 90, "feedback": "Correct."}
+
+    # The grade row exists and links back to the persisted exercise.
+    with get_session(api_main._engine) as session:
+        grades = list(session.scalars(select(Grade).where(Grade.exercise_id == exercise_id)))
+        assert len(grades) == 1
+        assert grades[0].exercise_id == exercise_id
+        assert grades[0].score == 90
+
+
+def test_grade_without_exercise_id_is_not_persisted(client, monkeypatch):
+    # Without an exercise id to link to, the grade node must not write a row
+    # (persist_grade skips), even though the verdict is still returned.
+    monkeypatch.setattr(
+        "agent.nodes.grade.get_llm",
+        lambda role="default": _FakeLLM('{"score": 10, "feedback": "No reference."}'),
+    )
+
+    response = client.post("/grade", json={"student_id": "ivan", "message": "guess"})
+    assert response.status_code == 200
+    assert response.json()["score"] == 10
+
+    from db.models import Grade
+    from db.session import get_session
+
+    with get_session(api_main._engine) as session:
+        assert session.scalars(select(Grade)).first() is None
 
 
 # --- API-key authentication --------------------------------------------------
