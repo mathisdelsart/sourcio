@@ -29,8 +29,11 @@ def _parse(raw: str) -> dict:
     if match:
         try:
             data = json.loads(match.group(0))
+            # Clamp to the documented 0-100 range so an out-of-range model
+            # score never propagates to the API or the database.
+            score = max(0, min(100, int(data.get("score", 0))))
             return {
-                "score": int(data.get("score", 0)),
+                "score": score,
                 "feedback": str(data.get("feedback", "")).strip(),
             }
         except (ValueError, TypeError):

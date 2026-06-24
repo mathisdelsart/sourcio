@@ -109,6 +109,13 @@ def test_classify_falls_back_to_keywords_when_llm_unusable(fake_llm):
     assert classify_intent("What is a wavelet?") == "explain"
 
 
+def test_keyword_fallback_prioritises_reexplain_over_generate(fake_llm):
+    # "problem" alone matches generate, but a re-explain signal must win so a
+    # struggling student is rephrased to, not handed a new exercise.
+    fake_llm["reply"] = "not-a-valid-label"
+    assert classify_intent("I don't understand this problem again") == "reexplain"
+
+
 # --- (b) compiled graph routes a message to the expected node ----------------
 
 
@@ -251,6 +258,20 @@ def test_grade_node_handles_unparseable_verdict(fake_llm):
     assert "raw" not in out["grade"]
 
 
+def test_grade_node_clamps_score_above_100(fake_llm):
+    fake_llm["reply"] = '{"score": 250, "feedback": "Over the top."}'
+    out = grade({"message": "my answer"})
+    assert out["grade"]["score"] == 100
+    assert out["grade"]["feedback"] == "Over the top."
+
+
+def test_grade_node_clamps_negative_score(fake_llm):
+    fake_llm["reply"] = '{"score": -10, "feedback": "Below zero."}'
+    out = grade({"message": "my answer"})
+    assert out["grade"]["score"] == 0
+    assert out["grade"]["feedback"] == "Below zero."
+
+
 def test_reexplain_uses_previous_tutor_turn(fake_llm):
     fake_llm["reply"] = "Simpler version."
     history = [
@@ -277,6 +298,17 @@ def test_reexplain_uses_last_tutor_turn_when_several(fake_llm):
     # The most recent tutor turn is the one rephrased, not an earlier one.
     assert "Latest explanation [2]." in human_msg
     assert "Old explanation." not in human_msg
+
+
+def test_reexplain_skips_non_dict_history_turns(fake_llm):
+    fake_llm["reply"] = "Rephrased."
+    # A malformed history with a plain string turn must not crash iteration; the
+    # node falls back to the answer field when no usable tutor turn is found.
+    history = ["just a string", 42, {"role": "student", "content": "q"}]
+    out = reexplain({"message": "again", "history": history, "answer": "Fallback explanation [1]."})
+    assert out["answer"] == "Rephrased."
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    assert "Fallback explanation [1]." in human_msg
 
 
 # --- adaptive re-explanation by level ----------------------------------------
@@ -337,8 +369,10 @@ def test_graph_threads_level_into_reexplain(fake_llm):
 
 
 # --- persistence: exercises and grades are stored, optionally ----------------
-
-sqlalchemy = pytest.importorskip("sqlalchemy")
+#
+# These tests require the optional ``api`` extra (sqlalchemy). The guard is
+# scoped to the persistence fixture/tests only, so the non-DB agent tests above
+# always run in a plain dev environment.
 
 
 @pytest.fixture
@@ -349,6 +383,7 @@ def db_factory(monkeypatch):
     inspection, and the helper that wired it into ``agent.persistence``. A single
     shared in-memory engine keeps the schema alive across sessions.
     """
+    pytest.importorskip("sqlalchemy")
     from sqlalchemy import create_engine
     from sqlalchemy.pool import StaticPool
 
@@ -434,6 +469,7 @@ def test_grade_skips_persistence_without_stored_exercise(fake_llm, db_factory):
 
 def test_nodes_work_with_persistence_disabled(fake_llm, fake_retrieve, monkeypatch):
     """Without an injected factory and no configured DB, nodes still run."""
+    pytest.importorskip("sqlalchemy")
     import agent.persistence as persistence
     import db.session as db_session
 

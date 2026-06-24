@@ -39,7 +39,8 @@ _LEVEL_GUIDANCE: dict[Level, str] = {
 def _previous_explanation(state: TutorState) -> str:
     """Return the most recent tutor explanation, or the last answer field."""
     for turn in reversed(state.get("history", [])):
-        if turn.get("role") == "tutor":
+        # Skip malformed turns (e.g. a plain string) so iteration never crashes.
+        if isinstance(turn, dict) and turn.get("role") == "tutor":
             return turn.get("content", "")
     return state.get("answer", "")
 
