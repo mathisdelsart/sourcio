@@ -49,7 +49,7 @@ def test_health_returns_ok(client):
 def test_ask_returns_grounded_answer_and_sources(client, monkeypatch):
     captured = {}
 
-    def fake_answer(question, *, k=5):
+    def fake_answer(question, *, k=5, course=None, chapter=None):
         captured["question"] = question
         captured["k"] = k
         return {
@@ -77,10 +77,50 @@ def test_ask_returns_grounded_answer_and_sources(client, monkeypatch):
     assert "raw" not in body
 
 
+def test_ask_threads_course_and_chapter_to_answer(client, monkeypatch):
+    captured = {}
+
+    def fake_answer(question, *, k=5, course=None, chapter=None):
+        captured["course"] = course
+        captured["chapter"] = chapter
+        return {"answer": "ok (Course, p.1)", "refused": False, "sources": [], "raw": "ok"}
+
+    monkeypatch.setattr(api_main, "answer", fake_answer)
+
+    response = client.post(
+        "/ask",
+        json={
+            "student_id": "s1",
+            "question": "What is X?",
+            "course": "Algebra",
+            "chapter": "Ch.2",
+        },
+    )
+    assert response.status_code == 200
+    # The course/chapter filter reached the grounded function as kwargs.
+    assert captured == {"course": "Algebra", "chapter": "Ch.2"}
+
+
+def test_ask_defaults_course_and_chapter_to_none(client, monkeypatch):
+    captured = {}
+
+    def fake_answer(question, *, k=5, course=None, chapter=None):
+        captured["course"] = course
+        captured["chapter"] = chapter
+        return {"answer": "ok", "refused": False, "sources": [], "raw": "ok"}
+
+    monkeypatch.setattr(api_main, "answer", fake_answer)
+
+    response = client.post("/ask", json={"student_id": "s1", "question": "anything"})
+    assert response.status_code == 200
+    # Backward compatible: omitting the filter searches the whole collection.
+    assert captured == {"course": None, "chapter": None}
+
+
 def test_ask_uses_default_k(client, monkeypatch):
     captured = {}
 
-    def fake_answer(question, *, k=5):
+    def fake_answer(question, *, k=5, course=None, chapter=None):
         captured["k"] = k
         return {"answer": "ok", "refused": False, "sources": [], "raw": "ok"}
 
@@ -92,7 +132,7 @@ def test_ask_uses_default_k(client, monkeypatch):
 
 
 def test_ask_surfaces_refusal(client, monkeypatch):
-    def fake_answer(question, *, k=5):
+    def fake_answer(question, *, k=5, course=None, chapter=None):
         return {
             "answer": "This is not covered in the course material.",
             "refused": True,
@@ -110,7 +150,7 @@ def test_ask_surfaces_refusal(client, monkeypatch):
 
 
 def test_ask_persists_user_and_assistant_messages(client, monkeypatch):
-    def fake_answer(question, *, k=5):
+    def fake_answer(question, *, k=5, course=None, chapter=None):
         return {
             "answer": "Grounded reply (Course, p.3)",
             "refused": False,
@@ -132,7 +172,7 @@ def test_ask_persists_user_and_assistant_messages(client, monkeypatch):
 def test_history_is_chronological_across_turns(client, monkeypatch):
     counter = {"n": 0}
 
-    def fake_answer(question, *, k=5):
+    def fake_answer(question, *, k=5, course=None, chapter=None):
         counter["n"] += 1
         return {
             "answer": f"answer-{counter['n']}",
@@ -154,7 +194,7 @@ def test_history_is_chronological_across_turns(client, monkeypatch):
 
 
 def test_history_respects_limit(client, monkeypatch):
-    def fake_answer(question, *, k=5):
+    def fake_answer(question, *, k=5, course=None, chapter=None):
         return {"answer": "a", "refused": False, "sources": [], "raw": "a"}
 
     monkeypatch.setattr(api_main, "answer", fake_answer)
@@ -172,7 +212,7 @@ def test_history_unknown_student_is_empty(client):
 
 
 def test_student_get_or_create_reuses_same_student(client, monkeypatch):
-    def fake_answer(question, *, k=5):
+    def fake_answer(question, *, k=5, course=None, chapter=None):
         return {"answer": "ok", "refused": False, "sources": [], "raw": "ok"}
 
     monkeypatch.setattr(api_main, "answer", fake_answer)
@@ -307,6 +347,102 @@ def test_missing_required_field_is_422(client, path, body):
     assert response.status_code == 422
 
 
+# --- /reexplain --------------------------------------------------------------
+
+
+def _seed_conversation(client, monkeypatch, student_id, question="Define X?"):
+    """Run one /ask so the student has a prior tutor answer to re-explain."""
+
+    def fake_answer(question, *, k=5, course=None, chapter=None):
+        return {
+            "answer": "X is a formal structure (Course, p.3)",
+            "refused": False,
+            "sources": ["(Course, p.3)"],
+            "raw": "X is a formal structure [1]",
+        }
+
+    monkeypatch.setattr(api_main, "answer", fake_answer)
+    client.post("/ask", json={"student_id": student_id, "question": question})
+
+
+def test_reexplain_rebuilds_history_and_returns_rephrased(client, monkeypatch):
+    _seed_conversation(client, monkeypatch, "rex")
+
+    captured = {}
+
+    def fake_reexplain(state):
+        # The node receives the rebuilt conversation history (assistant turns
+        # relabelled to ``tutor``) and the requested level.
+        captured["state"] = state
+        return {"answer": "X is simply a set of rules, in plain words."}
+
+    monkeypatch.setattr(api_main, "reexplain", fake_reexplain)
+
+    response = client.post("/reexplain", json={"student_id": "rex", "level": "beginner"})
+    assert response.status_code == 200
+    assert response.json() == {"answer": "X is simply a set of rules, in plain words."}
+
+    state = captured["state"]
+    assert state["level"] == "beginner"
+    # History is rebuilt from the DB with the tutor answer present, so the node
+    # has something to rephrase.
+    roles = [t["role"] for t in state["history"]]
+    assert "tutor" in roles
+    contents = [t["content"] for t in state["history"]]
+    assert "X is a formal structure (Course, p.3)" in contents
+
+
+def test_reexplain_persists_assistant_message(client, monkeypatch):
+    _seed_conversation(client, monkeypatch, "rex2")
+    monkeypatch.setattr(api_main, "reexplain", lambda state: {"answer": "Plainer explanation."})
+
+    client.post("/reexplain", json={"student_id": "rex2", "level": "beginner"})
+
+    history = client.get("/history/rex2").json()
+    # The new explanation is appended as an assistant turn after the original.
+    assert [(t["role"], t["content"]) for t in history][-1] == (
+        "assistant",
+        "Plainer explanation.",
+    )
+
+
+def test_reexplain_without_prior_answer_is_graceful(client, monkeypatch):
+    # A brand-new student has no prior tutor answer: a friendly message is
+    # returned and the node is never invoked (no crash).
+    called = {"node": False}
+
+    def fake_reexplain(state):
+        called["node"] = True
+        return {"answer": "should not happen"}
+
+    monkeypatch.setattr(api_main, "reexplain", fake_reexplain)
+
+    response = client.post("/reexplain", json={"student_id": "newcomer", "level": "beginner"})
+    assert response.status_code == 200
+    assert "no previous answer" in response.json()["answer"].lower()
+    assert called["node"] is False
+
+
+def test_reexplain_defaults_level_to_beginner(client, monkeypatch):
+    _seed_conversation(client, monkeypatch, "rex3")
+    captured = {}
+
+    def fake_reexplain(state):
+        captured["level"] = state["level"]
+        return {"answer": "ok"}
+
+    monkeypatch.setattr(api_main, "reexplain", fake_reexplain)
+
+    response = client.post("/reexplain", json={"student_id": "rex3"})
+    assert response.status_code == 200
+    assert captured["level"] == "beginner"
+
+
+def test_reexplain_rejects_invalid_level(client):
+    response = client.post("/reexplain", json={"student_id": "s1", "level": "expert"})
+    assert response.status_code == 422
+
+
 # --- End-to-end persistence (real generate/grade nodes, no LLM/network) ------
 
 
@@ -430,7 +566,12 @@ def _stub_nodes(monkeypatch):
     monkeypatch.setattr(
         api_main,
         "answer",
-        lambda question, *, k=5: {"answer": "ok", "refused": False, "sources": [], "raw": "ok"},
+        lambda question, *, k=5, course=None, chapter=None: {
+            "answer": "ok",
+            "refused": False,
+            "sources": [],
+            "raw": "ok",
+        },
     )
     monkeypatch.setattr(
         api_main,
@@ -444,6 +585,11 @@ def _stub_nodes(monkeypatch):
         api_main,
         "grade",
         lambda state: {"grade": {"score": 50, "feedback": "ok"}},
+    )
+    monkeypatch.setattr(
+        api_main,
+        "reexplain",
+        lambda state: {"answer": "rephrased"},
     )
 
 
@@ -459,6 +605,7 @@ def test_health_open_without_api_key(client, monkeypatch):
     ("method", "path", "body"),
     [
         ("post", "/ask", {"student_id": "s1", "question": "q"}),
+        ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),
         ("get", "/history/s1", None),
@@ -475,6 +622,7 @@ def test_protected_endpoint_rejects_missing_key(client, monkeypatch, method, pat
     ("method", "path", "body"),
     [
         ("post", "/ask", {"student_id": "s1", "question": "q"}),
+        ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),
         ("get", "/history/s1", None),
@@ -491,6 +639,7 @@ def test_protected_endpoint_rejects_wrong_key(client, monkeypatch, method, path,
     ("method", "path", "body"),
     [
         ("post", "/ask", {"student_id": "s1", "question": "q"}),
+        ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),
         ("get", "/history/s1", None),
@@ -507,6 +656,7 @@ def test_protected_endpoint_accepts_correct_key(client, monkeypatch, method, pat
     ("method", "path", "body"),
     [
         ("post", "/ask", {"student_id": "s1", "question": "q"}),
+        ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),
         ("get", "/history/s1", None),

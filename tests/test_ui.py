@@ -18,10 +18,14 @@ from ui.app import (  # noqa: E402
     exercise_for_grading,
     format_sources,
     get_api_base_url,
+    grade_score,
+    health_label,
+    is_refused,
     render_answer,
     render_exercise,
     render_grade,
     render_history,
+    render_refusal,
 )
 
 
@@ -53,8 +57,37 @@ def test_render_answer_shows_refusal_clearly():
         "sources": [],
     }
     out = render_answer(result)
-    assert out.startswith("**Refused.**")
+    # The refusal is rendered distinctly so the North-Star "not covered"
+    # behaviour stays prominent in the UI.
+    assert out.startswith("**Not covered in the course.**")
     assert "This is not covered in the course material." in out
+    assert "**Sources**" not in out
+
+
+def test_is_refused_reads_flag():
+    assert is_refused({"refused": True}) is True
+    assert is_refused({"refused": False}) is False
+    assert is_refused({}) is False
+
+
+def test_render_refusal_includes_body():
+    out = render_refusal({"answer": "Not in the slides."})
+    assert out.startswith("**Not covered in the course.**")
+    assert "Not in the slides." in out
+
+
+def test_health_label_reflects_connection():
+    assert "Connected" in health_label(True)
+    assert "Not reachable" in health_label(False)
+
+
+def test_grade_score_clamps_to_range():
+    assert grade_score({"score": 80}) == 80
+    assert grade_score({"score": 150}) == 100
+    assert grade_score({"score": -5}) == 0
+    # Non-numeric scores degrade to 0 instead of raising.
+    assert grade_score({"score": "n/a"}) == 0
+    assert grade_score({}) == 0
 
 
 def test_render_exercise_omits_solution():
@@ -71,7 +104,8 @@ def test_render_exercise_omits_solution():
 def test_render_exercise_shows_refusal():
     exercise = {"problem": "This is not covered in the course material.", "refused": True}
     out = render_exercise(exercise)
-    assert out.startswith("**Refused.**")
+    assert out.startswith("**Not covered in the course.**")
+    assert "This is not covered in the course material." in out
 
 
 def test_exercise_for_grading_preserves_id():
@@ -174,6 +208,76 @@ def test_client_ask_posts_payload_and_returns_json():
     assert out == {"answer": "ok (Course, p.1)", "refused": False, "sources": ["(Course, p.1)"]}
     assert seen["url"].endswith("/ask")
     assert seen["body"] == {"student_id": "s1", "question": "What is X?", "k": 3}
+
+
+def test_client_ask_includes_course_when_given():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json
+
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"answer": "ok", "refused": False, "sources": []})
+
+    client = _make_client(handler)
+    client.ask("s1", "What is X?", k=4, course="Algebra")
+
+    assert seen["body"] == {
+        "student_id": "s1",
+        "question": "What is X?",
+        "k": 4,
+        "course": "Algebra",
+    }
+
+
+def test_client_ask_omits_course_when_absent():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json
+
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"answer": "ok", "refused": False, "sources": []})
+
+    client = _make_client(handler)
+    client.ask("s1", "What is X?")
+
+    # Backward compatible: no course/chapter key when unfiltered.
+    assert "course" not in seen["body"]
+    assert "chapter" not in seen["body"]
+
+
+def test_client_reexplain_posts_level():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json
+
+        seen["url"] = str(request.url)
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"answer": "Simpler version."})
+
+    client = _make_client(handler)
+    out = client.reexplain("s1", "beginner")
+
+    assert out == {"answer": "Simpler version."}
+    assert seen["url"].endswith("/reexplain")
+    assert seen["body"] == {"student_id": "s1", "level": "beginner"}
+
+
+def test_client_health_true_on_ok():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "ok"})
+
+    assert _make_client(handler).health() is True
+
+
+def test_client_health_false_on_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, json={"status": "down"})
+
+    # A failing probe is reported as False rather than raising.
+    assert _make_client(handler).health() is False
 
 
 def test_client_exercise_posts_payload():

@@ -3,6 +3,7 @@
 Endpoints:
     GET  /health            health check
     POST /ask               answer a question, grounded in the course (explain path)
+    POST /reexplain         rephrase the last tutor answer at a chosen level
     POST /exercise          generate an exercise (never returns the reference solution)
     POST /grade             grade a student's answer
     GET  /history/{id}      recent conversation turns for a student
@@ -25,6 +26,8 @@ from sqlalchemy.orm import Session
 
 from agent.nodes.generate import generate
 from agent.nodes.grade import grade
+from agent.nodes.reexplain import reexplain
+from agent.state import Level
 from answer import answer
 from config import get_settings
 from db.models import Student
@@ -98,11 +101,18 @@ def _get_or_create_student(session: Session, student_id: str) -> Student:
 
 
 class AskRequest(BaseModel):
-    """A question to answer from the course, on behalf of a student."""
+    """A question to answer from the course, on behalf of a student.
+
+    ``course`` and ``chapter`` optionally restrict retrieval to a single course
+    (and chapter). Both default to ``None`` so existing callers keep searching
+    the whole collection unchanged.
+    """
 
     student_id: str
     question: str
     k: int = Field(default=5, ge=1)
+    course: str | None = None
+    chapter: str | None = None
 
 
 class AskResponse(BaseModel):
@@ -111,6 +121,19 @@ class AskResponse(BaseModel):
     answer: str
     refused: bool
     sources: list[str]
+
+
+class ReexplainRequest(BaseModel):
+    """A request to rephrase the student's last tutor answer at a given level."""
+
+    student_id: str
+    level: Level = "beginner"
+
+
+class ReexplainResponse(BaseModel):
+    """The rephrased explanation (or a friendly note when nothing to re-explain)."""
+
+    answer: str
 
 
 class ExerciseRequest(BaseModel):
@@ -164,7 +187,7 @@ def ask(request: AskRequest) -> dict[str, Any]:
     The question and the assistant's answer are persisted as conversation
     history for the student.
     """
-    result = answer(request.question, k=request.k)
+    result = answer(request.question, k=request.k, course=request.course, chapter=request.chapter)
     with get_session(_engine) as session:
         student = _get_or_create_student(session, request.student_id)
         add_message(session, student_id=student.id, role="user", content=request.question)
@@ -174,6 +197,61 @@ def ask(request: AskRequest) -> dict[str, Any]:
         "refused": result["refused"],
         "sources": result["sources"],
     }
+
+
+NOTHING_TO_REEXPLAIN = "There is no previous answer to re-explain yet. Ask a question first."
+
+
+def _history_for_reexplain(rows: list[Any]) -> list[dict[str, str]]:
+    """Map persisted messages to the history shape the reexplain node expects.
+
+    The DB stores roles as ``user`` / ``assistant``; the reexplain node looks for
+    the last turn with role ``tutor`` (its ``content`` is the explanation to
+    rephrase). Assistant turns are relabelled to ``tutor`` accordingly while user
+    turns are passed through, preserving chronological order.
+    """
+    history: list[dict[str, str]] = []
+    for row in rows:
+        role = "tutor" if row.role == "assistant" else row.role
+        history.append({"role": role, "content": row.content})
+    return history
+
+
+def _last_tutor_answer(history: list[dict[str, str]]) -> str | None:
+    """Return the most recent tutor turn's content, or None when there is none."""
+    for turn in reversed(history):
+        if turn.get("role") == "tutor" and turn.get("content"):
+            return turn["content"]
+    return None
+
+
+@app.post("/reexplain", response_model=ReexplainResponse, dependencies=[Depends(require_api_key)])
+def reexplain_answer(request: ReexplainRequest) -> dict[str, str]:
+    """Rephrase the student's last tutor answer at the requested level.
+
+    The recent conversation is rebuilt from the database and handed to the
+    ``reexplain`` node, which reformulates the last grounded explanation without
+    running retrieval again. The new explanation is persisted as an assistant
+    turn so the conversation stays continuous. When the student has no prior
+    answer, a friendly note is returned instead of crashing.
+    """
+    with get_session(_engine) as session:
+        student = session.scalar(select(Student).where(Student.external_id == request.student_id))
+        if student is None:
+            return {"answer": NOTHING_TO_REEXPLAIN}
+        history = _history_for_reexplain(recent_messages(session, student.id))
+        if _last_tutor_answer(history) is None:
+            return {"answer": NOTHING_TO_REEXPLAIN}
+        state = {
+            "student_id": request.student_id,
+            "message": "Please re-explain that.",
+            "level": request.level,
+            "history": history,
+        }
+        result = reexplain(state)
+        rephrased = result["answer"]
+        add_message(session, student_id=student.id, role="assistant", content=rephrased)
+    return {"answer": rephrased}
 
 
 @app.post("/exercise", response_model=ExerciseResponse, dependencies=[Depends(require_api_key)])
