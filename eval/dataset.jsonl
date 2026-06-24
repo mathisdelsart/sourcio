@@ -1,1 +1,8 @@
-{"question": "Example, replace later", "expected_chunks": [], "reference_answer": "", "in_scope": true}
+{"question": "What is a wavelet transform?", "expect_refusal": false, "note": "Core topic of the indexed slide deck."}
+{"question": "How does a piecewise constant approximation represent a signal?", "expect_refusal": false, "note": "Piecewise constant approximation is covered in the deck."}
+{"question": "What is multi-resolution analysis?", "expect_refusal": false, "note": "Multi-resolution is a central wavelet concept in the deck."}
+{"question": "How do scaling functions relate to wavelet functions?", "expect_refusal": false, "note": "Scaling vs wavelet functions are covered."}
+{"question": "What is the capital of Australia?", "expect_refusal": true, "note": "Geography, clearly outside the wavelet course."}
+{"question": "How do I bake a sourdough bread at home?", "expect_refusal": true, "note": "Cooking, unrelated to the course material."}
+{"question": "Who won the football world cup in 2018?", "expect_refusal": true, "note": "Sports trivia, out of scope."}
+{"question": "What is the boiling point of water at sea level?", "expect_refusal": true, "note": "General physics, not in the wavelet deck."}
