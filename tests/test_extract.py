@@ -12,7 +12,40 @@ import types
 import pytest
 
 from ingestion import extract
-from ingestion.extract import PageFeatures, has_math_symbols, needs_vision
+from ingestion.extract import (
+    PageFeatures,
+    _strip_code_fence,
+    has_math_symbols,
+    needs_vision,
+)
+
+# --- _strip_code_fence: pure helper ------------------------------------------
+
+
+def test_strip_code_fence_with_language_tag():
+    text = "```markdown\n# Piecewise constant approximation\n$f(x) = c$\n```"
+    assert _strip_code_fence(text) == "# Piecewise constant approximation\n$f(x) = c$"
+
+
+def test_strip_code_fence_without_language_tag():
+    text = "```\n# Title\nbody\n```"
+    assert _strip_code_fence(text) == "# Title\nbody"
+
+
+def test_strip_code_fence_no_fence_passthrough():
+    text = "# Title\nplain markdown content with no fence."
+    assert _strip_code_fence(text) == text
+
+
+def test_strip_code_fence_leaves_inline_backticks_intact():
+    text = "Use the `print()` function and a ``` literal somewhere in prose."
+    assert _strip_code_fence(text) == text
+
+
+def test_strip_code_fence_is_idempotent():
+    once = _strip_code_fence("```markdown\n# Title\nbody\n```")
+    assert _strip_code_fence(once) == once
+
 
 # --- Heuristic: needs_vision over synthetic features -------------------------
 
@@ -173,6 +206,22 @@ def test_parallel_preserves_order_and_calls_once_per_page(fake_fitz):
     # Exactly one transcription per vision-selected page.
     assert len(counts) == n
     assert all(c == 1 for c in counts.values())
+
+
+def test_extract_strips_fence_on_vision_pages_only(fake_fitz):
+    mathy = _FakePage("E = mc^2", images=1)  # vision page
+    plain = _FakePage("```not code``` " + "word " * 100, images=0)  # plain page
+    fake_fitz([mathy, plain])
+
+    def stub(_uri: str) -> str:
+        return "```markdown\n# Slide\n$E=mc^2$\n```"
+
+    result = extract.extract_pdf("x.pdf", "Course", hybrid=True, transcriber=stub)
+
+    # Vision page: surrounding fence removed.
+    assert result[0].text == "# Slide\n$E=mc^2$"
+    # Plain-text page: PyMuPDF output is left exactly as-is, fences and all.
+    assert result[1].text == ("```not code``` " + "word " * 100).strip()
 
 
 def test_max_pages_caps_selection(fake_fitz):

@@ -99,6 +99,30 @@ def _render_page(page, dpi: int) -> str:
     return f"data:image/png;base64,{b64}"
 
 
+def _strip_code_fence(text: str) -> str:
+    """Remove a single fenced code block wrapping the whole text, if present.
+
+    The vision model sometimes wraps its entire output in a Markdown code fence
+    (e.g. an opening ```markdown line and a trailing ```), which would otherwise
+    pollute the stored chunk and its embedding. If the stripped text both opens
+    with a fence (optionally followed by a language tag) and ends with a closing
+    fence, the inner content is returned stripped. Otherwise the text is returned
+    unchanged, so inline backticks are never mangled and the call is idempotent.
+    """
+    stripped = text.strip()
+    lines = stripped.splitlines()
+    if len(lines) < 2:
+        return text
+    if not lines[0].lstrip().startswith("```"):
+        return text
+    if lines[-1].strip() != "```":
+        return text
+    # First line must be just the fence plus an optional language tag (no code).
+    if not re.fullmatch(r"\s*```[A-Za-z0-9_+-]*\s*", lines[0]):
+        return text
+    return "\n".join(lines[1:-1]).strip()
+
+
 def _vision_transcribe(image_uri: str, llm) -> str:
     """Transcribe a rasterized page via the vision model into Markdown."""
     message = HumanMessage(
@@ -193,7 +217,10 @@ def extract_pdf(
                 pool.submit(transcriber, image_uri): page_no for page_no, image_uri in vision_jobs
             }
             for future in futures:
-                transcribed[futures[future]] = future.result()
+                # The vision model sometimes wraps its whole answer in a code
+                # fence; strip it before the text reaches a Page. The plain-text
+                # PyMuPDF path is left untouched.
+                transcribed[futures[future]] = _strip_code_fence(future.result())
 
     result: list[Page] = []
     for page_no in order:
