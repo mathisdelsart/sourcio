@@ -15,6 +15,7 @@ httpx = pytest.importorskip("httpx")
 from ui.app import (  # noqa: E402
     DEFAULT_API_BASE_URL,
     TutorClient,
+    exercise_for_grading,
     format_sources,
     get_api_base_url,
     render_answer,
@@ -71,6 +72,41 @@ def test_render_exercise_shows_refusal():
     exercise = {"problem": "This is not covered in the course material.", "refused": True}
     out = render_exercise(exercise)
     assert out.startswith("**Refused.**")
+
+
+def test_exercise_for_grading_preserves_id():
+    # The server-side exercise id must survive into the grade payload so the
+    # recorded grade links to its exercise (persist_grade skips without it).
+    generated = {"problem": "Compute X.", "refused": False, "id": 7}
+    out = exercise_for_grading(generated)
+    assert out is not None
+    assert out["id"] == 7
+
+
+def test_exercise_for_grading_drops_refused_and_missing():
+    assert exercise_for_grading(None) is None
+    assert exercise_for_grading({"problem": "n/a", "refused": True, "id": 3}) is None
+
+
+def test_exercise_id_round_trips_into_grade_call():
+    # End-to-end through the client: an exercise carrying an id is forwarded to
+    # /grade with that id intact, which is what lets the grade link server-side.
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json
+
+        if request.url.path == "/exercise":
+            return httpx.Response(200, json={"problem": "Compute X.", "refused": False, "id": 42})
+        seen["grade_body"] = json.loads(request.content)
+        return httpx.Response(200, json={"score": 80, "feedback": "Good."})
+
+    client = _make_client(handler)
+    generated = client.exercise("s1", "integrals")
+    assert generated["id"] == 42
+
+    client.grade("s1", "X = 42", exercise=exercise_for_grading(generated))
+    assert seen["grade_body"]["exercise"]["id"] == 42
 
 
 def test_render_grade_includes_score_and_feedback():
