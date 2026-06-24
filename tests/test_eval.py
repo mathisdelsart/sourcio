@@ -17,6 +17,7 @@ from eval.run_eval import (
     load_dataset,
     parse_verdict,
     passed,
+    retrieval_hit,
     run_eval,
 )
 
@@ -48,6 +49,141 @@ def test_bundled_dataset_has_both_classes():
     cases = load_dataset()
     assert any(c.expect_refusal for c in cases)
     assert any(not c.expect_refusal for c in cases)
+
+
+def test_bundled_dataset_is_expanded_with_keywords():
+    cases = load_dataset()
+    # The expansion brings the dataset to roughly sixteen reference questions.
+    assert len(cases) >= 16
+    # In-course cases declare keywords; out-of-course cases never do.
+    with_keywords = [c for c in cases if c.expect_keywords]
+    assert with_keywords, "expected some in-course cases to declare keywords"
+    assert all(not c.expect_refusal for c in with_keywords)
+    assert all(c.expect_keywords == () for c in cases if c.expect_refusal)
+    # Keywords are stored lowercase so substring matching is case-insensitive.
+    for c in with_keywords:
+        assert all(k == k.lower() for k in c.expect_keywords)
+
+
+def test_load_dataset_parses_expect_keywords(tmp_path):
+    path = _write_dataset(
+        tmp_path,
+        [
+            '{"question": "Haar?", "expect_refusal": false, '
+            '"expect_keywords": ["Haar", "WAVELET"]}',
+        ],
+    )
+    cases = load_dataset(path)
+    # Keywords are normalized to lowercase tuples.
+    assert cases[0].expect_keywords == ("haar", "wavelet")
+
+
+def test_load_dataset_defaults_keywords_to_empty(tmp_path):
+    path = _write_dataset(
+        tmp_path,
+        ['{"question": "Capital of Australia?", "expect_refusal": true}'],
+    )
+    cases = load_dataset(path)
+    assert cases[0].expect_keywords == ()
+
+
+# --- retrieval-hit metric -------------------------------------------------
+
+
+def test_retrieval_hit_accepts_when_keyword_present():
+    texts = ["The Haar scaling function builds a piecewise constant approximation."]
+    assert retrieval_hit(texts, ["piecewise constant"]) is True
+
+
+def test_retrieval_hit_is_case_insensitive():
+    assert retrieval_hit(["A WAVELET Transform"], ["wavelet"]) is True
+
+
+def test_retrieval_hit_matches_any_keyword_across_chunks():
+    texts = ["unrelated chunk", "multiresolution analysis here"]
+    assert retrieval_hit(texts, ["scaling function", "multiresolution"]) is True
+
+
+def test_retrieval_hit_rejects_when_no_keyword_present():
+    assert retrieval_hit(["completely unrelated text"], ["multiresolution"]) is False
+
+
+def test_retrieval_hit_rejects_with_no_keywords():
+    assert retrieval_hit(["anything"], []) is False
+
+
+def test_aggregate_computes_retrieval_hit_rate():
+    results = [
+        CaseResult("q1", expect_refusal=False, refused=False, retrieval_hit=True),
+        CaseResult("q2", expect_refusal=False, refused=False, retrieval_hit=False),
+        # No keyword declared -> not part of the retrieval-hit denominator.
+        CaseResult("q3", expect_refusal=False, refused=False),
+    ]
+    m = aggregate(results)
+    assert m.retrieval_checked == 2
+    assert m.retrieval_hit_rate == 1 / 2
+    assert any("q2" in f and "keyword" in f for f in m.failures)
+
+
+def test_aggregate_no_retrieval_checked_is_vacuously_perfect():
+    results = [CaseResult("q", expect_refusal=True, refused=True)]
+    m = aggregate(results)
+    assert m.retrieval_checked == 0
+    assert m.retrieval_hit_rate == 1.0
+
+
+def test_evaluate_runs_retrieval_hit_for_in_course_keyword_cases():
+    cases = [
+        EvalCase("in-scope", expect_refusal=False, expect_keywords=("haar",)),
+        EvalCase("in-scope-no-kw", expect_refusal=False),
+        EvalCase("out-of-scope", expect_refusal=True, expect_keywords=()),
+    ]
+    answered = {"answer": "ok [1]", "refused": False, "sources": ["s"]}
+    judge = _RecordingJudge({"faithful": True, "relevant": True})
+    fake_answer = _fake_answer_factory(answered, refused_questions={"out-of-scope"})
+
+    calls: list[str] = []
+
+    def fake_retrieve(question: str):
+        calls.append(question)
+        return ["a chunk about the Haar wavelet"]
+
+    results = evaluate(cases, fake_answer, judge, fake_retrieve)
+
+    # Retrieval only runs for the in-course case that declares keywords.
+    assert calls == ["in-scope"]
+    assert results[0].retrieval_hit is True
+    assert results[1].retrieval_hit is None
+    assert results[2].retrieval_hit is None
+
+
+def test_passed_honors_retrieval_hit_threshold():
+    thresholds = Metrics(1.0, 1.0, 1.0, retrieval_hit_rate=1.0)
+    assert passed(Metrics(1.0, 1.0, 1.0, retrieval_hit_rate=1.0), thresholds)
+    assert not passed(Metrics(1.0, 1.0, 1.0, retrieval_hit_rate=0.5), thresholds)
+    # A relaxed threshold tolerates a low hit rate.
+    relaxed = Metrics(1.0, 1.0, 1.0, retrieval_hit_rate=0.0)
+    assert passed(Metrics(1.0, 1.0, 1.0, retrieval_hit_rate=0.5), relaxed)
+
+
+def test_run_eval_fails_on_retrieval_miss_when_threshold_set():
+    dataset = [EvalCase("in-scope", expect_refusal=False, expect_keywords=("multiresolution",))]
+    answered = {"answer": "ok [1]", "refused": False, "sources": ["s"]}
+    judge = _RecordingJudge({"faithful": True, "relevant": True})
+    fake_answer = _fake_answer_factory(answered, refused_questions=set())
+
+    def fake_retrieve(question: str):
+        return ["a chunk with no relevant keyword"]
+
+    metrics, ok = run_eval(
+        dataset_path=_DummyPath(dataset),
+        answer_fn=fake_answer,
+        judge_fn=judge,
+        retrieve_fn=fake_retrieve,
+        thresholds=Metrics(1.0, 1.0, 1.0, retrieval_hit_rate=1.0),
+    )
+    assert metrics.retrieval_hit_rate == 0.0
+    assert ok is False
 
 
 # --- judge-output parser --------------------------------------------------
@@ -149,6 +285,11 @@ def _fake_answer_factory(answered: dict, refused_questions: set[str]):
     return fake_answer
 
 
+def _no_retrieve(question: str) -> list[str]:
+    """Fake retrieval that returns nothing, so no Qdrant/model is touched."""
+    return []
+
+
 def test_evaluate_only_judges_answerable_answered_cases():
     cases = [
         EvalCase("in-scope", expect_refusal=False),
@@ -183,6 +324,7 @@ def test_run_eval_passes_when_everything_is_correct():
         dataset_path=_DummyPath(dataset),
         answer_fn=fake_answer,
         judge_fn=judge,
+        retrieve_fn=_no_retrieve,
     )
     assert ok is True
     assert metrics.refusal_accuracy == 1.0
@@ -199,6 +341,7 @@ def test_run_eval_fails_on_unfaithful_answer():
         dataset_path=_DummyPath(dataset),
         answer_fn=fake_answer,
         judge_fn=judge,
+        retrieve_fn=_no_retrieve,
     )
     assert ok is False
     assert metrics.faithfulness_rate == 0.0
@@ -214,6 +357,7 @@ def test_run_eval_fails_when_out_of_scope_is_answered():
         dataset_path=_DummyPath(dataset),
         answer_fn=fake_answer,
         judge_fn=judge,
+        retrieve_fn=_no_retrieve,
     )
     assert ok is False
     assert metrics.refusal_accuracy == 0.0
@@ -246,6 +390,7 @@ class _DummyPath:
                     "question": c.question,
                     "expect_refusal": c.expect_refusal,
                     "note": c.note,
+                    "expect_keywords": list(c.expect_keywords),
                 }
             )
             for c in cases
