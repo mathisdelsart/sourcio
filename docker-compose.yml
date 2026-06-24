@@ -1,55 +1,8 @@
+# The persistent vector store runs in Docker; the FastAPI API and the Streamlit
+# UI run on the host (`make api` / `make ui`), where the local embedding model
+# (bge-m3 via torch) is already set up. This keeps the container light and avoids
+# shipping multi-gigabyte ML wheels — the standard split for an ML app.
 services:
-  app:
-    build: .
-    ports:
-      - "8000:8000"   # FastAPI / uvicorn
-    # Load secrets/settings (e.g. OPENAI_API_KEY) from .env when present. The
-    # `environment` block below takes precedence, so QDRANT_URL stays correct
-    # inside the container even if .env sets it for local (host) use.
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      QDRANT_URL: http://qdrant:6333
-    depends_on:
-      qdrant:
-        condition: service_healthy
-    healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=4).status == 200 else 1)
-      interval: 30s
-      timeout: 5s
-      start_period: 20s
-      retries: 3
-    restart: unless-stopped
-    networks:
-      - grounded-rag
-
-  ui:
-    build: .
-    command:
-      - streamlit
-      - run
-      - ui/app.py
-      - --server.address=0.0.0.0
-      - --server.port=8501
-      - --server.headless=true
-    ports:
-      - "8501:8501"   # Streamlit web UI
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      API_BASE_URL: http://app:8000
-    depends_on:
-      - app
-    restart: unless-stopped
-    networks:
-      - grounded-rag
-
   qdrant:
     image: qdrant/qdrant:latest
     ports:
@@ -66,11 +19,6 @@ services:
       start_period: 15s
       retries: 5
     restart: unless-stopped
-    networks:
-      - grounded-rag
-
-networks:
-  grounded-rag:
 
 volumes:
   qdrant_storage:

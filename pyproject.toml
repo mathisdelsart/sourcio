@@ -33,11 +33,6 @@ obs = [
 ui = [
     "streamlit>=1.39",
 ]
-# Query-side embeddings (bge-m3) needed to serve retrieval, without the heavy
-# PDF-extraction tools (pymupdf, marker-pdf) that only the offline ingestion uses.
-embed = [
-    "sentence-transformers>=3.0",
-]
 migrations = [
     "alembic>=1.13",
 ]
