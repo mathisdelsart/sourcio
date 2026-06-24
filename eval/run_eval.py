@@ -27,8 +27,9 @@ import json
 import re
 import sys
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any
 
 DATASET_PATH = Path(__file__).with_name("dataset.jsonl")
 
@@ -117,6 +118,25 @@ class Metrics:
     total: int = 0
     retrieval_checked: int = 0
     failures: list[str] = field(default_factory=list)
+
+
+def metrics_to_dict(metrics: Metrics) -> dict[str, Any]:
+    """Return a plain JSON-serializable dict view of the aggregated metrics.
+
+    Pure helper (no I/O): keys mirror the :class:`Metrics` fields, so the result
+    round-trips through ``ui.metrics.load_metrics_file`` and feeds the dashboard.
+    """
+    return asdict(metrics)
+
+
+def write_results(metrics: Metrics, path: Path) -> None:
+    """Write the aggregated metrics to ``path`` as a JSON object.
+
+    Creates parent directories as needed. The file is consumed by the metrics
+    dashboard (``ui/metrics.py``); it is a build artifact and is not committed.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(metrics_to_dict(metrics), indent=2), encoding="utf-8")
 
 
 def load_dataset(path: Path = DATASET_PATH) -> list[EvalCase]:
@@ -394,6 +414,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--min-faithfulness", type=float, default=DEFAULT_FAITHFULNESS_RATE)
     parser.add_argument("--min-relevance", type=float, default=DEFAULT_RELEVANCE_RATE)
     parser.add_argument("--min-retrieval-hit-rate", type=float, default=DEFAULT_RETRIEVAL_HIT_RATE)
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Write the computed metrics to this JSON file (e.g. eval/results.json).",
+    )
     args = parser.parse_args(argv)
 
     thresholds = Metrics(
@@ -404,6 +430,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     metrics, ok = run_eval(dataset_path=args.dataset, thresholds=thresholds)
     print(format_summary(metrics, thresholds, ok))
+    if args.out is not None:
+        write_results(metrics, args.out)
+        print(f"  wrote results: {args.out}")
     return 0 if ok else 1
 
 

@@ -13,10 +13,12 @@ import json
 import pytest
 
 from ui.metrics import (
+    DEFAULT_RESULTS_PATH,
     MetricCard,
     format_metric_cards,
     format_stats,
     gather_db_stats,
+    load_default_metrics,
     load_metrics_file,
 )
 
@@ -108,6 +110,40 @@ def test_load_metrics_file_non_object_returns_empty(tmp_path):
     path = tmp_path / "list.json"
     path.write_text("[1, 2, 3]", encoding="utf-8")
     assert load_metrics_file(path) == {}
+
+
+# --- load_default_metrics ---------------------------------------------------
+
+
+def test_default_results_path_points_at_eval_results():
+    assert DEFAULT_RESULTS_PATH == "eval/results.json"
+
+
+def test_load_default_metrics_uses_explicit_path(tmp_path):
+    path = tmp_path / "results.json"
+    payload = {"faithfulness_rate": 1.0, "relevance_rate": 0.8}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    assert load_default_metrics(path) == payload
+
+
+def test_load_default_metrics_reads_default_results_file(tmp_path, monkeypatch):
+    # The dashboard default path is relative; resolve it against a temp cwd so
+    # the real results file (if any) is never touched and no network happens.
+    monkeypatch.chdir(tmp_path)
+    results = tmp_path / "eval" / "results.json"
+    results.parent.mkdir(parents=True)
+    payload = {"faithfulness_rate": 0.95, "refusal_accuracy": 1.0}
+    results.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = load_default_metrics()
+    assert loaded == payload
+    by_key = {c.key: c for c in format_metric_cards(loaded)}
+    assert by_key["faithfulness_rate"].display == "95%"
+
+
+def test_load_default_metrics_missing_default_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert load_default_metrics() == {}
 
 
 # --- format_stats -----------------------------------------------------------

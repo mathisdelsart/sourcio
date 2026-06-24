@@ -7,6 +7,9 @@ data/
 # Qdrant (local storage)
 qdrant_storage/
 
+# Eval run artifacts (build output, not committed)
+eval/results.json
+
 # Python
 __pycache__/
 *.py[cod]
