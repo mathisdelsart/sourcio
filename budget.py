@@ -69,12 +69,33 @@ class BudgetCallbackHandler(BaseCallbackHandler):
             )
 
 
+# Process-wide cache of budget handlers, keyed by cap. The cost guard must be
+# cumulative across every `get_llm` call in the process, so each distinct cap
+# maps to a single shared handler whose `total_tokens` accumulates over time.
+_HANDLERS: dict[int, BudgetCallbackHandler] = {}
+
+
+def get_budget_handler(max_tokens: int) -> BudgetCallbackHandler:
+    """Return the shared budget handler for `max_tokens`, creating it once.
+
+    A single handler instance is reused for a given cap so token usage adds up
+    across all LLM calls in the process, instead of resetting on every call.
+    """
+    handler = _HANDLERS.get(max_tokens)
+    if handler is None:
+        handler = BudgetCallbackHandler(max_tokens)
+        _HANDLERS[max_tokens] = handler
+    return handler
+
+
 def get_budget_callbacks(max_tokens: int) -> list:
     """Return budget callbacks for the configured cap, or `[]` when disabled.
 
     A cap of zero (or negative) means no budget is enforced and an empty list is
-    returned, so the factory attaches nothing.
+    returned, so the factory attaches nothing. For a positive cap the same shared
+    handler is returned every time, so usage accumulates process-wide and the cap
+    actually trips on cumulative tokens.
     """
     if max_tokens and max_tokens > 0:
-        return [BudgetCallbackHandler(max_tokens)]
+        return [get_budget_handler(max_tokens)]
     return []

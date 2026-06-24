@@ -181,15 +181,20 @@ def _open_session_stats(database_url: str | None = None) -> dict[str, int]:
     """Open a short-lived DB session and gather stats, or zeros on failure.
 
     Used by the Streamlit wiring; kept here (not in ``main``) only to isolate the
-    optional-import boundary. Never raises: a fresh checkout with no database
-    yields all-zero counts.
+    optional-import boundary. With no ``database_url`` the configured store is
+    read (``Settings.database_url``, i.e. the real ``app.db`` by default) instead
+    of an unbound session, so the usage panel shows real counts out of the box; an
+    explicit override is still honored. Never raises: a fresh checkout with no
+    database yields all-zero counts.
     """
     try:
         from db.session import create_engine_from_settings, get_session
     except ImportError:
         return gather_db_stats(None)
     try:
-        engine = create_engine_from_settings(database_url) if database_url else None
+        # No override: fall back to the configured database URL (``app.db`` by
+        # default) instead of the unbound module-level session factory.
+        engine = create_engine_from_settings(database_url or None)
         with get_session(engine) as session:
             return gather_db_stats(session)
     except Exception:

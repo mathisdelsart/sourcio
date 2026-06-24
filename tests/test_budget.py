@@ -20,6 +20,12 @@ def _result(total_tokens: int) -> LLMResult:
     )
 
 
+@pytest.fixture(autouse=True)
+def _reset_budget_handlers(monkeypatch):
+    """Isolate the process-wide budget handler cache between tests."""
+    monkeypatch.setattr(budget, "_HANDLERS", {})
+
+
 def test_get_budget_callbacks_disabled_returns_empty():
     """A zero (or negative) cap disables the guard and attaches nothing."""
     assert budget.get_budget_callbacks(0) == []
@@ -39,6 +45,65 @@ def test_budget_callback_accumulates_and_raises():
     with pytest.raises(budget.BudgetExceeded):
         handler.on_llm_end(_result(20))  # 110 > 100 -> raises
     assert handler.total_tokens == 110
+
+
+def test_get_budget_callbacks_returns_shared_handler_for_cap():
+    """The same cap yields the same handler instance, so usage is process-wide."""
+    (first,) = budget.get_budget_callbacks(500)
+    (second,) = budget.get_budget_callbacks(500)
+    assert first is second  # cached, not freshly constructed per retrieval
+
+    # A different cap gets its own independent handler.
+    (other,) = budget.get_budget_callbacks(999)
+    assert other is not first
+
+
+def test_budget_accumulates_across_separate_retrievals():
+    """Tokens add up across distinct `get_budget_callbacks` calls for one cap.
+
+    This is the cost-guard fix: each `get_llm` invocation fetches callbacks
+    afresh, but they must share a handler so cumulative usage trips the cap.
+    """
+    (h1,) = budget.get_budget_callbacks(100)
+    h1.on_llm_end(_result(60))  # first "call"
+
+    (h2,) = budget.get_budget_callbacks(100)  # second "call": fresh retrieval
+    assert h2 is h1
+    assert h2.total_tokens == 60  # carries over, not reset to zero
+
+    with pytest.raises(budget.BudgetExceeded):
+        h2.on_llm_end(_result(50))  # 110 > 100 cumulative -> trips
+    assert h2.total_tokens == 110
+
+
+def test_get_llm_reuses_shared_budget_handler(monkeypatch):
+    """`config.get_llm` attaches the shared handler so usage is cumulative."""
+    for var in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_HOST"):
+        monkeypatch.delenv(var, raising=False)
+
+    monkeypatch.setattr(config, "_cache_configured", False)
+    monkeypatch.setattr(
+        config, "get_settings", lambda: config.Settings(llm_cache="", llm_budget_tokens=100)
+    )
+
+    captured = {}
+
+    class _FakeLLM:
+        def with_config(self, callbacks):
+            captured["callbacks"] = callbacks
+            return self
+
+    monkeypatch.setattr(config, "init_chat_model", lambda model, temperature: _FakeLLM())
+
+    config.get_llm()
+    first = captured["callbacks"]
+    config.get_llm()
+    second = captured["callbacks"]
+
+    # Both invocations attach the very same handler instance.
+    assert len(first) == 1 and len(second) == 1
+    assert first[0] is second[0]
+    assert first[0] is budget.get_budget_handler(100)
 
 
 def test_budget_callback_reads_usage_metadata():

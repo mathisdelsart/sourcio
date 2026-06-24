@@ -246,3 +246,71 @@ def test_gather_db_stats_swallows_errors_to_zero():
         "grades": 0,
         "messages": 0,
     }
+
+
+# --- _open_session_stats: default DB source ---------------------------------
+
+
+def test_open_session_stats_defaults_to_settings_url(monkeypatch):
+    """With no override, the dashboard reads the configured ``database_url``.
+
+    The engine factory and session are stubbed (no real database), so this only
+    asserts that the None path forwards to ``create_engine_from_settings`` with a
+    falsy override, which resolves to ``Settings.database_url``.
+    """
+    import db.session as db_session
+    from ui import metrics
+
+    captured = {}
+
+    def fake_create_engine_from_settings(url=None):
+        captured["url"] = url
+        return "ENGINE"
+
+    class _FakeSession:
+        def __enter__(self):
+            return "SESSION"
+
+        def __exit__(self, *_exc):
+            return False
+
+    def fake_get_session(engine=None):
+        captured["engine"] = engine
+        return _FakeSession()
+
+    monkeypatch.setattr(db_session, "create_engine_from_settings", fake_create_engine_from_settings)
+    monkeypatch.setattr(db_session, "get_session", fake_get_session)
+    monkeypatch.setattr(metrics, "gather_db_stats", lambda session: {"seen": session})
+
+    result = metrics._open_session_stats(None)
+
+    # No override forwarded -> factory falls back to Settings.database_url.
+    assert captured["url"] is None
+    assert captured["engine"] == "ENGINE"
+    assert result == {"seen": "SESSION"}
+
+
+def test_open_session_stats_honors_override(monkeypatch):
+    """An explicit URL override is passed straight through to the engine factory."""
+    import db.session as db_session
+    from ui import metrics
+
+    captured = {}
+
+    def fake_create_engine_from_settings(url=None):
+        captured["url"] = url
+        return "ENGINE"
+
+    class _FakeSession:
+        def __enter__(self):
+            return "SESSION"
+
+        def __exit__(self, *_exc):
+            return False
+
+    monkeypatch.setattr(db_session, "create_engine_from_settings", fake_create_engine_from_settings)
+    monkeypatch.setattr(db_session, "get_session", lambda engine=None: _FakeSession())
+    monkeypatch.setattr(metrics, "gather_db_stats", lambda session: {})
+
+    metrics._open_session_stats("sqlite:///override.db")
+    assert captured["url"] == "sqlite:///override.db"

@@ -5,6 +5,7 @@ stub transcriber. The PDF layer is replaced by a fake `fitz` module injected via
 `sys.modules`, so no real PyMuPDF and no vision/API call is ever made.
 """
 
+import base64
 import sys
 import time
 import types
@@ -132,6 +133,13 @@ class _FakeDoc:
     def __init__(self, pages):
         self._pages = pages
         self.closed = False
+
+    @property
+    def page_count(self) -> int:
+        return len(self._pages)
+
+    def __getitem__(self, index):
+        return self._pages[index]
 
     def __iter__(self):
         return iter(self._pages)
@@ -263,6 +271,26 @@ def test_explicit_pages_override_order(fake_fitz):
     fake_fitz(pages)
     result = extract.extract_pdf("x.pdf", "Course", pages=[2, 4], transcriber=lambda uri: "V")
     assert [p.page for p in result] == [2, 4]
+
+
+def test_explicit_pages_honor_requested_order(fake_fitz):
+    # Each page transcribes to a marker carrying its 1-based page number, so the
+    # output order can be checked end to end against the requested order.
+    pages = [_FakePage(f"page-{i + 1}!", images=1) for i in range(8)]
+    fake_fitz(pages)
+
+    def stub(image_uri: str) -> str:
+        # The rasterized PNG encodes the page text ("PNG:page-N!"); decode the
+        # data URI back to it so the marker is tied to the source page.
+        b64 = image_uri.split(",", 1)[1]
+        return base64.b64decode(b64).decode()
+
+    result = extract.extract_pdf("x.pdf", "Course", pages=[5, 3, 8], transcriber=stub)
+
+    # Page numbers follow the requested order, not document order.
+    assert [p.page for p in result] == [5, 3, 8]
+    # And the transcribed text is tied to the matching page (no off-by-one mix-up).
+    assert [p.text for p in result] == ["PNG:page-5!", "PNG:page-3!", "PNG:page-8!"]
 
 
 # --- Rate-limit detection helper ---------------------------------------------

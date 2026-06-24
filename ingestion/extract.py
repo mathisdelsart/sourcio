@@ -256,8 +256,9 @@ def extract_pdf(
             so retries do not actually wait.
 
     Returns:
-        One Page per selected slide, in document order, with math preserved as
-        LaTeX for vision-transcribed pages.
+        One Page per selected slide, with math preserved as LaTeX for
+        vision-transcribed pages. When explicit `pages` are given the output
+        follows that requested order; otherwise pages are in document order.
     """
     import fitz  # PyMuPDF, imported lazily so non-ingestion code can import this module.
 
@@ -271,22 +272,28 @@ def extract_pdf(
     transcriber = with_rate_limit_retry(transcriber, sleep=sleep)
 
     doc = fitz.open(path)
-    selected = set(pages) if pages else None
+    page_count = doc.page_count
 
-    # First pass: select pages, classify them, and resolve plain-text pages for
-    # free. Vision pages are recorded as pending jobs to run concurrently.
+    # Resolve the output order. Explicit `pages` take priority in the given order
+    # (de-duplicated, keeping first occurrence, and dropping out-of-range values);
+    # otherwise pages follow natural document order. `max_pages` then caps the
+    # first N selected pages in whichever order was chosen.
+    if pages:
+        seen: set[int] = set()
+        order = [p for p in pages if 1 <= p <= page_count and not (p in seen or seen.add(p))]
+    else:
+        order = list(range(1, page_count + 1))
+    if max_pages is not None:
+        order = order[:max_pages]
+
+    # First pass: classify the selected pages and resolve plain-text pages for
+    # free. Vision pages are recorded as pending jobs to run concurrently. The
+    # dicts are keyed by page number so the requested order is honored later.
     plain: dict[int, str] = {}
     vision_jobs: list[tuple[int, str]] = []
-    order: list[int] = []
 
-    for i, page in enumerate(doc):
-        page_no = i + 1
-        if selected is not None and page_no not in selected:
-            continue
-        if max_pages is not None and len(order) >= max_pages:
-            break
-        order.append(page_no)
-
+    for page_no in order:
+        page = doc[page_no - 1]
         if hybrid and not needs_vision(_page_features(page)):
             plain[page_no] = page.get_text().strip()
         else:
