@@ -7,6 +7,7 @@ relevant is retrieved, the node refuses rather than inventing content that is
 not in the course (mirroring the refusal contract in ``answer.py``).
 """
 
+from agent.persistence import persist_exercise
 from agent.state import TutorState
 from answer import REFUSAL
 from config import get_llm
@@ -41,7 +42,9 @@ def generate(state: TutorState) -> TutorState:
     """Generate a course-grounded exercise + reference solution.
 
     Retrieves chunks for ``state['message']`` and builds the exercise only from
-    them. Returns a refusal when nothing relevant is found.
+    them. Returns a refusal when nothing relevant is found. When an exercise is
+    produced (not refused) it is persisted for the student via the optional
+    persistence layer, which is a no-op without a student or database.
     """
     from retrieval import retrieve
 
@@ -56,7 +59,28 @@ def generate(state: TutorState) -> TutorState:
     raw = get_llm("generate").invoke([("system", _SYSTEM), ("human", prompt)]).content.strip()
 
     problem, solution = _split(raw)
+    # The notion is the request itself; the course comes from the retrieved
+    # chunks so the stored exercise stays attributed to its source course.
+    notion = state["message"]
+    course = results[0].chunk.course
+    exercise_id = persist_exercise(
+        state.get("student_id"),
+        course=course,
+        notion=notion,
+        problem=problem,
+        reference_solution=solution,
+    )
+    exercise: dict = {
+        "problem": problem,
+        "solution": solution,
+        "refused": False,
+        "course": course,
+        "notion": notion,
+    }
+    # Surface the stored id so a later grade can link back to this exercise.
+    if exercise_id is not None:
+        exercise["id"] = exercise_id
     return {
-        "exercise": {"problem": problem, "solution": solution, "refused": False},
+        "exercise": exercise,
         "retrieved": [r.citation() for r in results],
     }

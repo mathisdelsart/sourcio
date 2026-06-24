@@ -11,6 +11,7 @@ numeric score plus feedback.
 import json
 import re
 
+from agent.persistence import persist_grade
 from agent.state import TutorState
 from config import get_llm
 
@@ -39,7 +40,12 @@ def _parse(raw: str) -> dict:
 
 
 def grade(state: TutorState) -> TutorState:
-    """Grade ``state['message']`` (the student's answer) and return a verdict."""
+    """Grade ``state['message']`` (the student's answer) and return a verdict.
+
+    When the answer is graded against a stored exercise (``state['exercise']``
+    carries its id) the verdict is persisted for the student via the optional
+    persistence layer, which is a no-op without a student, exercise or database.
+    """
     exercise = state.get("exercise") or {}
     reference = exercise.get("solution", "")
 
@@ -47,4 +53,14 @@ def grade(state: TutorState) -> TutorState:
     raw = get_llm("grade").invoke([("system", _SYSTEM), ("human", human)]).content.strip()
 
     # Keep raw parsing internal; the node returns only the clean verdict.
-    return {"grade": _parse(raw)}
+    verdict = _parse(raw)
+
+    persist_grade(
+        state.get("student_id"),
+        exercise_id=exercise.get("id"),
+        answer=state["message"],
+        score=verdict["score"],
+        feedback=verdict["feedback"],
+    )
+
+    return {"grade": verdict}
