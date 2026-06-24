@@ -13,6 +13,7 @@ is stateful: a ``student_id`` identifies the user (get-or-create), ``/ask`` turn
 are persisted as conversation history, and ``/history`` replays them.
 """
 
+import hmac
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -79,7 +80,7 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
     expected = get_settings().api_key
     if not expected:
         return
-    if x_api_key != expected:
+    if not hmac.compare_digest(x_api_key or "", expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key.",
@@ -124,6 +125,7 @@ class ExerciseResponse(BaseModel):
 
     problem: str
     refused: bool
+    id: int | None = None
 
 
 class GradeRequest(BaseModel):
@@ -179,24 +181,28 @@ def exercise(request: ExerciseRequest) -> dict[str, Any]:
     """Generate a course-grounded exercise on the requested notion.
 
     The reference solution stays server-side and is never returned. The student
-    is ensured to exist; exercise persistence is owned by the agent node.
+    is ensured to exist; exercise persistence is owned by the agent node, which
+    needs the ``student_id`` to store the exercise. The persisted exercise id is
+    surfaced so a later ``/grade`` call can link the grade back to it.
     """
     with get_session(_engine) as session:
         _get_or_create_student(session, request.student_id)
-    state = generate({"message": request.notion})
+    state = generate({"message": request.notion, "student_id": request.student_id})
     built = state["exercise"]
-    return {"problem": built["problem"], "refused": built["refused"]}
+    return {"problem": built["problem"], "refused": built["refused"], "id": built.get("id")}
 
 
 @app.post("/grade", response_model=GradeResponse, dependencies=[Depends(require_api_key)])
 def grade_answer(request: GradeRequest) -> dict[str, Any]:
     """Grade the student's answer, optionally against a prior exercise.
 
-    The student is ensured to exist; grade persistence is owned by the agent node.
+    The student is ensured to exist; grade persistence is owned by the agent
+    node, which needs the ``student_id`` (and the exercise's id) to link the
+    grade to its exercise.
     """
     with get_session(_engine) as session:
         _get_or_create_student(session, request.student_id)
-    state: dict[str, Any] = {"message": request.message}
+    state: dict[str, Any] = {"message": request.message, "student_id": request.student_id}
     if request.exercise is not None:
         state["exercise"] = request.exercise
     verdict = grade(state)["grade"]

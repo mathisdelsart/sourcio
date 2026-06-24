@@ -53,7 +53,12 @@ class TutorClient:
         return self._post("/ask", {"student_id": student_id, "question": question, "k": k})
 
     def exercise(self, student_id: str, notion: str) -> dict[str, Any]:
-        """Generate an exercise and return ``{problem, refused}``."""
+        """Generate an exercise and return ``{problem, refused, id}``.
+
+        The ``id`` is the server-side exercise id (``None`` when the exercise was
+        refused or not persisted). It must be carried back into ``grade`` so the
+        recorded grade links to its exercise.
+        """
         return self._post("/exercise", {"student_id": student_id, "notion": notion})
 
     def grade(
@@ -108,6 +113,19 @@ def render_exercise(exercise: dict[str, Any]) -> str:
     if exercise.get("refused"):
         return f"**Refused.** {exercise.get('problem', '').strip()}"
     return (exercise.get("problem") or "").strip()
+
+
+def exercise_for_grading(exercise: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Build the exercise payload sent to ``/grade`` from a generated exercise.
+
+    Returns ``None`` when there is no usable exercise (missing or refused) so the
+    answer is graded on its own. Otherwise the generated exercise dict is passed
+    through unchanged, crucially preserving its server-side ``id`` so the grade
+    links back to the stored exercise (``persist_grade`` skips without it).
+    """
+    if not exercise or exercise.get("refused"):
+        return None
+    return exercise
 
 
 def render_grade(grade: dict[str, Any]) -> str:
@@ -174,7 +192,7 @@ def main() -> None:  # pragma: no cover - thin UI wiring, not unit-tested
         student_answer = st.text_area("Your answer", key="grade_answer", height=160)
         if st.button("Grade", key="grade_button") and student_answer.strip():
             with st.spinner("Grading your answer..."):
-                out = client.grade(student_id, student_answer, exercise=last or None)
+                out = client.grade(student_id, student_answer, exercise=exercise_for_grading(last))
             st.markdown(render_grade(out))
 
     with history_tab:
