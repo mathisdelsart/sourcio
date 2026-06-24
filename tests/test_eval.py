@@ -11,6 +11,7 @@ from eval.run_eval import (
     EvalCase,
     Metrics,
     Verdict,
+    _source_texts,
     aggregate,
     evaluate,
     format_summary,
@@ -188,6 +189,32 @@ def test_run_eval_fails_on_retrieval_miss_when_threshold_set():
     )
     assert metrics.retrieval_hit_rate == 0.0
     assert ok is False
+
+
+# --- source-text extraction for the judge ---------------------------------
+
+
+def test_source_texts_returns_chunk_texts_not_labels():
+    # An ``answer()``-shaped dict carries both the raw passages (``retrieved``)
+    # and the citation labels (``sources``). The judge must see the passages.
+    out = {
+        "answer": "A wavelet is X [1].",
+        "refused": False,
+        "sources": ["(Wavelet Transform, p.11)"],
+        "retrieved": [
+            "A wavelet is a localized oscillation.",
+            "Multiresolution analysis decomposes a signal.",
+        ],
+    }
+    assert _source_texts(out) == [
+        "A wavelet is a localized oscillation.",
+        "Multiresolution analysis decomposes a signal.",
+    ]
+
+
+def test_source_texts_falls_back_to_labels_when_no_retrieved():
+    out = {"answer": "x", "sources": ["(Wavelet Transform, p.11)"]}
+    assert _source_texts(out) == ["(Wavelet Transform, p.11)"]
 
 
 # --- judge-output parser --------------------------------------------------
