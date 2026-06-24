@@ -1,0 +1,130 @@
+"""Engine and session helpers driven by ``Settings.database_url``.
+
+The engine is created lazily (no connection at import time) so importing this
+module never touches the database. Swapping SQLite for PostgreSQL is a matter of
+changing ``database_url`` in the settings.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from config import get_settings
+from db.models import Base, Exercise, Grade, Message
+
+# Bound on first use by ``get_session`` / ``configure_session_factory``.
+SessionLocal = sessionmaker(class_=Session, expire_on_commit=False)
+
+
+def create_engine_from_settings(url: str | None = None) -> Engine:
+    """Create an SQLAlchemy engine from the configured ``database_url``.
+
+    Pass ``url`` to override the configured value (e.g. an in-memory database in
+    tests). The engine is created but no connection is opened here.
+    """
+    database_url = url or get_settings().database_url
+    return create_engine(database_url, future=True)
+
+
+def init_db(engine: Engine) -> None:
+    """Create all tables on ``engine`` if they do not already exist."""
+    Base.metadata.create_all(engine)
+
+
+def configure_session_factory(engine: Engine) -> None:
+    """Bind the module-level ``SessionLocal`` factory to ``engine``."""
+    SessionLocal.configure(bind=engine)
+
+
+@contextmanager
+def get_session(engine: Engine | None = None) -> Iterator[Session]:
+    """Yield a session, committing on success and rolling back on error.
+
+    When ``engine`` is given, a session bound to it is used directly; otherwise
+    the module-level ``SessionLocal`` factory is used (configure it first via
+    ``configure_session_factory``).
+    """
+    session = SessionLocal(bind=engine) if engine is not None else SessionLocal()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def add_exercise(
+    session: Session,
+    *,
+    student_id: int,
+    course: str,
+    notion: str,
+    problem: str,
+    reference_solution: str,
+) -> Exercise:
+    """Persist a generated exercise and return the flushed instance."""
+    exercise = Exercise(
+        student_id=student_id,
+        course=course,
+        notion=notion,
+        problem=problem,
+        reference_solution=reference_solution,
+    )
+    session.add(exercise)
+    session.flush()
+    return exercise
+
+
+def add_grade(
+    session: Session,
+    *,
+    exercise_id: int,
+    student_id: int,
+    answer: str,
+    score: float,
+    feedback: str,
+) -> Grade:
+    """Persist a grade for an exercise and return the flushed instance."""
+    grade = Grade(
+        exercise_id=exercise_id,
+        student_id=student_id,
+        answer=answer,
+        score=score,
+        feedback=feedback,
+    )
+    session.add(grade)
+    session.flush()
+    return grade
+
+
+def add_message(session: Session, *, student_id: int, role: str, content: str) -> Message:
+    """Append a conversation message and return the flushed instance."""
+    message = Message(student_id=student_id, role=role, content=content)
+    session.add(message)
+    session.flush()
+    return message
+
+
+def recent_messages(session: Session, student_id: int, limit: int = 20) -> list[Message]:
+    """Return the most recent messages for a student, oldest first.
+
+    The newest ``limit`` messages are selected, then returned in chronological
+    order so they can be replayed as conversation history.
+    """
+    from sqlalchemy import select
+
+    stmt = (
+        select(Message)
+        .where(Message.student_id == student_id)
+        .order_by(Message.created_at.desc(), Message.id.desc())
+        .limit(limit)
+    )
+    rows = list(session.scalars(stmt))
+    rows.reverse()
+    return rows
