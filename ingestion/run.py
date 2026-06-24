@@ -25,12 +25,30 @@ def main() -> None:
         help="Explicit 1-based pages to extract (e.g. --pages 10 11). Overrides order.",
     )
     parser.add_argument("--dpi", type=int, default=150, help="Rasterization resolution.")
+    parser.add_argument(
+        "--hybrid",
+        action="store_true",
+        help="Route plain-text pages to free PyMuPDF extraction; vision only for "
+        "math/figure-heavy pages. Default sends every page to the vision model.",
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=8,
+        help="Maximum number of vision transcriptions running at once.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
     pages = extract_pdf(
-        args.pdf, args.course, dpi=args.dpi, max_pages=args.max_pages, pages=args.pages
+        args.pdf,
+        args.course,
+        dpi=args.dpi,
+        max_pages=args.max_pages,
+        pages=args.pages,
+        hybrid=args.hybrid,
+        concurrency=args.concurrency,
     )
     chunks = chunk_pages(pages)
     index_chunks(chunks)
