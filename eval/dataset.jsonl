@@ -1,8 +1,18 @@
-{"question": "What is a wavelet transform?", "expect_refusal": false, "note": "Core topic of the indexed slide deck."}
-{"question": "How does a piecewise constant approximation represent a signal?", "expect_refusal": false, "note": "Piecewise constant approximation is covered in the deck."}
-{"question": "What is multi-resolution analysis?", "expect_refusal": false, "note": "Multi-resolution is a central wavelet concept in the deck."}
-{"question": "How do scaling functions relate to wavelet functions?", "expect_refusal": false, "note": "Scaling vs wavelet functions are covered."}
+{"question": "What is a wavelet transform?", "expect_refusal": false, "note": "Core topic of the indexed slide deck.", "expect_keywords": ["wavelet", "transform"]}
+{"question": "How does a piecewise constant approximation represent a signal?", "expect_refusal": false, "note": "Piecewise constant approximation is covered in the deck.", "expect_keywords": ["piecewise constant", "approximation"]}
+{"question": "What is the approximation space in multiresolution analysis?", "expect_refusal": false, "note": "Approximation spaces are introduced with the nested-subspace construction.", "expect_keywords": ["approximation space", "subspace"]}
+{"question": "What is multi-resolution analysis?", "expect_refusal": false, "note": "Multi-resolution is a central wavelet concept in the deck.", "expect_keywords": ["multiresolution", "resolution"]}
+{"question": "How do scaling functions relate to wavelet functions?", "expect_refusal": false, "note": "Scaling vs wavelet functions are covered.", "expect_keywords": ["scaling function", "wavelet function"]}
+{"question": "What is the scaling function used for in a multiresolution analysis?", "expect_refusal": false, "note": "Scaling function defines the approximation spaces.", "expect_keywords": ["scaling function"]}
+{"question": "How is the fast wavelet transform computed?", "expect_refusal": false, "note": "The fast wavelet transform (filter-bank recursion) is presented.", "expect_keywords": ["fast wavelet transform", "filter"]}
+{"question": "What is the Haar wavelet?", "expect_refusal": false, "note": "Haar is the introductory example of the deck.", "expect_keywords": ["haar"]}
+{"question": "How does the Haar scaling function build a piecewise constant approximation?", "expect_refusal": false, "note": "Haar links scaling functions and piecewise constant approximation.", "expect_keywords": ["haar", "piecewise constant"]}
+{"question": "Why are the approximation subspaces nested in multiresolution analysis?", "expect_refusal": false, "note": "Nested subspaces are an axiom of multiresolution analysis.", "expect_keywords": ["nested", "subspace"]}
+{"question": "What are detail coefficients in the wavelet decomposition?", "expect_refusal": false, "note": "Detail (wavelet) coefficients complement the approximation coefficients.", "expect_keywords": ["detail", "coefficient"]}
 {"question": "What is the capital of Australia?", "expect_refusal": true, "note": "Geography, clearly outside the wavelet course."}
 {"question": "How do I bake a sourdough bread at home?", "expect_refusal": true, "note": "Cooking, unrelated to the course material."}
 {"question": "Who won the football world cup in 2018?", "expect_refusal": true, "note": "Sports trivia, out of scope."}
 {"question": "What is the boiling point of water at sea level?", "expect_refusal": true, "note": "General physics, not in the wavelet deck."}
+{"question": "What were the main causes of the French Revolution?", "expect_refusal": true, "note": "History, clearly outside the wavelet course."}
+{"question": "How do I configure a VPN on my laptop?", "expect_refusal": true, "note": "IT how-to, unrelated to the course material."}
+{"question": "What is the best way to invest in the stock market?", "expect_refusal": true, "note": "Personal finance, out of scope."}
