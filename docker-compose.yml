@@ -1,4 +1,16 @@
 services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"   # FastAPI / uvicorn
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      - qdrant
+    networks:
+      - grounded-rag
+
   qdrant:
     image: qdrant/qdrant:latest
     ports:
@@ -6,6 +18,11 @@ services:
       - "6334:6334"   # gRPC
     volumes:
       - qdrant_storage:/qdrant/storage
+    networks:
+      - grounded-rag
+
+networks:
+  grounded-rag:
 
 volumes:
   qdrant_storage:
