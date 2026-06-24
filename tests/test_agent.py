@@ -262,3 +262,156 @@ def test_reexplain_uses_previous_tutor_turn(fake_llm):
     # The previous tutor explanation was fed to the model, not re-retrieved.
     human_msg = fake_llm["last"].calls[0][-1][1]
     assert "First explanation [1]." in human_msg
+
+
+def test_reexplain_uses_last_tutor_turn_when_several(fake_llm):
+    fake_llm["reply"] = "Even simpler."
+    history = [
+        {"role": "tutor", "content": "Old explanation."},
+        {"role": "student", "content": "still lost"},
+        {"role": "tutor", "content": "Latest explanation [2]."},
+    ]
+    out = reexplain({"message": "again", "history": history})
+    assert out["answer"] == "Even simpler."
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    # The most recent tutor turn is the one rephrased, not an earlier one.
+    assert "Latest explanation [2]." in human_msg
+    assert "Old explanation." not in human_msg
+
+
+# --- persistence: exercises and grades are stored, optionally ----------------
+
+sqlalchemy = pytest.importorskip("sqlalchemy")
+
+
+@pytest.fixture
+def db_factory(monkeypatch):
+    """Inject an in-memory SQLite session factory into the persistence layer.
+
+    Yields ``(SessionLocal, set_factory)``: the bound session factory for direct
+    inspection, and the helper that wired it into ``agent.persistence``. A single
+    shared in-memory engine keeps the schema alive across sessions.
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import StaticPool
+
+    import agent.persistence as persistence
+    from db.session import SessionLocal, init_db
+
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        future=True,
+    )
+    init_db(engine)
+    SessionLocal.configure(bind=engine)
+    persistence.set_session_factory(SessionLocal.begin)
+    yield SessionLocal
+    persistence.set_session_factory(None)
+
+
+def test_generate_persists_exercise_with_reference_solution(fake_llm, fake_retrieve, db_factory):
+    from sqlalchemy import select
+
+    from db.models import Exercise, Student
+
+    fake_retrieve["results"] = [_retrieved(3, "Integral definition.")]
+    fake_llm["reply"] = "EXERCISE:\nCompute X.\n\nSOLUTION:\nX = 42."
+
+    out = generate({"message": "integrals", "student_id": "alice"})
+    assert out["exercise"]["refused"] is False
+    assert "id" in out["exercise"]
+
+    with db_factory() as session:
+        student = session.scalar(select(Student).where(Student.external_id == "alice"))
+        assert student is not None
+        exercises = session.scalars(select(Exercise)).all()
+        assert len(exercises) == 1
+        stored = exercises[0]
+        assert stored.student_id == student.id
+        assert stored.problem == "Compute X."
+        assert stored.reference_solution == "X = 42."
+        assert stored.notion == "integrals"
+        assert stored.course == "Course"
+
+
+def test_grade_persists_grade_linked_to_exercise(fake_llm, fake_retrieve, db_factory):
+    from sqlalchemy import select
+
+    from db.models import Grade
+
+    # First create and store an exercise, then grade an answer against it.
+    fake_retrieve["results"] = [_retrieved(5, "Reference material.")]
+    fake_llm["reply"] = "EXERCISE:\nDo it.\n\nSOLUTION:\nThe answer."
+    gen = generate({"message": "limits", "student_id": "bob"})
+    exercise = gen["exercise"]
+
+    fake_llm["reply"] = '{"score": 75, "feedback": "Almost."}'
+    out = grade({"message": "my attempt", "student_id": "bob", "exercise": exercise})
+    assert out["grade"]["score"] == 75
+
+    with db_factory() as session:
+        grades = session.scalars(select(Grade)).all()
+        assert len(grades) == 1
+        stored = grades[0]
+        assert stored.exercise_id == exercise["id"]
+        assert stored.answer == "my attempt"
+        assert stored.score == 75
+        assert stored.feedback == "Almost."
+
+
+def test_grade_skips_persistence_without_stored_exercise(fake_llm, db_factory):
+    from sqlalchemy import select
+
+    from db.models import Grade
+
+    fake_llm["reply"] = '{"score": 50, "feedback": "ok"}'
+    # No exercise id: nothing to link a grade to, so persistence is skipped.
+    out = grade({"message": "answer", "student_id": "carol", "exercise": {"solution": "ref"}})
+    assert out["grade"]["score"] == 50
+
+    with db_factory() as session:
+        assert session.scalars(select(Grade)).all() == []
+
+
+def test_nodes_work_with_persistence_disabled(fake_llm, fake_retrieve, monkeypatch):
+    """Without an injected factory and no configured DB, nodes still run."""
+    import agent.persistence as persistence
+    import db.session as db_session
+
+    # Ensure no factory is wired and the default resolution finds no engine.
+    persistence.set_session_factory(None)
+
+    def _no_engine(*_args, **_kwargs):
+        raise RuntimeError("no engine configured")
+
+    # Simulate an unconfigured database: the default resolution must degrade to
+    # a no-op instead of crashing the node.
+    monkeypatch.setattr(db_session, "get_session", _no_engine)
+
+    fake_retrieve["results"] = [_retrieved(1, "Some material.")]
+    fake_llm["reply"] = "EXERCISE:\nTry this.\n\nSOLUTION:\nDone."
+    gen = generate({"message": "topic", "student_id": "dave"})
+    assert gen["exercise"]["refused"] is False
+    # No id is surfaced when nothing was persisted.
+    assert "id" not in gen["exercise"]
+
+    fake_llm["reply"] = '{"score": 90, "feedback": "Great."}'
+    graded = grade({"message": "ans", "student_id": "dave", "exercise": gen["exercise"]})
+    assert graded["grade"]["score"] == 90
+
+
+def test_persistence_skipped_without_student_id(fake_llm, fake_retrieve, db_factory):
+    from sqlalchemy import select
+
+    from db.models import Exercise
+
+    fake_retrieve["results"] = [_retrieved(2, "Material.")]
+    fake_llm["reply"] = "EXERCISE:\nQ.\n\nSOLUTION:\nA."
+    # No student_id: persistence is skipped even though a DB is configured.
+    out = generate({"message": "topic"})
+    assert "id" not in out["exercise"]
+
+    with db_factory() as session:
+        assert session.scalars(select(Exercise)).all() == []
