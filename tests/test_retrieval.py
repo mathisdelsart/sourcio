@@ -184,12 +184,23 @@ def test_reranker_reorders_and_truncates_to_k(monkeypatch):
     assert [r.score for r in results] == [0.9, 0.5]
 
 
-def test_reranker_fetches_more_candidates_without_threshold(monkeypatch):
-    _set_settings(monkeypatch, reranker_model="fake-model", rerank_candidates=20)
+def test_reranker_fetches_more_candidates_above_threshold(monkeypatch):
+    # The reranker widens the candidate pool but keeps the dense similarity
+    # threshold, so the cross-encoder only ever reorders in-course survivors.
+    settings = _set_settings(monkeypatch, reranker_model="fake-model", rerank_candidates=20)
     retrieval.retrieve("q", k=5, scorer=lambda question, texts: [0.0] * len(texts))
     kwargs = _FakeQdrantClient.last_kwargs
     assert kwargs["limit"] == 20
-    assert kwargs["score_threshold"] is None
+    assert kwargs["score_threshold"] == settings.similarity_threshold
+
+
+def test_reranker_returns_empty_when_no_candidates_pass_threshold(monkeypatch):
+    # Out-of-course question: the dense pre-filter drops everything, so even with
+    # a reranker configured the retrieval is empty -> the answer layer refuses.
+    _set_settings(monkeypatch, reranker_model="fake-model", rerank_candidates=20)
+    _FakeQdrantClient.points = []
+    results = retrieval.retrieve("q", k=5, scorer=lambda question, texts: [0.0] * len(texts))
+    assert results == []
 
 
 def test_reranker_limit_at_least_k(monkeypatch):

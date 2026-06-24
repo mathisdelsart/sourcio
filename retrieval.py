@@ -6,9 +6,10 @@ An empty result means nothing in the course is relevant enough, which the
 answer layer turns into an explicit refusal rather than a guess.
 
 An optional cross-encoder reranker (opt-in via ``reranker_model``) can improve
-precision: it fetches more candidates without the similarity threshold, rescores
-each (question, chunk) pair locally, and keeps the best k. When disabled (the
-default) the dense path above is used unchanged.
+precision: it fetches more candidates above the similarity threshold, rescores
+each (question, chunk) pair locally, and keeps the best k. The dense threshold
+still pre-filters, so an out-of-course question yields no candidates and is
+refused. When disabled (the default) the dense path above is used unchanged.
 """
 
 from collections.abc import Callable
@@ -112,9 +113,11 @@ def retrieve(
     ordered by similarity.
 
     Reranking path (when ``reranker_model`` is set): fetches up to
-    ``rerank_candidates`` chunks *without* the similarity threshold, rescores
+    ``rerank_candidates`` chunks *above* the similarity threshold, rescores
     them with a local cross-encoder, and returns the top k. The returned
     ``.score`` is then the cross-encoder relevance, not the dense similarity.
+    Keeping the threshold preserves refusal: an out-of-course question yields
+    no candidates, so the answer layer refuses instead of guessing.
 
     In both paths, when ``course`` and/or ``chapter`` are given retrieval is
     restricted to chunks whose payload matches them; when both are None the
@@ -126,14 +129,14 @@ def retrieve(
     query_filter = _build_filter(course, chapter)
 
     reranking = bool(settings.reranker_model)
+    score_threshold = settings.similarity_threshold
     if reranking:
-        # Fetch more candidates and drop the threshold so the cross-encoder has
-        # room to re-order; it decides what is relevant, not the dense score.
+        # Fetch more candidates (still above the similarity threshold) so the
+        # cross-encoder has room to re-order the survivors. Keeping the dense
+        # pre-filter means an out-of-course question yields nothing -> refusal.
         limit = max(settings.rerank_candidates, k)
-        score_threshold = None
     else:
         limit = k
-        score_threshold = settings.similarity_threshold
 
     response = client.query_points(
         collection_name=settings.qdrant_collection,

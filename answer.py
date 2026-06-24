@@ -59,21 +59,25 @@ def answer(
     """Answer a question grounded in the course, or refuse if uncovered.
 
     Returns a dict with the remapped ``answer``, the ``refused`` flag, the
-    ``sources`` actually cited in the answer, and the unmapped ``raw`` model
-    output (what the LLM literally produced, with [n] markers).
+    ``sources`` actually cited in the answer (citation labels), the unmapped
+    ``raw`` model output (what the LLM literally produced, with [n] markers),
+    and ``retrieved``: the raw text of every retrieved chunk. The faithfulness
+    judge consumes ``retrieved`` so it can verify support against the actual
+    passages, not the citation labels (which carry no content). On refusal
+    ``retrieved`` is an empty list, for shape consistency.
 
     ``course`` and ``chapter`` optionally restrict retrieval to a single course
     (and chapter); when both are None the whole collection is searched.
     """
     results = retrieve(question, k=k, course=course, chapter=chapter)
     if not results:
-        return {"answer": REFUSAL, "refused": True, "sources": [], "raw": REFUSAL}
+        return {"answer": REFUSAL, "refused": True, "sources": [], "raw": REFUSAL, "retrieved": []}
 
     prompt = f"Sources:\n{_format_sources(results)}\n\nQuestion: {question}"
     raw = get_llm("explain").invoke([("system", _SYSTEM), ("human", prompt)]).content.strip()
 
     if raw.strip() == REFUSAL:
-        return {"answer": REFUSAL, "refused": True, "sources": [], "raw": raw}
+        return {"answer": REFUSAL, "refused": True, "sources": [], "raw": raw, "retrieved": []}
 
     # Only list the sources the answer truly relies on, not every retrieved chunk.
     sources = [results[n - 1].citation() for n in _cited_indices(raw, len(results))]
@@ -82,4 +86,5 @@ def answer(
         "refused": False,
         "sources": sources,
         "raw": raw,
+        "retrieved": [r.chunk.text for r in results],
     }
