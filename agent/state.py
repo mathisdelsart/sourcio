@@ -12,6 +12,10 @@ from typing import Any, Literal, TypedDict
 # single source of truth shared by the router prompt and the routing table.
 Intent = Literal["explain", "generate", "grade", "reexplain"]
 
+# Audience levels a re-explanation can target. Optional in the state; the
+# reexplain node falls back to a sensible default when none is supplied.
+Level = Literal["beginner", "intermediate", "advanced"]
+
 
 class TutorState(TypedDict, total=False):
     """State passed between graph nodes."""
@@ -19,6 +23,7 @@ class TutorState(TypedDict, total=False):
     student_id: str
     message: str
     intent: Intent  # explain | generate | grade | reexplain
+    level: Level  # optional audience level for re-explanation
     retrieved: list[Any]  # citations/sources backing the last explanation
     answer: str  # grounded explanation (explain / reexplain output)
     exercise: dict[str, Any]  # generated exercise + reference solution

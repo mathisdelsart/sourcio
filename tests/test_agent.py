@@ -279,6 +279,63 @@ def test_reexplain_uses_last_tutor_turn_when_several(fake_llm):
     assert "Old explanation." not in human_msg
 
 
+# --- adaptive re-explanation by level ----------------------------------------
+
+# Distinctive substrings each level's guidance must inject into the prompt.
+_LEVEL_MARKERS = {
+    "beginner": "beginner",
+    "intermediate": "intermediate level",
+    "advanced": "advanced level",
+}
+
+
+@pytest.mark.parametrize("level", list(_LEVEL_MARKERS))
+def test_reexplain_reflects_requested_level_in_prompt(fake_llm, level):
+    fake_llm["reply"] = "Rephrased."
+    history = [{"role": "tutor", "content": "Original explanation [1]."}]
+    out = reexplain({"message": "again", "level": level, "history": history})
+    assert out["answer"] == "Rephrased."
+
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    # The requested level's guidance is present, and no other level leaks in.
+    assert _LEVEL_MARKERS[level] in human_msg
+    for other, marker in _LEVEL_MARKERS.items():
+        if other != level:
+            assert marker not in human_msg
+    # Re-explanation still grounds on the latest tutor turn from history.
+    assert "Original explanation [1]." in human_msg
+
+
+def test_reexplain_defaults_level_when_absent(fake_llm):
+    from agent.nodes.reexplain import _LEVEL_GUIDANCE, DEFAULT_LEVEL
+
+    fake_llm["reply"] = "Default rephrase."
+    history = [{"role": "tutor", "content": "Original explanation [1]."}]
+    out = reexplain({"message": "again", "history": history})
+    assert out["answer"] == "Default rephrase."
+
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    # No level supplied falls back to the default level's guidance.
+    assert _LEVEL_GUIDANCE[DEFAULT_LEVEL] in human_msg
+    assert _LEVEL_MARKERS[DEFAULT_LEVEL] in human_msg
+
+
+def test_graph_threads_level_into_reexplain(fake_llm):
+    fake_llm["reply"] = "Advanced rephrase."
+    app = build_graph()
+    out = app.invoke(
+        {
+            "message": "I don't understand, explain again",
+            "level": "advanced",
+            "history": [{"role": "tutor", "content": "Original explanation [1]."}],
+        }
+    )
+    assert out["intent"] == "reexplain"
+    assert out["answer"] == "Advanced rephrase."
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    assert _LEVEL_MARKERS["advanced"] in human_msg
+
+
 # --- persistence: exercises and grades are stored, optionally ----------------
 
 sqlalchemy = pytest.importorskip("sqlalchemy")
