@@ -67,6 +67,17 @@ export interface HistoryItem {
   created_at: string;
 }
 
+/** Spaced-repetition recall quality, from 0 (forgot) to 5 (perfect). */
+export type ReviewQuality = 0 | 1 | 2 | 3 | 4 | 5;
+
+/** A notion scheduled for spaced-repetition review. */
+export interface ReviewItem {
+  notion: string;
+  ease: number;
+  interval_days: number;
+  due_at: string;
+}
+
 /** A student's thumbs up (1) or down (-1) on a tutor answer. */
 export type FeedbackRating = 1 | -1;
 
@@ -501,6 +512,39 @@ export async function getSessionMessages(
   return request<HistoryItem[]>(
     `/sessions/${encodeURIComponent(studentId)}/${sessionId}/messages`,
     { method: "GET", headers: buildHeaders(config) },
+    config,
+  );
+}
+
+/** List the notions due for spaced-repetition review now, soonest first. */
+export async function getDueReviews(
+  studentId: string,
+  config?: ConnectionConfig,
+): Promise<ReviewItem[]> {
+  return request<ReviewItem[]>(
+    `/reviews/due?student_id=${encodeURIComponent(studentId)}`,
+    { method: "GET", headers: buildHeaders(config) },
+    config,
+  );
+}
+
+/**
+ * Record a recall rating for a notion and reschedule it. `quality` is 0..5;
+ * the response carries the updated ease, interval and next due date.
+ */
+export async function recordReview(
+  studentId: string,
+  notion: string,
+  quality: ReviewQuality,
+  config?: ConnectionConfig,
+): Promise<ReviewItem> {
+  return request<ReviewItem>(
+    "/reviews",
+    {
+      method: "POST",
+      headers: buildHeaders(config, true),
+      body: JSON.stringify({ student_id: studentId, notion, quality }),
+    },
     config,
   );
 }

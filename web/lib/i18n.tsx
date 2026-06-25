@@ -49,6 +49,7 @@ const en = {
   "tabs.quiz": "Quiz",
   "tabs.threads": "Threads",
   "tabs.history": "History",
+  "tabs.review": "Review",
 
   // Health badge
   "health.online": "Backend online",
@@ -219,6 +220,35 @@ const en = {
   "threads.loadFailed": "Could not load threads.",
   "threads.messagesFailed": "Could not load the thread's messages.",
 
+  // Review panel (spaced repetition)
+  "review.title": "Spaced repetition",
+  "review.description":
+    "Rate how well you recalled each notion. Your rating reschedules it for the right time.",
+  "review.refresh": "Refresh",
+  "review.dueTitle": "Due now",
+  "review.dueCount": "{count} due",
+  "review.add.title": "Add a notion",
+  "review.add.label": "Notion to review",
+  "review.add.placeholder": "e.g. continuous wavelet transform",
+  "review.add.button": "Add",
+  "review.add.hint": "Adds the notion to your review queue, due immediately.",
+  "review.added": "Added “{notion}” to your review queue.",
+  "review.rateLabel": "How well did you recall this?",
+  "review.rate.again": "Again",
+  "review.rate.hard": "Hard",
+  "review.rate.good": "Good",
+  "review.rate.easy": "Easy",
+  "review.rate.againAria": "Rate “{notion}” as forgotten",
+  "review.rate.hardAria": "Rate “{notion}” as hard",
+  "review.rate.goodAria": "Rate “{notion}” as good",
+  "review.rate.easyAria": "Rate “{notion}” as easy",
+  "review.rescheduled": "“{notion}” — next review in {days}.",
+  "review.day": "1 day",
+  "review.days": "{days} days",
+  "review.empty.title": "Nothing due — well done.",
+  "review.empty.description":
+    "You're all caught up. Add a notion above to start tracking it.",
+
   // Export actions
   "export.copy": "Copy as Markdown",
   "export.copyAria": "Copy answer and citations as Markdown",
@@ -272,6 +302,7 @@ const fr: Record<TranslationKey, string> = {
   "tabs.quiz": "Quiz",
   "tabs.threads": "Fils",
   "tabs.history": "Historique",
+  "tabs.review": "Révision",
 
   // Health badge
   "health.online": "Backend en ligne",
@@ -450,6 +481,35 @@ const fr: Record<TranslationKey, string> = {
     "Sélectionnez ce fil, puis posez une question dans l'onglet Demander pour le démarrer.",
   "threads.loadFailed": "Impossible de charger les fils.",
   "threads.messagesFailed": "Impossible de charger les messages du fil.",
+
+  // Review panel (spaced repetition)
+  "review.title": "Répétition espacée",
+  "review.description":
+    "Évaluez votre rappel de chaque notion. Votre note la replanifie au bon moment.",
+  "review.refresh": "Actualiser",
+  "review.dueTitle": "À réviser",
+  "review.dueCount": "{count} à réviser",
+  "review.add.title": "Ajouter une notion",
+  "review.add.label": "Notion à réviser",
+  "review.add.placeholder": "ex. transformée en ondelettes continue",
+  "review.add.button": "Ajouter",
+  "review.add.hint": "Ajoute la notion à votre file de révision, à réviser immédiatement.",
+  "review.added": "« {notion} » ajoutée à votre file de révision.",
+  "review.rateLabel": "À quel point vous en êtes-vous souvenu ?",
+  "review.rate.again": "À revoir",
+  "review.rate.hard": "Difficile",
+  "review.rate.good": "Bien",
+  "review.rate.easy": "Facile",
+  "review.rate.againAria": "Noter « {notion} » comme oubliée",
+  "review.rate.hardAria": "Noter « {notion} » comme difficile",
+  "review.rate.goodAria": "Noter « {notion} » comme bien",
+  "review.rate.easyAria": "Noter « {notion} » comme facile",
+  "review.rescheduled": "« {notion} » — prochaine révision dans {days}.",
+  "review.day": "1 jour",
+  "review.days": "{days} jours",
+  "review.empty.title": "Rien à réviser — bravo.",
+  "review.empty.description":
+    "Vous êtes à jour. Ajoutez une notion ci-dessus pour commencer à la suivre.",
 
   // Export actions
   "export.copy": "Copier en Markdown",
