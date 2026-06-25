@@ -63,3 +63,16 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.pyright]
+# Static type-check the application source only. Tests, migrations, the local
+# virtualenv and the web frontend are out of scope.
+include = ["agent", "api", "db", "ingestion", "eval", "config.py", "answer.py", "retrieval.py"]
+exclude = ["tests", "alembic", ".venv", "web"]
+# Resolve imports against the project virtualenv so installed extras are seen.
+venvPath = "."
+venv = ".venv"
+# Heavy optional extras (PyMuPDF/fitz, sentence-transformers, langchain-community)
+# are intentionally not installed in CI to avoid the multi-GB torch/CUDA bloat,
+# so unresolved imports are expected and must not fail the type check.
+reportMissingImports = false

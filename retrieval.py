@@ -16,7 +16,7 @@ from collections.abc import Callable
 from functools import lru_cache
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import FieldCondition, Filter, MatchValue
+from qdrant_client.models import Condition, FieldCondition, Filter, MatchValue
 
 from config import get_settings
 from ingestion.embed import embed_query
@@ -32,7 +32,7 @@ def _build_filter(course: str | None, chapter: str | None) -> Filter | None:
     Only matching chunks are returned, so the answer stays inside the chosen
     course/chapter. With both None the query is unfiltered (full collection).
     """
-    conditions: list[FieldCondition] = []
+    conditions: list[Condition] = []
     if course is not None:
         conditions.append(FieldCondition(key="course", match=MatchValue(value=course)))
     if chapter is not None:

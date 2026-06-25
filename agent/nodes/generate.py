@@ -44,20 +44,21 @@ def generate(state: TutorState) -> TutorState:
     """
     from retrieval import retrieve
 
-    results = retrieve(state["message"])
+    message = state.get("message", "")
+    results = retrieve(message)
     if not results:
         return {
             "exercise": {"problem": REFUSAL, "solution": "", "refused": True},
             "retrieved": [],
         }
 
-    prompt = f"Sources:\n{format_numbered_sources(results)}\n\nNotion: {state['message']}"
+    prompt = f"Sources:\n{format_numbered_sources(results)}\n\nNotion: {message}"
     raw = get_llm("generate").invoke([("system", _SYSTEM), ("human", prompt)]).content.strip()
 
     problem, solution = _split(raw)
     # The notion is the request itself; the course comes from the retrieved
     # chunks so the stored exercise stays attributed to its source course.
-    notion = state["message"]
+    notion = message
     course = results[0].chunk.course
     exercise_id = persist_exercise(
         state.get("student_id"),

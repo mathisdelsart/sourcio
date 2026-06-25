@@ -51,8 +51,9 @@ def grade(state: TutorState) -> TutorState:
     """
     exercise = state.get("exercise") or {}
     reference = exercise.get("solution", "")
+    message = state.get("message", "")
 
-    human = f"Reference solution:\n{reference}\n\nStudent answer:\n{state['message']}"
+    human = f"Reference solution:\n{reference}\n\nStudent answer:\n{message}"
     raw = get_llm("grade").invoke([("system", _SYSTEM), ("human", human)]).content.strip()
 
     # Keep raw parsing internal; the node returns only the clean verdict.
@@ -61,7 +62,7 @@ def grade(state: TutorState) -> TutorState:
     persist_grade(
         state.get("student_id"),
         exercise_id=exercise.get("id"),
-        answer=state["message"],
+        answer=message,
         score=verdict["score"],
         feedback=verdict["feedback"],
     )

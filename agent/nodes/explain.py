@@ -15,7 +15,7 @@ def explain(state: TutorState) -> TutorState:
     """Answer ``state['message']`` from the course and record it in memory."""
     from answer import answer
 
-    result = answer(state["message"])
+    result = answer(state.get("message", ""))
 
     history = list(state.get("history", []))
     history.append({"role": "tutor", "intent": "explain", "content": result["answer"]})

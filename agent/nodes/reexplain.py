@@ -52,7 +52,7 @@ def reexplain(state: TutorState) -> TutorState:
     guidance = _LEVEL_GUIDANCE.get(level, _LEVEL_GUIDANCE[DEFAULT_LEVEL])
     human = (
         f"Previous explanation:\n{previous}\n\n"
-        f"Student says: {state['message']}\n\n"
+        f"Student says: {state.get('message', '')}\n\n"
         f"Re-explain it. {guidance}"
     )
     raw = get_llm("reexplain").invoke([("system", _SYSTEM), ("human", human)]).content.strip()

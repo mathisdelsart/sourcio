@@ -265,8 +265,10 @@ def extract_pdf(
     if transcriber is None:
         llm = get_llm("extract")
 
-        def transcriber(image_uri: str) -> str:
+        def _default_transcriber(image_uri: str) -> str:
             return _vision_transcribe(image_uri, llm)
+
+        transcriber = _default_transcriber
 
     # Back off and retry on rate-limit (429) errors instead of crashing the run.
     transcriber = with_rate_limit_retry(transcriber, sleep=sleep)

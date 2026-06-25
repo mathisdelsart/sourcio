@@ -76,7 +76,7 @@ def classify_intent(message: str) -> Intent:
 
 def router(state: TutorState) -> TutorState:
     """Entry node: write the classified intent into the state."""
-    return {"intent": classify_intent(state["message"])}
+    return {"intent": classify_intent(state.get("message", ""))}
 
 
 def route(state: TutorState) -> Intent:

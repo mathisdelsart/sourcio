@@ -10,11 +10,11 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from config import get_settings
-from db.models import Base, Exercise, Grade, Message
+from db.models import Base, Exercise, Grade, Message, Student
 
 # Bound on first use by ``get_session`` / ``configure_session_factory``.
 SessionLocal = sessionmaker(class_=Session, expire_on_commit=False)
@@ -57,6 +57,20 @@ def get_session(engine: Engine | None = None) -> Iterator[Session]:
         raise
     finally:
         session.close()
+
+
+def get_or_create_student(session: Session, external_id: str) -> Student:
+    """Return the student with ``external_id``, creating one if needed.
+
+    The new student is flushed so its ``id`` is available to callers that need
+    to reference it (e.g. when persisting messages, exercises or grades).
+    """
+    student = session.scalar(select(Student).where(Student.external_id == external_id))
+    if student is None:
+        student = Student(external_id=external_id)
+        session.add(student)
+        session.flush()
+    return student
 
 
 def add_exercise(
