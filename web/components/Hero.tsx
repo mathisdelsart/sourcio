@@ -10,7 +10,7 @@ function ArrowDown() {
     <svg
       aria-hidden
       viewBox="0 0 24 24"
-      className="h-4 w-4"
+      className="h-4 w-4 transition-transform group-hover:translate-y-0.5"
       fill="none"
       stroke="currentColor"
       strokeWidth={2}
@@ -117,7 +117,7 @@ export function Hero({ targetId = "tool" }: { targetId?: string }) {
               type="button"
               onClick={() => scrollToId(targetId)}
               aria-label={t("hero.ctaAria")}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-6 py-3 text-base font-medium text-white shadow-sm transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:bg-white dark:text-ink dark:focus-visible:ring-offset-zinc-950"
+              className="group inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-6 py-3 text-base font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:opacity-90 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:bg-white dark:text-ink dark:focus-visible:ring-offset-zinc-950"
             >
               {t("hero.cta")}
               <ArrowDown />
@@ -163,15 +163,21 @@ function AppMockup() {
         className="pointer-events-none absolute -inset-6 rounded-[2rem] bg-[radial-gradient(60%_55%_at_50%_45%,theme(colors.brand.500/22%),transparent_75%)] blur-xl"
       />
       <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-ink/10 ring-1 ring-black/[0.02] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/40">
-        {/* Top bar: dots + window title. */}
+        {/* Browser chrome: traffic-light dots + a faint URL pill. */}
         <div className="flex items-center gap-3 border-b border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/40">
           <WindowDots />
-          <span className="mx-auto -ml-6 flex-1 text-center text-xs font-medium text-zinc-500 dark:text-zinc-400">
-            {t("hero.app.window")}
+          <span className="mx-auto flex max-w-[16rem] flex-1 items-center justify-center gap-1.5 truncate rounded-md border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
+            <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <rect x="5" y="11" width="14" height="9" rx="2" />
+              <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+            </svg>
+            grounded-tutor.app
           </span>
+          {/* Spacer to balance the dots so the pill stays centered. */}
+          <span aria-hidden className="w-[42px]" />
         </div>
 
-        {/* Tab strip hint. */}
+        {/* Tab strip. */}
         <div className="flex items-center gap-1 border-b border-zinc-200 px-3 pt-2.5 dark:border-zinc-800">
           {tabs.map((label, i) => (
             <span
@@ -203,17 +209,20 @@ function AppMockup() {
 
           {/* Grounded answer with a token-by-token feel. */}
           <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#0f7a52] dark:text-emerald-400">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#0f7a52] dark:text-emerald-400">
+              <span aria-hidden className="flex h-3.5 w-3.5 items-center justify-center">
+                <Check />
+              </span>
               {t("hero.app.answered")}
             </p>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+            <p className="mt-2.5 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
               {t("hero.preview.answer")}
               {/* Caret hinting at streamed tokens. */}
               <span className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse rounded-sm bg-brand-500 align-baseline dark:bg-brand-400" />
             </p>
-            <div className="mt-3">
+            <div className="mt-3.5 border-t border-zinc-100 pt-3 dark:border-zinc-800">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-brand-500 dark:bg-brand-400" />
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-brand-500 dark:bg-brand-400" />
                 {t("hero.preview.citation")}
               </span>
             </div>

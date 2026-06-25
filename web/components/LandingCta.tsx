@@ -19,7 +19,7 @@ export function LandingCta({ targetId = "tool" }: { targetId?: string }) {
       <div className="relative">
         <h2
           id="landing-cta-heading"
-          className="mx-auto max-w-xl text-balance text-2xl font-bold tracking-tight text-white sm:text-3xl"
+          className="mx-auto max-w-xl text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl"
         >
           {t("landing.cta.title")}
         </h2>
@@ -31,7 +31,7 @@ export function LandingCta({ targetId = "tool" }: { targetId?: string }) {
             type="button"
             onClick={() => scrollToId(targetId)}
             aria-label={t("hero.ctaAria")}
-            className="inline-flex items-center justify-center rounded-xl bg-brand-500 px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:bg-brand-400 active:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+            className="inline-flex items-center justify-center rounded-xl bg-brand-500 px-6 py-3 text-base font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-brand-400 hover:shadow-md active:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
           >
             {t("landing.cta.button")}
           </button>

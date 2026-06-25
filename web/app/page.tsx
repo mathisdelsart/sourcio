@@ -178,7 +178,8 @@ export default function Home() {
               <HealthBadge config={config} />
             </div>
 
-            {/* App window: faint top bar + framed body. */}
+            {/* App window: browser chrome (dots + URL pill) + framed body, so the
+                tool reads as a live product demo. */}
             <div className="mt-2 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-card dark:border-zinc-800 dark:bg-zinc-950">
               <div className="flex items-center gap-3 border-b border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/60">
                 <div className="flex items-center gap-1.5" aria-hidden>
@@ -186,12 +187,27 @@ export default function Home() {
                   <span className="h-2.5 w-2.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
                   <span className="h-2.5 w-2.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
                 </div>
-                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  {t("app.name")}
+                <span className="mx-auto flex max-w-[18rem] flex-1 items-center justify-center gap-1.5 truncate rounded-md border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 24 24"
+                    className="h-3 w-3 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="5" y="11" width="14" height="9" rx="2" />
+                    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                  </svg>
+                  localhost:3000
                 </span>
+                {/* Spacer balances the traffic-light dots so the pill stays centered. */}
+                <span aria-hidden className="w-[42px]" />
               </div>
 
-              <div className="space-y-6 p-5 sm:p-7">
+              <div className="space-y-6 p-6 sm:p-8">
                 <SettingsPanel
                   studentId={studentId}
                   baseUrl={baseUrl}

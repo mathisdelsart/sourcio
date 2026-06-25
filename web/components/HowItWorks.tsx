@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useT } from "@/lib/i18n";
 import type { TranslationKey } from "@/lib/i18n";
+import { SectionIntro } from "@/components/SectionIntro";
 
 /** Stacked-layers icon — "index your course". */
 function IndexIcon() {
@@ -83,17 +84,12 @@ export function HowItWorks() {
   const { t } = useT();
   return (
     <section id="how" aria-labelledby="how-heading" className="scroll-mt-24 py-4">
-      <div className="text-center">
-        <p className="text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
-          {t("how.eyebrow")}
-        </p>
-        <h2
-          id="how-heading"
-          className="mt-3 text-balance text-3xl font-bold tracking-tight text-ink dark:text-zinc-50 sm:text-4xl"
-        >
-          {t("how.title")}
-        </h2>
-      </div>
+      <SectionIntro
+        eyebrow="how.eyebrow"
+        title="how.title"
+        subtitle="how.subtitle"
+        headingId="how-heading"
+      />
 
       <ol className="relative mt-16 grid gap-12 sm:grid-cols-3 sm:gap-8">
         {/* Connector line behind the nodes (desktop only). */}
@@ -102,9 +98,9 @@ export function HowItWorks() {
           className="pointer-events-none absolute left-[16.67%] right-[16.67%] top-7 hidden h-px bg-gradient-to-r from-brand-200 via-brand-300 to-brand-200 dark:from-brand-900 dark:via-brand-800 dark:to-brand-900 sm:block"
         />
         {STEPS.map((step, i) => (
-          <li key={step.title} className="relative text-center">
+          <li key={step.title} className="group relative text-center">
             <div className="flex justify-center">
-              <span className="relative inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-200 bg-brand-500/10 text-brand-600 shadow-sm dark:border-brand-900 dark:bg-brand-400/15 dark:text-brand-300">
+              <span className="relative inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-200 bg-brand-500/10 text-brand-600 shadow-sm transition group-hover:-translate-y-0.5 group-hover:shadow-md dark:border-brand-900 dark:bg-brand-400/15 dark:text-brand-300">
                 {step.icon}
                 <span className="absolute -right-2 -top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink text-[11px] font-bold tabular-nums text-white dark:bg-white dark:text-ink">
                   {String(i + 1).padStart(2, "0")}

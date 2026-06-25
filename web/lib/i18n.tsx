@@ -67,8 +67,10 @@ const en = {
   "hero.app.refusalQuestion": "How do I set up a Kubernetes cluster?",
 
   // Stats band — figures are taken verbatim from the README metrics table.
-  "stats.eyebrow": "Measured, not promised",
+  "stats.eyebrow": "Measured on a full course run",
   "stats.title": "Numbers from a full course run",
+  "stats.subtitle":
+    "Real figures from indexing and querying one complete course end to end — no synthetic benchmarks.",
   "stats.hitRate.value": "82%",
   "stats.hitRate.label": "Retrieval hit-rate with the cross-encoder reranker",
   "stats.hybrid.value": "+9 pts",
@@ -83,6 +85,8 @@ const en = {
   // How it works
   "how.eyebrow": "How it works",
   "how.title": "From your course to a cited answer",
+  "how.subtitle":
+    "Three steps from raw slides to an answer you can trust — index once, ask anything, get the source.",
   "how.step1.title": "Index your course once",
   "how.step1.body":
     "Add your slides, exercises and notes. They're parsed math-aware and stored as a private, searchable knowledge base.",
@@ -96,6 +100,8 @@ const en = {
   // Features
   "features.eyebrow": "Why it's different",
   "features.title": "Built to be trusted, not just helpful",
+  "features.subtitle":
+    "Every design choice serves one rule: stay inside your course material, and prove it on every answer.",
   "features.cited.title": "Cited by construction",
   "features.cited.body":
     "Sources are mapped in code, not written by the model — so a citation can never point to a page it invented.",
@@ -117,6 +123,9 @@ const en = {
   // Mini visual inside the highlighted bento tile.
   "features.cited.demo.answer": "…the admissibility integral stays finite",
   "features.cited.demo.chip": "(Wavelet Transform, p.57)",
+  // Inline detail pills inside the refusal-guard tile.
+  "features.refusal.pill.threshold": "similarity threshold",
+  "features.refusal.pill.faithfulness": "faithfulness check",
 
   // Landing CTA / footer
   "landing.cta.title": "Ready to revise from your own course?",
@@ -410,8 +419,10 @@ const fr: Record<TranslationKey, string> = {
   "hero.app.refusalQuestion": "Comment configurer un cluster Kubernetes ?",
 
   // Stats band — figures are taken verbatim from the README metrics table.
-  "stats.eyebrow": "Mesuré, pas promis",
+  "stats.eyebrow": "Mesuré sur un cours complet",
   "stats.title": "Des chiffres issus d'un cours complet",
+  "stats.subtitle":
+    "Des chiffres réels issus de l'indexation et de l'interrogation d'un cours complet de bout en bout — aucun benchmark synthétique.",
   "stats.hitRate.value": "82 %",
   "stats.hitRate.label": "Taux de réussite du retrieval avec le reranker cross-encoder",
   "stats.hybrid.value": "+9 pts",
@@ -426,6 +437,8 @@ const fr: Record<TranslationKey, string> = {
   // How it works
   "how.eyebrow": "Comment ça marche",
   "how.title": "De votre cours à une réponse citée",
+  "how.subtitle":
+    "Trois étapes, des slides brutes à une réponse fiable — indexez une fois, demandez tout, obtenez la source.",
   "how.step1.title": "Indexez votre cours une fois",
   "how.step1.body":
     "Ajoutez vos slides, exercices et notes. Ils sont analysés en tenant compte des maths et stockés dans une base de connaissances privée et interrogeable.",
@@ -439,6 +452,8 @@ const fr: Record<TranslationKey, string> = {
   // Features
   "features.eyebrow": "Ce qui le distingue",
   "features.title": "Conçu pour la confiance, pas seulement l'aide",
+  "features.subtitle":
+    "Chaque choix de conception sert une règle : rester dans votre matériel de cours, et le prouver à chaque réponse.",
   "features.cited.title": "Citations par construction",
   "features.cited.body":
     "Les sources sont mappées dans le code, pas écrites par le modèle — une citation ne peut donc jamais pointer vers une page inventée.",
@@ -460,6 +475,9 @@ const fr: Record<TranslationKey, string> = {
   // Mini visual inside the highlighted bento tile.
   "features.cited.demo.answer": "…l'intégrale d'admissibilité reste finie",
   "features.cited.demo.chip": "(Wavelet Transform, p.57)",
+  // Inline detail pills inside the refusal-guard tile.
+  "features.refusal.pill.threshold": "seuil de similarité",
+  "features.refusal.pill.faithfulness": "contrôle de fidélité",
 
   // Landing CTA / footer
   "landing.cta.title": "Prêt à réviser à partir de votre propre cours ?",
