@@ -39,10 +39,10 @@ export function LevelSelector({
             onClick={() => onChange(level)}
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
               "disabled:cursor-not-allowed disabled:opacity-50",
               selected
-                ? "bg-white text-indigo-700 shadow-card dark:bg-zinc-700 dark:text-indigo-300"
+                ? "bg-white text-brand-700 shadow-card dark:bg-zinc-700 dark:text-brand-300"
                 : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100",
             )}
           >

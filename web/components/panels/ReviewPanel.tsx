@@ -60,7 +60,7 @@ const RATINGS: ReadonlyArray<{
     labelKey: "review.rate.easy",
     ariaKey: "review.rate.easyAria",
     tone:
-      "border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-500/30 dark:text-indigo-300 dark:hover:bg-indigo-500/10",
+      "border-brand-200 text-brand-700 hover:bg-brand-50 dark:border-brand-500/30 dark:text-brand-300 dark:hover:bg-brand-500/10",
   },
 ];
 
@@ -220,7 +220,7 @@ export function ReviewPanel({ studentId, config, active }: ReviewPanelProps) {
                             onClick={() => rate(item.notion, r.quality)}
                             className={cn(
                               "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
-                              "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
+                              "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
                               "disabled:cursor-not-allowed disabled:opacity-50",
                               r.tone,
                             )}

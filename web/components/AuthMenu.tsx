@@ -79,7 +79,7 @@ export function AuthMenu({ config, email, onLogin, onLogout }: AuthMenuProps) {
           "inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5",
           "text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50",
           "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950",
         )}
       >
         <span
@@ -121,9 +121,9 @@ export function AuthMenu({ config, email, onLogin, onLogout }: AuthMenuProps) {
                     onClick={() => setMode(m)}
                     className={cn(
                       "flex-1 rounded-md px-2 py-1 font-medium transition-colors",
-                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
                       mode === m
-                        ? "bg-indigo-600 text-white dark:bg-indigo-500"
+                        ? "bg-brand-600 text-white dark:bg-brand-500"
                         : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800",
                     )}
                   >

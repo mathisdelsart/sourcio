@@ -88,11 +88,11 @@ body {
 }
 
 .prose-tutor a {
-  @apply font-medium text-indigo-600 underline underline-offset-2 hover:text-indigo-700;
+  @apply font-medium text-brand-600 underline underline-offset-2 hover:text-brand-700;
 }
 
 .dark .prose-tutor a {
-  @apply text-indigo-400 hover:text-indigo-300;
+  @apply text-brand-400 hover:text-brand-300;
 }
 
 .prose-tutor strong {

@@ -35,9 +35,9 @@ export function Tabs({
             onClick={() => onChange(tab.id)}
             className={cn(
               "whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950",
               selected
-                ? "bg-zinc-900 text-white shadow-sm dark:bg-white dark:text-zinc-900"
+                ? "bg-ink text-white shadow-sm dark:bg-white dark:text-ink"
                 : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800",
             )}
           >

@@ -88,7 +88,7 @@ export function ThemeToggle() {
         "inline-flex h-9 w-9 items-center justify-center rounded-lg border text-zinc-600",
         "border-zinc-200 bg-white transition-colors hover:bg-zinc-50",
         "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2",
         "dark:focus-visible:ring-offset-zinc-950",
       )}
     >

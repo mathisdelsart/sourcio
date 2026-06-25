@@ -9,6 +9,7 @@ import { AuthMenu } from "@/components/AuthMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useT } from "@/lib/i18n";
+import { scrollToId } from "@/lib/scroll";
 import { Hero } from "@/components/Hero";
 import { HowItWorks } from "@/components/HowItWorks";
 import { Features } from "@/components/Features";
@@ -118,11 +119,11 @@ export default function Home() {
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-sm font-bold text-white dark:bg-white dark:text-ink">
               G
             </div>
             <div className="leading-tight">
-              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              <p className="text-sm font-semibold text-ink dark:text-zinc-100">
                 {t("app.name")}
               </p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -159,7 +160,7 @@ export default function Home() {
         <section
           id="tool"
           aria-label={t("tabs.aria")}
-          className="scroll-mt-20 border-t border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950"
+          className="scroll-mt-20 border-t border-zinc-200 bg-[#f6f6f3] dark:border-zinc-800 dark:bg-zinc-900"
         >
           <div className="mx-auto max-w-3xl space-y-6 px-4 py-16 sm:px-6 sm:py-20">
             <div className="flex justify-center sm:hidden">
@@ -227,21 +228,53 @@ export default function Home() {
           </div>
         </section>
 
-        <footer className="border-t border-zinc-200 dark:border-zinc-800">
-          <div className="mx-auto flex max-w-5xl flex-col items-center gap-2 px-4 py-8 text-center sm:px-6">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600 text-xs font-bold text-white">
-                G
-              </span>
-              <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                {t("app.name")}
-              </span>
-              <span className="text-xs text-zinc-400 dark:text-zinc-500">grounded-rag</span>
+        <footer className="bg-navy text-zinc-300">
+          <div className="mx-auto grid max-w-5xl gap-10 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-3">
+            {/* Brand mark + tagline. */}
+            <div className="lg:col-span-2 lg:max-w-md">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white text-xs font-bold text-ink">
+                  G
+                </span>
+                <span className="text-sm font-semibold text-white">{t("app.name")}</span>
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+                {t("landing.footer.tagline")}
+              </p>
             </div>
-            <p className="max-w-md text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
-              {t("landing.footer.tagline")}
-            </p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">{t("footer.tagline")}</p>
+
+            {/* Section links — smooth-scroll to the page sections / tool. */}
+            <nav aria-label={t("footer.explore")}>
+              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                {t("footer.explore")}
+              </p>
+              <ul className="mt-4 space-y-2.5 text-sm">
+                {(
+                  [
+                    ["how", "footer.link.how"],
+                    ["features", "footer.link.features"],
+                    ["tool", "footer.link.tool"],
+                  ] as const
+                ).map(([target, key]) => (
+                  <li key={target}>
+                    <button
+                      type="button"
+                      onClick={() => scrollToId(target)}
+                      className="rounded text-zinc-400 transition-colors hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+                    >
+                      {t(key)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          </div>
+
+          <div className="border-t border-white/10">
+            <div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-5 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <p>{t("footer.tagline")}</p>
+              <p>{t("footer.credit")}</p>
+            </div>
           </div>
         </footer>
       </main>

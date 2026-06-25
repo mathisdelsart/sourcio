@@ -38,7 +38,7 @@ export function SettingsPanel({ studentId, baseUrl, apiKey, onSave }: SettingsPa
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 rounded-2xl px-5 py-3.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900"
+        className="flex w-full items-center justify-between gap-3 rounded-2xl px-5 py-3.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900"
       >
         <span className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
           {t("settings.title")}

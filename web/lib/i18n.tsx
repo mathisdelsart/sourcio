@@ -43,6 +43,20 @@ const en = {
   "hero.chip.grounded": "Grounded",
   "hero.chip.cited": "Cited",
   "hero.chip.refuses": "Refuses to hallucinate",
+  // Two-tone headline: a leading part in ink, an emphasized part in brand.
+  "hero.headline.lead": "An AI tutor grounded in your course —",
+  "hero.headline.accent": "always cited, never invented.",
+  // Trust badges row.
+  "hero.badge.refuses": "Refuses to hallucinate",
+  "hero.badge.cited": "Cited by construction",
+  "hero.badge.private": "Private — runs locally",
+  // Right-side answer-preview mock card.
+  "hero.preview.question": "What is the admissibility condition?",
+  "hero.preview.answer":
+    "A wavelet must have zero mean, so its Fourier transform vanishes at the origin and the admissibility integral stays finite.",
+  "hero.preview.citation": "(Wavelet Transform, p.57)",
+  "hero.preview.refusalLabel": "Off-topic question",
+  "hero.preview.refusal": "Not in the course material.",
 
   // How it works
   "how.eyebrow": "How it works",
@@ -85,6 +99,11 @@ const en = {
     "No setup to read this far. Open the tutor below, point it at your material, and ask your first question.",
   "landing.cta.button": "Start now",
   "landing.footer.tagline": "An AI tutor grounded strictly in your course — cited, or honest about what it can't answer.",
+  "footer.explore": "Explore",
+  "footer.link.how": "How it works",
+  "footer.link.features": "Features",
+  "footer.link.tool": "Open the tutor",
+  "footer.credit": "grounded-rag — built by mathisdelsart.",
 
   // Tabs
   "tabs.aria": "Tutor sections",
@@ -342,6 +361,20 @@ const fr: Record<TranslationKey, string> = {
   "hero.chip.grounded": "Ancré",
   "hero.chip.cited": "Cité",
   "hero.chip.refuses": "Refuse d'halluciner",
+  // Two-tone headline: a leading part in ink, an emphasized part in brand.
+  "hero.headline.lead": "Un tuteur IA ancré dans votre cours —",
+  "hero.headline.accent": "toujours cité, jamais inventé.",
+  // Trust badges row.
+  "hero.badge.refuses": "Refuse d'halluciner",
+  "hero.badge.cited": "Cité par construction",
+  "hero.badge.private": "Privé — fonctionne en local",
+  // Right-side answer-preview mock card.
+  "hero.preview.question": "Quelle est la condition d'admissibilité ?",
+  "hero.preview.answer":
+    "Une ondelette doit être de moyenne nulle : sa transformée de Fourier s'annule à l'origine et l'intégrale d'admissibilité reste finie.",
+  "hero.preview.citation": "(Wavelet Transform, p.57)",
+  "hero.preview.refusalLabel": "Question hors-sujet",
+  "hero.preview.refusal": "Absent du matériel de cours.",
 
   // How it works
   "how.eyebrow": "Comment ça marche",
@@ -384,6 +417,11 @@ const fr: Record<TranslationKey, string> = {
     "Aucune configuration nécessaire pour en arriver là. Ouvrez le tuteur ci-dessous, pointez-le vers votre matériel et posez votre première question.",
   "landing.cta.button": "Commencer",
   "landing.footer.tagline": "Un tuteur IA strictement ancré dans votre cours — cité, ou honnête sur ce qu'il ne peut pas répondre.",
+  "footer.explore": "Explorer",
+  "footer.link.how": "Comment ça marche",
+  "footer.link.features": "Fonctionnalités",
+  "footer.link.tool": "Ouvrir le tuteur",
+  "footer.credit": "grounded-rag — réalisé par mathisdelsart.",
 
   // Tabs
   "tabs.aria": "Sections du tuteur",

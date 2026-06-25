@@ -159,7 +159,7 @@ export function AskPanel({
                 max={10}
                 value={k}
                 onChange={(e) => setK(Number(e.target.value))}
-                className="w-full accent-indigo-600 dark:accent-indigo-400"
+                className="w-full accent-brand-600 dark:accent-brand-400"
               />
             </div>
             <Button onClick={runAsk} loading={loading} disabled={!canAsk}>
@@ -181,7 +181,7 @@ export function AskPanel({
             ) : (
               <div className="space-y-2" aria-live="polite" aria-busy="true">
                 <Markdown>{streaming}</Markdown>
-                <span className="inline-block h-4 w-2 animate-pulse bg-indigo-400 align-middle dark:bg-indigo-300" />
+                <span className="inline-block h-4 w-2 animate-pulse bg-brand-400 align-middle dark:bg-brand-300" />
               </div>
             )
           ) : loading ? (
@@ -197,7 +197,7 @@ export function AskPanel({
             <div className="space-y-5">
               <Markdown>{lastAnswer.answer}</Markdown>
               <div className="border-t border-zinc-100 pt-4 dark:border-zinc-800">
-                <p className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                <p className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
                   {t("common.sources")}
                 </p>
                 {lastAnswer.sources.length > 0 ? (

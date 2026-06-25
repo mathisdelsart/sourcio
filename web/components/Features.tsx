@@ -82,14 +82,14 @@ const FEATURES: Feature[] = [
 export function Features() {
   const { t } = useT();
   return (
-    <section aria-labelledby="features-heading" className="py-4">
+    <section id="features" aria-labelledby="features-heading" className="scroll-mt-24 py-4">
       <div className="text-center">
-        <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+        <p className="text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
           {t("features.eyebrow")}
         </p>
         <h2
           id="features-heading"
-          className="mt-3 text-balance text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl"
+          className="mt-3 text-balance text-2xl font-bold tracking-tight text-ink dark:text-zinc-50 sm:text-3xl"
         >
           {t("features.title")}
         </h2>
@@ -101,10 +101,10 @@ export function Features() {
             key={feature.title}
             className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
           >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600 dark:bg-brand-400/15 dark:text-brand-300">
               {feature.icon}
             </span>
-            <h3 className="mt-5 font-semibold text-zinc-900 dark:text-zinc-100">
+            <h3 className="mt-5 font-semibold text-ink dark:text-zinc-100">
               {t(feature.title)}
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">

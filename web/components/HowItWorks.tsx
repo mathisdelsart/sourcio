@@ -78,14 +78,14 @@ const STEPS: Step[] = [
 export function HowItWorks() {
   const { t } = useT();
   return (
-    <section aria-labelledby="how-heading" className="py-4">
+    <section id="how" aria-labelledby="how-heading" className="scroll-mt-24 py-4">
       <div className="text-center">
-        <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+        <p className="text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
           {t("how.eyebrow")}
         </p>
         <h2
           id="how-heading"
-          className="mt-3 text-balance text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl"
+          className="mt-3 text-balance text-2xl font-bold tracking-tight text-ink dark:text-zinc-50 sm:text-3xl"
         >
           {t("how.title")}
         </h2>
@@ -98,14 +98,14 @@ export function HowItWorks() {
             className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
           >
             <div className="flex items-center gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600 dark:bg-brand-400/15 dark:text-brand-300">
                 {step.icon}
               </span>
               <span className="text-xs font-semibold tabular-nums text-zinc-400 dark:text-zinc-500">
                 {String(i + 1).padStart(2, "0")}
               </span>
             </div>
-            <h3 className="mt-5 font-semibold text-zinc-900 dark:text-zinc-100">
+            <h3 className="mt-5 font-semibold text-ink dark:text-zinc-100">
               {t(step.title)}
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">

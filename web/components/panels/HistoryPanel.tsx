@@ -96,7 +96,7 @@ export function HistoryPanel({ studentId, config, active }: HistoryPanelProps) {
                   className={cn(
                     "max-w-[85%] rounded-xl border px-4 py-3",
                     isUser(turn.role)
-                      ? "border-indigo-100 bg-indigo-50/70 dark:border-indigo-500/30 dark:bg-indigo-500/10"
+                      ? "border-brand-100 bg-brand-50/70 dark:border-brand-500/30 dark:bg-brand-500/10"
                       : "border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800/60",
                   )}
                 >

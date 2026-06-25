@@ -128,9 +128,9 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
                     onClick={() => setCount(c)}
                     className={cn(
                       "rounded-md px-3 py-1.5 text-sm font-medium tabular-nums transition-colors",
-                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
                       count === c
-                        ? "bg-indigo-600 text-white dark:bg-indigo-500"
+                        ? "bg-brand-600 text-white dark:bg-brand-500"
                         : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800",
                     )}
                   >
@@ -179,7 +179,7 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
                 return (
                   <li key={qid ?? i} className="space-y-3">
                     <div className="flex items-start gap-3">
-                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-semibold tabular-nums text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold tabular-nums text-brand-600 dark:bg-brand-500/15 dark:text-brand-300">
                         {i + 1}
                       </span>
                       <div className="min-w-0 flex-1">

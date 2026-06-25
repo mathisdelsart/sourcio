@@ -70,8 +70,8 @@ export function GradePanel({ studentId, config, lastExercise }: GradePanelProps)
         />
         <CardBody className="space-y-4">
           {linkable && (
-            <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4 dark:border-indigo-500/30 dark:bg-indigo-500/10">
-              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500 dark:text-indigo-300">
+            <div className="rounded-lg border border-brand-100 bg-brand-50/60 p-4 dark:border-brand-500/30 dark:bg-brand-500/10">
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-500 dark:text-brand-300">
                 {t("grade.against", { id: String(linkable.id) })}
               </p>
               <div className="mt-2">

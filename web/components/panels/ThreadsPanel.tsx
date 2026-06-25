@@ -131,9 +131,9 @@ export function ThreadsPanel({
 
   const selectRow =
     "w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors focus:outline-none " +
-    "focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950";
+    "focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950";
   const selectedRow =
-    "border-indigo-300 bg-indigo-50/70 dark:border-indigo-500/40 dark:bg-indigo-500/10";
+    "border-brand-300 bg-brand-50/70 dark:border-brand-500/40 dark:bg-brand-500/10";
   const idleRow =
     "border-zinc-200 bg-white hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/40 dark:hover:bg-zinc-800";
 
@@ -180,7 +180,7 @@ export function ThreadsPanel({
                   {t("threads.none")}
                 </span>
                 {activeSessionId == null && (
-                  <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-medium text-white dark:bg-indigo-500">
+                  <span className="rounded-full bg-brand-600 px-2 py-0.5 text-xs font-medium text-white dark:bg-brand-500">
                     {t("threads.active")}
                   </span>
                 )}
@@ -218,7 +218,7 @@ export function ThreadsPanel({
                             {title}
                           </span>
                           {selected && (
-                            <span className="shrink-0 rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-medium text-white dark:bg-indigo-500">
+                            <span className="shrink-0 rounded-full bg-brand-600 px-2 py-0.5 text-xs font-medium text-white dark:bg-brand-500">
                               {t("threads.active")}
                             </span>
                           )}
@@ -242,7 +242,7 @@ export function ThreadsPanel({
         <Card>
           <CardHeader title={t("threads.messages.title")} />
           <CardBody>
-            <p className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/70 px-4 py-2 text-sm text-indigo-900 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
+            <p className="mb-4 rounded-lg border border-brand-100 bg-brand-50/70 px-4 py-2 text-sm text-brand-900 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-200">
               {t("threads.activeBanner")}
             </p>
             {messagesLoading && messages.length === 0 ? (
@@ -272,7 +272,7 @@ export function ThreadsPanel({
                       className={cn(
                         "max-w-[85%] rounded-xl border px-4 py-3",
                         isUser(turn.role)
-                          ? "border-indigo-100 bg-indigo-50/70 dark:border-indigo-500/30 dark:bg-indigo-500/10"
+                          ? "border-brand-100 bg-brand-50/70 dark:border-brand-500/30 dark:bg-brand-500/10"
                           : "border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800/60",
                       )}
                     >
