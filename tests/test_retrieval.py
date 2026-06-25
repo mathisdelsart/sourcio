@@ -62,6 +62,7 @@ def _set_settings(monkeypatch, **overrides):
     """Override the settings seen by retrieval without loading real ones."""
     base = {
         "qdrant_url": "http://localhost:6333",
+        "qdrant_api_key": None,
         "qdrant_collection": "courses",
         "similarity_threshold": 0.5,
         "reranker_model": "",

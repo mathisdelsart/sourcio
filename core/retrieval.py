@@ -230,7 +230,7 @@ def retrieve(
     None the configured cross-encoder model is used.
     """
     settings = get_settings()
-    client = QdrantClient(url=settings.qdrant_url)
+    client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
     query_filter = _build_filter(course, chapter)
 
     reranking = bool(settings.reranker_model)

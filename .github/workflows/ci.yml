@@ -30,4 +30,7 @@ jobs:
         run: uvx pyright
 
       - name: Tests
-        run: uv run pytest
+        # Measure coverage over the application packages (configured in
+        # pyproject.toml) and fail if it regresses below the threshold. The
+        # term-missing report is printed to the job log for inspection.
+        run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=84

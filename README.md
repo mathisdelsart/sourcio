@@ -1,5 +1,7 @@
 # grounded-rag
 
+![coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)
+
 **An AI tutor that answers strictly from your own course material, always citing the source, and refuses anything it does not cover.**
 
 `grounded-rag` indexes your courses once (slides, exercise sets, summaries) into a persistent vector
