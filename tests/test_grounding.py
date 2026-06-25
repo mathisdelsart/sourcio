@@ -69,6 +69,63 @@ def test_answer_retrieved_is_empty_on_refusal(monkeypatch):
     assert out["retrieved"] == []
 
 
+class _FakeChunk:
+    """Minimal stand-in for a streamed chat-model chunk, exposing ``.content``."""
+
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+def _fake_stream_llm(deltas):
+    """Return an object whose ``.stream(messages)`` yields the given deltas."""
+    return SimpleNamespace(stream=lambda messages: (_FakeChunk(d) for d in deltas))
+
+
+def test_stream_answer_yields_tokens_then_sources(monkeypatch):
+    # retrieve and the LLM's .stream() are mocked: no Qdrant, no API call.
+    results = [_retrieved(11, text="A wavelet is localized.")]
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
+    monkeypatch.setattr(
+        answer_mod, "get_llm", lambda role: _fake_stream_llm(["A wavelet ", "is X ", "[1]."])
+    )
+
+    events = list(answer_mod.stream_answer("what is a wavelet?"))
+
+    tokens = [e["text"] for e in events if e["type"] == "token"]
+    assert tokens == ["A wavelet ", "is X ", "[1]."]
+
+    final = events[-1]
+    assert final["type"] == "sources"
+    assert final["refused"] is False
+    # The assembled answer is remapped; the model only ever emitted [1].
+    assert final["answer"] == "A wavelet is X (Wavelet Transform, p.11)."
+    assert final["sources"] == ["(Wavelet Transform, p.11)"]
+
+
+def test_stream_answer_refuses_when_no_retrieval(monkeypatch):
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: [])
+    events = list(answer_mod.stream_answer("off-topic"))
+
+    assert events[0] == {"type": "token", "text": answer_mod.REFUSAL}
+    final = events[-1]
+    assert final["type"] == "sources"
+    assert final["refused"] is True
+    assert final["sources"] == []
+    assert final["answer"] == answer_mod.REFUSAL
+
+
+def test_stream_answer_refuses_when_model_emits_refusal(monkeypatch):
+    results = [_retrieved(11)]
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
+    monkeypatch.setattr(answer_mod, "get_llm", lambda role: _fake_stream_llm([answer_mod.REFUSAL]))
+
+    events = list(answer_mod.stream_answer("uncovered"))
+    final = events[-1]
+    assert final["type"] == "sources"
+    assert final["refused"] is True
+    assert final["sources"] == []
+
+
 def test_chunk_pages_one_slide_one_chunk_drops_empty():
     pages = [
         Page(course="C", page=1, text="slide one", doc_type="slides"),

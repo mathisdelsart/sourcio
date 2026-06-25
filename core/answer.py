@@ -7,6 +7,7 @@ the question is refused rather than answered from the model's own knowledge.
 """
 
 import re
+from collections.abc import Iterator
 
 from core.config import get_llm
 from core.obs import timer
@@ -86,4 +87,61 @@ def answer(
         "sources": sources,
         "raw": raw,
         "retrieved": [r.chunk.text for r in results],
+    }
+
+
+def stream_answer(
+    question: str,
+    *,
+    k: int = 5,
+    course: str | None = None,
+    chapter: str | None = None,
+) -> Iterator[dict]:
+    """Stream a grounded answer token by token, mirroring :func:`answer`.
+
+    Runs the same retrieval, threshold/refusal and citation-by-construction
+    logic as :func:`answer`, but yields incrementally so a caller can render the
+    explanation as it is produced. Each yielded item is a dict tagged by
+    ``type``:
+
+    - ``{"type": "token", "text": str}`` for each raw text delta the model
+      produces. Deltas carry the model's literal ``[n]`` markers; citation
+      remapping is applied once, at the end, to the assembled text.
+    - ``{"type": "sources", "sources": list[str], "refused": bool,
+      "answer": str}`` as the single final event. ``answer`` is the fully
+      remapped text (or the refusal), ``sources`` are the citation labels the
+      answer actually relies on, and ``refused`` flags an uncovered question.
+
+    On refusal (no retrieval hit, or the model emitting the exact refusal
+    string) the refusal text is streamed as one token, then the final event is
+    emitted with ``refused=True`` and no sources.
+    """
+    with timer("retrieval"):
+        results = retrieve(question, k=k, course=course, chapter=chapter)
+    if not results:
+        yield {"type": "token", "text": REFUSAL}
+        yield {"type": "sources", "sources": [], "refused": True, "answer": REFUSAL}
+        return
+
+    prompt = f"Sources:\n{format_numbered_sources(results)}\n\nQuestion: {question}"
+    parts: list[str] = []
+    with timer("llm"):
+        for piece in get_llm("explain").stream([("system", _SYSTEM), ("human", prompt)]):
+            delta = piece.content
+            if not delta:
+                continue
+            parts.append(delta)
+            yield {"type": "token", "text": delta}
+
+    raw = "".join(parts).strip()
+    if raw == REFUSAL:
+        yield {"type": "sources", "sources": [], "refused": True, "answer": REFUSAL}
+        return
+
+    sources = [results[n - 1].citation() for n in _cited_indices(raw, len(results))]
+    yield {
+        "type": "sources",
+        "sources": sources,
+        "refused": False,
+        "answer": _remap_citations(raw, results),
     }
