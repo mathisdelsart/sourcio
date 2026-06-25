@@ -6,6 +6,8 @@ import { KEYS, generateStudentId, readLocal, writeLocal } from "@/lib/storage";
 import { Tabs, type TabItem } from "@/components/Tabs";
 import { HealthBadge } from "@/components/HealthBadge";
 import { AuthMenu } from "@/components/AuthMenu";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { Hero } from "@/components/Hero";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { AskPanel } from "@/components/panels/AskPanel";
 import { ReexplainPanel } from "@/components/panels/ReexplainPanel";
@@ -86,35 +88,48 @@ export default function Home() {
   }
 
   if (!ready) {
-    return <div className="min-h-screen bg-zinc-50" />;
+    return <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950" />;
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur">
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
               G
             </div>
             <div className="leading-tight">
-              <p className="text-sm font-semibold text-zinc-900">Grounded Tutor</p>
-              <p className="text-xs text-zinc-400">Answers only from your course</p>
+              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Grounded Tutor
+              </p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                Answers only from your course
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <HealthBadge config={config} />
+          <div className="flex items-center gap-2 sm:gap-3">
+            <span className="hidden sm:inline-flex">
+              <HealthBadge config={config} />
+            </span>
             <AuthMenu
               config={config}
               email={authEmail || null}
               onLogin={onLogin}
               onLogout={onLogout}
             />
+            <ThemeToggle />
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:px-6">
+        <Hero />
+
+        <div className="flex justify-center sm:hidden">
+          <HealthBadge config={config} />
+        </div>
+
         <SettingsPanel
           studentId={studentId}
           baseUrl={baseUrl}
@@ -157,7 +172,7 @@ export default function Home() {
           )}
         </div>
 
-        <footer className="pt-2 text-center text-xs text-zinc-400">
+        <footer className="pt-2 text-center text-xs text-zinc-400 dark:text-zinc-500">
           Grounded retrieval · citations by construction · honest refusals
         </footer>
       </main>

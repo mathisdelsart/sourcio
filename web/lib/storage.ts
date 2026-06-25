@@ -6,6 +6,7 @@ export const KEYS = {
   apiKey: "grounded-rag:api_key",
   authToken: "grounded-rag:auth_token",
   authEmail: "grounded-rag:auth_email",
+  theme: "grounded-rag:theme",
 } as const;
 
 /** Read a string from localStorage, returning `fallback` when unavailable. */

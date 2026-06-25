@@ -131,8 +131,12 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
           </div>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="w-full max-w-xs space-y-1.5">
-              <label htmlFor="ask-k" className="block text-sm font-medium text-zinc-700">
-                Sources to retrieve: <span className="tabular-nums text-zinc-500">{k}</span>
+              <label
+                htmlFor="ask-k"
+                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
+                Sources to retrieve:{" "}
+                <span className="tabular-nums text-zinc-500 dark:text-zinc-400">{k}</span>
               </label>
               <input
                 id="ask-k"
@@ -141,14 +145,16 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
                 max={10}
                 value={k}
                 onChange={(e) => setK(Number(e.target.value))}
-                className="w-full accent-indigo-600"
+                className="w-full accent-indigo-600 dark:accent-indigo-400"
               />
             </div>
             <Button onClick={runAsk} loading={loading} disabled={!canAsk}>
               Ask
             </Button>
           </div>
-          <p className="text-xs text-zinc-400">Press ⌘/Ctrl + Enter to submit.</p>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500">
+            Press ⌘/Ctrl + Enter to submit.
+          </p>
         </CardBody>
       </Card>
 
@@ -161,7 +167,7 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
             ) : (
               <div className="space-y-2" aria-live="polite" aria-busy="true">
                 <Markdown>{streaming}</Markdown>
-                <span className="inline-block h-4 w-2 animate-pulse bg-indigo-400 align-middle" />
+                <span className="inline-block h-4 w-2 animate-pulse bg-indigo-400 align-middle dark:bg-indigo-300" />
               </div>
             )
           ) : loading ? (
@@ -177,7 +183,7 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
             <div className="space-y-5">
               <Markdown>{lastAnswer.answer}</Markdown>
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
                   Sources
                 </p>
                 {lastAnswer.sources.length > 0 ? (
@@ -187,11 +193,11 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-zinc-400">No sources cited.</p>
+                  <p className="text-sm text-zinc-400 dark:text-zinc-500">No sources cited.</p>
                 )}
               </div>
 
-              <div className="border-t border-zinc-100 pt-4">
+              <div className="border-t border-zinc-100 pt-4 dark:border-zinc-800">
                 <ExportActions
                   question={question}
                   answer={lastAnswer.answer}
@@ -199,8 +205,8 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
                 />
               </div>
 
-              <div className="border-t border-zinc-100 pt-4">
-                <p className="mb-2 text-sm font-medium text-zinc-700">
+              <div className="border-t border-zinc-100 pt-4 dark:border-zinc-800">
+                <p className="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   Didn&apos;t get it? Re-explain at a level:
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
@@ -210,7 +216,7 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
                   </Button>
                 </div>
                 {reexplained && (
-                  <div className="mt-4 rounded-lg border border-zinc-100 bg-zinc-50/60 p-4">
+                  <div className="mt-4 rounded-lg border border-zinc-100 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
                     <Markdown>{reexplained}</Markdown>
                   </div>
                 )}

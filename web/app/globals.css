@@ -4,17 +4,29 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light;
-}
-
 html {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 body {
-  @apply bg-zinc-50 text-zinc-900;
+  @apply bg-zinc-50 text-zinc-900 transition-colors;
+}
+
+.dark body {
+  @apply bg-zinc-950 text-zinc-100;
+}
+
+/* Honour users who prefer reduced motion: drop transitions and animations. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* --- Markdown ("prose-tutor") -------------------------------------------- */
@@ -22,6 +34,10 @@ body {
 
 .prose-tutor {
   @apply text-[15px] leading-7 text-zinc-700;
+}
+
+.dark .prose-tutor {
+  @apply text-zinc-300;
 }
 
 .prose-tutor > :first-child {
@@ -41,6 +57,13 @@ body {
 .prose-tutor h3,
 .prose-tutor h4 {
   @apply mb-2 mt-5 font-semibold text-zinc-900;
+}
+
+.dark .prose-tutor h1,
+.dark .prose-tutor h2,
+.dark .prose-tutor h3,
+.dark .prose-tutor h4 {
+  @apply text-zinc-100;
 }
 
 .prose-tutor h1 {
@@ -68,16 +91,32 @@ body {
   @apply font-medium text-indigo-600 underline underline-offset-2 hover:text-indigo-700;
 }
 
+.dark .prose-tutor a {
+  @apply text-indigo-400 hover:text-indigo-300;
+}
+
 .prose-tutor strong {
   @apply font-semibold text-zinc-900;
+}
+
+.dark .prose-tutor strong {
+  @apply text-zinc-100;
 }
 
 .prose-tutor code {
   @apply rounded bg-zinc-100 px-1 py-0.5 font-mono text-[13px] text-zinc-800;
 }
 
+.dark .prose-tutor code {
+  @apply bg-zinc-800 text-zinc-200;
+}
+
 .prose-tutor pre {
   @apply my-4 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-[13px];
+}
+
+.dark .prose-tutor pre {
+  @apply border-zinc-700 bg-zinc-900;
 }
 
 .prose-tutor pre code {
@@ -86,6 +125,10 @@ body {
 
 .prose-tutor blockquote {
   @apply my-4 border-l-2 border-zinc-200 pl-4 italic text-zinc-500;
+}
+
+.dark .prose-tutor blockquote {
+  @apply border-zinc-700 text-zinc-400;
 }
 
 .prose-tutor table {
@@ -97,8 +140,17 @@ body {
   @apply border border-zinc-200 px-3 py-1.5 text-left;
 }
 
+.dark .prose-tutor th,
+.dark .prose-tutor td {
+  @apply border-zinc-700;
+}
+
 .prose-tutor th {
   @apply bg-zinc-50 font-semibold text-zinc-700;
+}
+
+.dark .prose-tutor th {
+  @apply bg-zinc-900 text-zinc-300;
 }
 
 /* Let long block equations scroll instead of overflowing the card. */

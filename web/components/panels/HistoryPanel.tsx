@@ -84,16 +84,18 @@ export function HistoryPanel({ studentId, config, active }: HistoryPanelProps) {
                 key={`${turn.created_at}-${i}`}
                 className={cn("flex flex-col gap-1", isUser(turn.role) ? "items-end" : "items-start")}
               >
-                <div className="flex items-center gap-2 text-xs text-zinc-400">
-                  <span className="font-medium capitalize text-zinc-500">{turn.role}</span>
+                <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
+                  <span className="font-medium capitalize text-zinc-500 dark:text-zinc-400">
+                    {turn.role}
+                  </span>
                   {turn.created_at && <span>· {formatTime(turn.created_at)}</span>}
                 </div>
                 <div
                   className={cn(
                     "max-w-[85%] rounded-xl border px-4 py-3",
                     isUser(turn.role)
-                      ? "border-indigo-100 bg-indigo-50/70"
-                      : "border-zinc-200 bg-white",
+                      ? "border-indigo-100 bg-indigo-50/70 dark:border-indigo-500/30 dark:bg-indigo-500/10"
+                      : "border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800/60",
                   )}
                 >
                   <Markdown>{turn.content}</Markdown>

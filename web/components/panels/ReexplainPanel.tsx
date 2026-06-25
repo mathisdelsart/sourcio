@@ -48,8 +48,8 @@ export function ReexplainPanel({ studentId, config, lastAnswer }: ReexplainPanel
         />
         <CardBody className="space-y-4">
           {lastAnswer && !lastAnswer.refused && (
-            <div className="rounded-lg border border-zinc-100 bg-zinc-50/60 p-4">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            <div className="rounded-lg border border-zinc-100 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
                 Last answer
               </p>
               <Markdown>{lastAnswer.answer}</Markdown>

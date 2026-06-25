@@ -17,7 +17,7 @@ export function LevelSelector({
     <div
       role="radiogroup"
       aria-label="Re-explanation level"
-      className="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-1"
+      className="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-800"
     >
       {LEVELS.map((level) => {
         const selected = level === value;
@@ -33,7 +33,9 @@ export function LevelSelector({
               "rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors",
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
               "disabled:cursor-not-allowed disabled:opacity-50",
-              selected ? "bg-white text-indigo-700 shadow-card" : "text-zinc-500 hover:text-zinc-800",
+              selected
+                ? "bg-white text-indigo-700 shadow-card dark:bg-zinc-700 dark:text-indigo-300"
+                : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100",
             )}
           >
             {level}

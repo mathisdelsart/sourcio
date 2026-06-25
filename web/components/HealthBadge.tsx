@@ -34,11 +34,11 @@ export function HealthBadge({ config }: { config: ConnectionConfig }) {
       ? "bg-emerald-500"
       : status === "offline"
         ? "bg-red-500"
-        : "bg-zinc-300";
+        : "bg-zinc-300 dark:bg-zinc-600";
 
   return (
     <span
-      className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600"
+      className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
       title={label}
     >
       <span className="relative flex h-2 w-2">
