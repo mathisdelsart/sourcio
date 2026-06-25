@@ -8,6 +8,7 @@ Endpoints:
     POST /grade             grade a student's answer
     POST /quiz              generate a grounded multi-question quiz (no solutions)
     POST /quiz/{id}/grade   grade one quiz answer against its stored reference
+    GET  /courses           list the distinct courses indexed in Qdrant
     GET  /history/{id}      recent conversation turns for a student
 
 The layer stays thin: each route delegates to the existing grounded functions
@@ -52,6 +53,7 @@ from api.middleware import (
 )
 from core.answer import answer, stream_answer
 from core.config import get_settings
+from core.courses import list_courses
 from db.models import Student
 from db.session import (
     add_message,
@@ -294,6 +296,12 @@ class HistoryItem(BaseModel):
     role: str
     content: str
     created_at: str
+
+
+class CoursesResponse(BaseModel):
+    """The distinct courses currently indexed in Qdrant, sorted."""
+
+    courses: list[str]
 
 
 class StudentOut(BaseModel):
@@ -576,6 +584,21 @@ def quiz_grade(
             detail="Quiz question not found.",
         )
     return {"score": verdict["score"], "feedback": verdict["feedback"]}
+
+
+@app.get(
+    "/courses",
+    response_model=CoursesResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def courses() -> dict[str, list[str]]:
+    """List the distinct courses currently indexed in Qdrant.
+
+    Lets a client discover the available courses dynamically (e.g. to populate a
+    picker) instead of hardcoding them. Returns an empty list when nothing is
+    indexed yet; it never reaches the LLM and runs no retrieval.
+    """
+    return {"courses": list_courses()}
 
 
 @app.get(
