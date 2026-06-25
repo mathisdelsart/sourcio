@@ -189,6 +189,16 @@ export async function checkHealth(config?: ConnectionConfig): Promise<boolean> {
   }
 }
 
+/** List the distinct courses currently indexed, sorted. Empty when none. */
+export async function getCourses(config?: ConnectionConfig): Promise<string[]> {
+  const data = await request<{ courses?: string[] }>(
+    "/courses",
+    { method: "GET", headers: buildHeaders(config) },
+    config,
+  );
+  return Array.isArray(data.courses) ? data.courses : [];
+}
+
 /** Ask a grounded question. `course`/`chapter` are only sent when truthy. */
 export async function ask(
   body: AskRequest,

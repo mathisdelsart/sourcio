@@ -102,6 +102,11 @@ const en = {
   "ask.courseLabel": "Course filter",
   "ask.courseHint": "Optional — restrict retrieval to one course.",
   "ask.coursePlaceholder": "e.g. ELEC2885 Wavelet Transform",
+
+  // Course picker
+  "course.allCourses": "All courses",
+  "course.loading": "Loading courses…",
+  "course.fetchFailed": "Could not load courses — enter a course name.",
   "ask.chapterLabel": "Chapter filter",
   "ask.chapterHint": "Optional — restrict to a single chapter.",
   "ask.chapterPlaceholder": "e.g. Chapter 3",
@@ -295,6 +300,11 @@ const fr: Record<TranslationKey, string> = {
   "ask.courseLabel": "Filtre par cours",
   "ask.courseHint": "Optionnel — restreindre la récupération à un seul cours.",
   "ask.coursePlaceholder": "ex. ELEC2885 Wavelet Transform",
+
+  // Course picker
+  "course.allCourses": "Tous les cours",
+  "course.loading": "Chargement des cours…",
+  "course.fetchFailed": "Impossible de charger les cours — saisissez un nom de cours.",
   "ask.chapterLabel": "Filtre par chapitre",
   "ask.chapterHint": "Optionnel — restreindre à un seul chapitre.",
   "ask.chapterPlaceholder": "ex. Chapitre 3",

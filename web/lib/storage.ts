@@ -8,6 +8,7 @@ export const KEYS = {
   authEmail: "grounded-rag:auth_email",
   theme: "grounded-rag:theme",
   locale: "grounded-rag:locale",
+  course: "grounded-rag:course",
 } as const;
 
 /** Read a string from localStorage, returning `fallback` when unavailable. */

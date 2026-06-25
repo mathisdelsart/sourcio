@@ -12,6 +12,7 @@ import {
 import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { TextField, TextArea } from "@/components/TextField";
+import { CourseSelect } from "@/components/CourseSelect";
 import { Markdown } from "@/components/Markdown";
 import { CitationChip } from "@/components/CitationChip";
 import { ExportActions } from "@/components/ExportActions";
@@ -21,6 +22,7 @@ import { LevelSelector } from "@/components/LevelSelector";
 import { useToast } from "@/components/Toast";
 import { useT } from "@/lib/i18n";
 import { submitOnCmdEnter } from "@/lib/keys";
+import { KEYS, readLocal, writeLocal } from "@/lib/storage";
 
 interface AskPanelProps {
   studentId: string;
@@ -34,7 +36,8 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
   const toast = useToast();
   const { t } = useT();
   const [question, setQuestion] = useState("");
-  const [course, setCourse] = useState("");
+  // Lazy-init from localStorage so the last chosen course survives a reload.
+  const [course, setCourse] = useState(() => readLocal(KEYS.course));
   const [chapter, setChapter] = useState("");
   const [k, setK] = useState(5);
   const [loading, setLoading] = useState(false);
@@ -46,6 +49,11 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
   const [reLoading, setReLoading] = useState(false);
 
   const canAsk = question.trim().length > 0 && !loading;
+
+  function selectCourse(next: string) {
+    setCourse(next);
+    writeLocal(KEYS.course, next);
+  }
 
   async function runAsk() {
     if (!canAsk) return;
@@ -117,13 +125,7 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
             onKeyDown={submitOnCmdEnter(runAsk)}
           />
           <div className="grid gap-4 sm:grid-cols-2">
-            <TextField
-              label={t("ask.courseLabel")}
-              hint={t("ask.courseHint")}
-              placeholder={t("ask.coursePlaceholder")}
-              value={course}
-              onChange={(e) => setCourse(e.target.value)}
-            />
+            <CourseSelect value={course} onChange={selectCourse} config={config} />
             <TextField
               label={t("ask.chapterLabel")}
               hint={t("ask.chapterHint")}
