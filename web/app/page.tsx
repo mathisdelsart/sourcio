@@ -116,7 +116,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
               G
@@ -125,7 +125,7 @@ export default function Home() {
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                 {t("app.name")}
               </p>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 {t("app.tagline")}
               </p>
             </div>
@@ -148,7 +148,7 @@ export default function Home() {
 
       <main>
         {/* Landing — wider container, generous spacing, leads into the tool. */}
-        <div className="mx-auto max-w-5xl space-y-12 px-4 py-10 sm:px-6 sm:py-14">
+        <div className="mx-auto max-w-5xl space-y-16 px-4 py-16 sm:px-6 sm:py-20">
           <Hero targetId="tool" />
           <HowItWorks />
           <Features />
@@ -159,9 +159,9 @@ export default function Home() {
         <section
           id="tool"
           aria-label={t("tabs.aria")}
-          className="scroll-mt-20 border-t border-zinc-200 bg-white/40 dark:border-zinc-800 dark:bg-zinc-950"
+          className="scroll-mt-20 border-t border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950"
         >
-          <div className="mx-auto max-w-3xl space-y-5 px-4 py-8 sm:px-6 sm:py-10">
+          <div className="mx-auto max-w-3xl space-y-6 px-4 py-16 sm:px-6 sm:py-20">
             <div className="flex justify-center sm:hidden">
               <HealthBadge config={config} />
             </div>
@@ -238,10 +238,10 @@ export default function Home() {
               </span>
               <span className="text-xs text-zinc-400 dark:text-zinc-500">grounded-rag</span>
             </div>
-            <p className="max-w-md text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+            <p className="max-w-md text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
               {t("landing.footer.tagline")}
             </p>
-            <p className="text-xs text-zinc-400 dark:text-zinc-500">{t("footer.tagline")}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">{t("footer.tagline")}</p>
           </div>
         </footer>
       </main>

@@ -84,30 +84,30 @@ export function Features() {
   return (
     <section aria-labelledby="features-heading" className="py-4">
       <div className="text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">
+        <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
           {t("features.eyebrow")}
         </p>
         <h2
           id="features-heading"
-          className="mt-2 text-balance text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-2xl"
+          className="mt-3 text-balance text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl"
         >
           {t("features.title")}
         </h2>
       </div>
 
-      <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {FEATURES.map((feature) => (
           <li
             key={feature.title}
-            className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-card transition-shadow hover:shadow-card-hover dark:border-zinc-800 dark:bg-zinc-900"
+            className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
           >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">
               {feature.icon}
             </span>
-            <h3 className="mt-4 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            <h3 className="mt-5 font-semibold text-zinc-900 dark:text-zinc-100">
               {t(feature.title)}
             </h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+            <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
               {t(feature.body)}
             </p>
           </li>

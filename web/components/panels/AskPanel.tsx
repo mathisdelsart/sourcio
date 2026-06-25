@@ -166,7 +166,7 @@ export function AskPanel({
               {t("ask.submit")}
             </Button>
           </div>
-          <p className="text-xs text-zinc-400 dark:text-zinc-500">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
             {t("common.submitHint")}
           </p>
         </CardBody>
@@ -196,8 +196,8 @@ export function AskPanel({
           ) : (
             <div className="space-y-5">
               <Markdown>{lastAnswer.answer}</Markdown>
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+              <div className="border-t border-zinc-100 pt-4 dark:border-zinc-800">
+                <p className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
                   {t("common.sources")}
                 </p>
                 {lastAnswer.sources.length > 0 ? (
@@ -207,7 +207,7 @@ export function AskPanel({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-zinc-400 dark:text-zinc-500">{t("common.noSources")}</p>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("common.noSources")}</p>
                 )}
               </div>
 
@@ -240,7 +240,7 @@ export function AskPanel({
                   </Button>
                 </div>
                 {reexplained && (
-                  <div className="mt-4 rounded-lg border border-zinc-100 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
+                  <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
                     <Markdown>{reexplained}</Markdown>
                   </div>
                 )}

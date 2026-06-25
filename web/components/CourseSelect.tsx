@@ -6,7 +6,7 @@ import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 
 const baseField =
-  "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 " +
+  "w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 " +
   "transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 " +
   "disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400 " +
   "dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 " +
@@ -88,7 +88,7 @@ export function CourseSelect({
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />
-        <p className="text-xs text-zinc-400 dark:text-zinc-500">{resolvedHint}</p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">{resolvedHint}</p>
       </div>
     );
   }
@@ -122,7 +122,7 @@ export function CourseSelect({
           </option>
         ))}
       </select>
-      <p className="text-xs text-zinc-400 dark:text-zinc-500">
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">
         {hint ?? t("ask.courseHint")}
       </p>
     </div>
