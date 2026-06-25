@@ -22,9 +22,10 @@ class User(Base):
     """A registered account that can authenticate with email and password.
 
     The password is never stored in clear text: only its bcrypt hash is kept.
-    This table is additive and independent of ``Student`` (the anonymous,
-    ``external_id``-keyed identity used by the tutor endpoints); the two are not
-    linked, so existing flows are unaffected.
+    A user may own zero or more ``Student`` identities. The link is optional on
+    the ``Student`` side, so anonymous, ``external_id``-keyed students created by
+    the tutor endpoints without a logged-in caller remain unlinked and existing
+    flows are unaffected.
     """
 
     __tablename__ = "users"
@@ -34,6 +35,8 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    students: Mapped[list[Student]] = relationship(back_populates="user")
+
 
 class Student(Base):
     """A user revising their courses."""
@@ -42,8 +45,12 @@ class Student(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     external_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    user: Mapped[User | None] = relationship(back_populates="students")
     exercises: Mapped[list[Exercise]] = relationship(
         back_populates="student", cascade="all, delete-orphan"
     )

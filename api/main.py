@@ -35,6 +35,7 @@ from agent.state import Level, TutorState, to_history
 from api.auth import (
     CurrentUser,
     LoginRequest,
+    OptionalUser,
     RegisterRequest,
     TokenResponse,
     UserOut,
@@ -112,6 +113,23 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key.",
         )
+
+
+def _resolve_student(session: Any, external_id: str, user: UserOut | None) -> Student:
+    """Get-or-create the student and, when authenticated, claim ownership.
+
+    Anonymous requests (``user is None``) behave exactly as before: the student
+    is keyed solely by ``external_id`` and left unlinked. When a valid bearer
+    token is present, the resolved student is associated with that user if it has
+    no owner yet (``user_id`` stays untouched once set, so a student already
+    owned by someone else is never re-claimed). This is purely additive: it never
+    changes the answer, only the ownership link.
+    """
+    student = get_or_create_student(session, external_id)
+    if user is not None and student.user_id is None:
+        student.user_id = user.id
+        session.flush()
+    return student
 
 
 class AskRequest(BaseModel):
@@ -224,6 +242,14 @@ class HistoryItem(BaseModel):
     created_at: str
 
 
+class StudentOut(BaseModel):
+    """A student identity owned by the authenticated caller."""
+
+    id: int
+    external_id: str
+    created_at: str
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     """Liveness probe."""
@@ -266,16 +292,42 @@ def auth_me(current_user: UserOut = CurrentUser) -> UserOut:
     return current_user
 
 
+@app.get("/me/students", response_model=list[StudentOut])
+def my_students(current_user: UserOut = CurrentUser) -> list[dict[str, Any]]:
+    """List the student identities owned by the authenticated caller.
+
+    Protected by ``get_current_user``: the request must carry a valid bearer
+    token, otherwise 401 is returned. Only students linked to this user are
+    returned, so a caller never sees another account's data or the anonymous,
+    unlinked students. The list is newest-first.
+    """
+    with get_session(_engine) as session:
+        rows = session.scalars(
+            select(Student)
+            .where(Student.user_id == current_user.id)
+            .order_by(Student.created_at.desc(), Student.id.desc())
+        )
+        return [
+            {
+                "id": row.id,
+                "external_id": row.external_id,
+                "created_at": row.created_at.isoformat() if row.created_at else "",
+            }
+            for row in rows
+        ]
+
+
 @app.post("/ask", response_model=AskResponse, dependencies=[Depends(require_api_key)])
-def ask(request: AskRequest) -> dict[str, Any]:
+def ask(request: AskRequest, user: UserOut | None = OptionalUser) -> dict[str, Any]:
     """Answer a question grounded in the course, or refuse if uncovered.
 
     The question and the assistant's answer are persisted as conversation
-    history for the student.
+    history for the student. When the request carries a valid bearer token, the
+    student is linked to that account so the turns become the user's own.
     """
     result = answer(request.question, k=request.k, course=request.course, chapter=request.chapter)
     with get_session(_engine) as session:
-        student = get_or_create_student(session, request.student_id)
+        student = _resolve_student(session, request.student_id, user)
         add_message(session, student_id=student.id, role="user", content=request.question)
         add_message(session, student_id=student.id, role="assistant", content=result["answer"])
     return {
@@ -285,7 +337,7 @@ def ask(request: AskRequest) -> dict[str, Any]:
     }
 
 
-def _stream_ask_events(request: AskRequest) -> Iterator[str]:
+def _stream_ask_events(request: AskRequest, user: UserOut | None = None) -> Iterator[str]:
     """Serialize ``stream_answer`` as Server-Sent Events and persist on completion.
 
     Each item from the generator is emitted as one SSE ``data:`` line carrying a
@@ -310,7 +362,7 @@ def _stream_ask_events(request: AskRequest) -> Iterator[str]:
             yield f"data: {json.dumps(event)}\n\n"
 
     with get_session(_engine) as session:
-        student = get_or_create_student(session, request.student_id)
+        student = _resolve_student(session, request.student_id, user)
         add_message(session, student_id=student.id, role="user", content=request.question)
         add_message(session, student_id=student.id, role="assistant", content=final_answer)
 
@@ -319,16 +371,16 @@ REFUSAL_FALLBACK = "This is not covered in the course material."
 
 
 @app.post("/ask/stream", dependencies=[Depends(require_api_key)])
-def ask_stream(request: AskRequest) -> StreamingResponse:
+def ask_stream(request: AskRequest, user: UserOut | None = OptionalUser) -> StreamingResponse:
     """Stream a grounded answer token by token as Server-Sent Events.
 
-    Mirrors ``/ask`` (same request model, auth and history persistence) but
-    returns a ``text/event-stream`` response: token deltas arrive first, then a
-    final sources/refusal event. ``/ask`` stays available for non-streaming
-    clients.
+    Mirrors ``/ask`` (same request model, auth and history persistence, and
+    optional ownership linking) but returns a ``text/event-stream`` response:
+    token deltas arrive first, then a final sources/refusal event. ``/ask`` stays
+    available for non-streaming clients.
     """
     return StreamingResponse(
-        _stream_ask_events(request),
+        _stream_ask_events(request, user),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -374,16 +426,17 @@ def reexplain_answer(request: ReexplainRequest) -> dict[str, str]:
 
 
 @app.post("/exercise", response_model=ExerciseResponse, dependencies=[Depends(require_api_key)])
-def exercise(request: ExerciseRequest) -> dict[str, Any]:
+def exercise(request: ExerciseRequest, user: UserOut | None = OptionalUser) -> dict[str, Any]:
     """Generate a course-grounded exercise on the requested notion.
 
     The reference solution stays server-side and is never returned. The student
-    is ensured to exist; exercise persistence is owned by the agent node, which
-    needs the ``student_id`` to store the exercise. The persisted exercise id is
-    surfaced so a later ``/grade`` call can link the grade back to it.
+    is ensured to exist (and linked to the caller when authenticated); exercise
+    persistence is owned by the agent node, which needs the ``student_id`` to
+    store the exercise. The persisted exercise id is surfaced so a later
+    ``/grade`` call can link the grade back to it.
     """
     with get_session(_engine) as session:
-        get_or_create_student(session, request.student_id)
+        _resolve_student(session, request.student_id, user)
     state = generate({"message": request.notion, "student_id": request.student_id})
     # generate always populates "exercise" (a built exercise or a refusal).
     built = state.get("exercise")
@@ -392,15 +445,15 @@ def exercise(request: ExerciseRequest) -> dict[str, Any]:
 
 
 @app.post("/grade", response_model=GradeResponse, dependencies=[Depends(require_api_key)])
-def grade_answer(request: GradeRequest) -> dict[str, Any]:
+def grade_answer(request: GradeRequest, user: UserOut | None = OptionalUser) -> dict[str, Any]:
     """Grade the student's answer, optionally against a prior exercise.
 
-    The student is ensured to exist; grade persistence is owned by the agent
-    node, which needs the ``student_id`` (and the exercise's id) to link the
-    grade to its exercise.
+    The student is ensured to exist (and linked to the caller when
+    authenticated); grade persistence is owned by the agent node, which needs the
+    ``student_id`` (and the exercise's id) to link the grade to its exercise.
     """
     with get_session(_engine) as session:
-        get_or_create_student(session, request.student_id)
+        _resolve_student(session, request.student_id, user)
     state: TutorState = {"message": request.message, "student_id": request.student_id}
     if request.exercise is not None:
         state["exercise"] = request.exercise
@@ -411,17 +464,18 @@ def grade_answer(request: GradeRequest) -> dict[str, Any]:
 
 
 @app.post("/quiz", response_model=QuizResponse, dependencies=[Depends(require_api_key)])
-def quiz(request: QuizRequest) -> dict[str, Any]:
+def quiz(request: QuizRequest, user: UserOut | None = OptionalUser) -> dict[str, Any]:
     """Generate a course-grounded quiz of ``n`` questions on the requested notion.
 
     Reference solutions stay server-side and are never returned: each question is
-    surfaced as ``{id, problem}`` only. The student is ensured to exist; quiz
-    persistence is owned by the quiz node, which needs the ``student_id`` to store
-    the quiz and its questions. A refusal (empty ``questions``) is returned when
-    the course does not cover the notion.
+    surfaced as ``{id, problem}`` only. The student is ensured to exist (and
+    linked to the caller when authenticated); quiz persistence is owned by the
+    quiz node, which needs the ``student_id`` to store the quiz and its questions.
+    A refusal (empty ``questions``) is returned when the course does not cover the
+    notion.
     """
     with get_session(_engine) as session:
-        get_or_create_student(session, request.student_id)
+        _resolve_student(session, request.student_id, user)
     return generate_quiz(request.notion, request.n, request.student_id)
 
 
@@ -430,16 +484,19 @@ def quiz(request: QuizRequest) -> dict[str, Any]:
     response_model=GradeResponse,
     dependencies=[Depends(require_api_key)],
 )
-def quiz_grade(quiz_id: int, request: QuizGradeRequest) -> dict[str, Any]:
+def quiz_grade(
+    quiz_id: int, request: QuizGradeRequest, user: UserOut | None = OptionalUser
+) -> dict[str, Any]:
     """Grade one quiz answer against the question's stored reference solution.
 
     The reference solution is never sent by the client: it is loaded server-side
-    from the persisted quiz question. The verdict is persisted as a grade linked
+    from the persisted quiz question. The student is ensured to exist (and linked
+    to the caller when authenticated). The verdict is persisted as a grade linked
     to the question. An unknown question (or one not belonging to ``quiz_id``)
     yields 404.
     """
     with get_session(_engine) as session:
-        get_or_create_student(session, request.student_id)
+        _resolve_student(session, request.student_id, user)
     verdict = grade_quiz_answer(quiz_id, request.question_id, request.answer, request.student_id)
     if verdict is None:
         raise HTTPException(

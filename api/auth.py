@@ -189,14 +189,14 @@ def _bearer_token(authorization: str | None) -> str:
     return token.strip()
 
 
-def get_current_user(authorization: str | None = Header(default=None)) -> UserOut:
-    """FastAPI dependency that resolves the caller from a bearer JWT.
+def _resolve_user_from_token(token: str) -> UserOut:
+    """Decode a bearer ``token`` and load the matching user as a ``UserOut``.
 
-    Parses and validates the ``Authorization`` header, decodes the token, and
-    loads the matching user. Returns a ``UserOut``. Raises 401 on any failure
-    (missing/invalid/expired token, or a token whose user no longer exists).
+    Raises 401 when the token is malformed/expired, carries a non-numeric
+    subject, or points to a user that no longer exists. Shared by both the
+    strict (``get_current_user``) and optional (``get_optional_user``)
+    dependencies so they stay consistent.
     """
-    token = _bearer_token(authorization)
     subject = decode_access_token(token)
     try:
         user_id = int(subject)
@@ -215,6 +215,33 @@ def get_current_user(authorization: str | None = Header(default=None)) -> UserOu
                 headers={"WWW-Authenticate": "Bearer"},
             )
         return UserOut(id=user.id, email=user.email)
+
+
+def get_current_user(authorization: str | None = Header(default=None)) -> UserOut:
+    """FastAPI dependency that resolves the caller from a bearer JWT.
+
+    Parses and validates the ``Authorization`` header, decodes the token, and
+    loads the matching user. Returns a ``UserOut``. Raises 401 on any failure
+    (missing/invalid/expired token, or a token whose user no longer exists).
+    """
+    token = _bearer_token(authorization)
+    return _resolve_user_from_token(token)
+
+
+def get_optional_user(authorization: str | None = Header(default=None)) -> UserOut | None:
+    """FastAPI dependency that resolves the caller from a bearer JWT, if present.
+
+    Unlike ``get_current_user``, authentication is optional: when no
+    ``Authorization`` header is supplied the dependency returns ``None`` instead
+    of raising, so a route can stay open to anonymous callers while still
+    recognizing a logged-in user. A header that *is* present but malformed,
+    invalid, or expired still raises 401, so a broken token never silently
+    degrades to anonymous access.
+    """
+    if not authorization:
+        return None
+    token = _bearer_token(authorization)
+    return _resolve_user_from_token(token)
 
 
 def register_user(payload: RegisterRequest) -> UserOut:
@@ -257,3 +284,4 @@ def login_user(payload: LoginRequest) -> TokenResponse:
 
 # Re-exported so the API can declare the dependency without importing internals.
 CurrentUser = Depends(get_current_user)
+OptionalUser = Depends(get_optional_user)
