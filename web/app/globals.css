@@ -1,0 +1,107 @@
+@import "katex/dist/katex.min.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  @apply bg-zinc-50 text-zinc-900;
+}
+
+/* --- Markdown ("prose-tutor") -------------------------------------------- */
+/* A compact, readable prose style tuned for grounded answers and exercises. */
+
+.prose-tutor {
+  @apply text-[15px] leading-7 text-zinc-700;
+}
+
+.prose-tutor > :first-child {
+  @apply mt-0;
+}
+
+.prose-tutor > :last-child {
+  @apply mb-0;
+}
+
+.prose-tutor p {
+  @apply my-3;
+}
+
+.prose-tutor h1,
+.prose-tutor h2,
+.prose-tutor h3,
+.prose-tutor h4 {
+  @apply mb-2 mt-5 font-semibold text-zinc-900;
+}
+
+.prose-tutor h1 {
+  @apply text-lg;
+}
+
+.prose-tutor h2 {
+  @apply text-base;
+}
+
+.prose-tutor h3,
+.prose-tutor h4 {
+  @apply text-[15px];
+}
+
+.prose-tutor ul {
+  @apply my-3 list-disc space-y-1 pl-5;
+}
+
+.prose-tutor ol {
+  @apply my-3 list-decimal space-y-1 pl-5;
+}
+
+.prose-tutor a {
+  @apply font-medium text-indigo-600 underline underline-offset-2 hover:text-indigo-700;
+}
+
+.prose-tutor strong {
+  @apply font-semibold text-zinc-900;
+}
+
+.prose-tutor code {
+  @apply rounded bg-zinc-100 px-1 py-0.5 font-mono text-[13px] text-zinc-800;
+}
+
+.prose-tutor pre {
+  @apply my-4 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-[13px];
+}
+
+.prose-tutor pre code {
+  @apply bg-transparent p-0;
+}
+
+.prose-tutor blockquote {
+  @apply my-4 border-l-2 border-zinc-200 pl-4 italic text-zinc-500;
+}
+
+.prose-tutor table {
+  @apply my-4 w-full border-collapse text-sm;
+}
+
+.prose-tutor th,
+.prose-tutor td {
+  @apply border border-zinc-200 px-3 py-1.5 text-left;
+}
+
+.prose-tutor th {
+  @apply bg-zinc-50 font-semibold text-zinc-700;
+}
+
+/* Let long block equations scroll instead of overflowing the card. */
+.prose-tutor .katex-display {
+  @apply overflow-x-auto overflow-y-hidden py-1;
+}
