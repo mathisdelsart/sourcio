@@ -20,14 +20,29 @@ from db.models import Base, Exercise, Grade, Message, Student
 SessionLocal = sessionmaker(class_=Session, expire_on_commit=False)
 
 
+def _connect_args_for(database_url: str) -> dict:
+    """Return driver ``connect_args`` appropriate for the given URL.
+
+    SQLite needs ``check_same_thread=False`` so a connection can be shared across
+    threads (the FastAPI app is multithreaded). This flag is SQLite-only and must
+    not leak into other drivers, so it is applied only for ``sqlite`` URLs and an
+    empty dict is returned for everything else (e.g. ``postgresql+psycopg://``).
+    """
+    if database_url.startswith("sqlite"):
+        return {"check_same_thread": False}
+    return {}
+
+
 def create_engine_from_settings(url: str | None = None) -> Engine:
     """Create an SQLAlchemy engine from the configured ``database_url``.
 
     Pass ``url`` to override the configured value (e.g. an in-memory database in
-    tests). The engine is created but no connection is opened here.
+    tests). The engine is created but no connection is opened here. Driver
+    ``connect_args`` are selected from the URL scheme so SQLite-only options are
+    never passed to PostgreSQL (and vice versa).
     """
     database_url = url or get_settings().database_url
-    return create_engine(database_url, future=True)
+    return create_engine(database_url, future=True, connect_args=_connect_args_for(database_url))
 
 
 def init_db(engine: Engine) -> None:
