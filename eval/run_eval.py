@@ -432,6 +432,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Write the computed metrics to this JSON file (e.g. eval/results.json).",
     )
     parser.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="Write a Markdown report of the computed metrics to this path (e.g. eval/report.md).",
+    )
+    parser.add_argument(
         "--latency-out",
         type=Path,
         default=None,
@@ -453,6 +459,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.out is not None:
         write_results(metrics, args.out)
         print(f"  wrote results: {args.out}")
+    if args.report is not None:
+        from eval.report import write_report
+
+        write_report(metrics_to_dict(metrics), args.report, metrics_to_dict(thresholds))
+        print(f"  wrote report: {args.report}")
     if args.latency_out is not None:
         # Flush any per-stage timings collected during the run (only present
         # when LATENCY_ENABLED is set) so the dashboard can render p50/p95.

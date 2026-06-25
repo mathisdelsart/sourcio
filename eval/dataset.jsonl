@@ -34,3 +34,28 @@
 {"question": "How do I deploy a Kubernetes cluster on a cloud provider?", "expect_refusal": true, "note": "DevOps how-to, unrelated to the course material."}
 {"question": "What is the chemical formula of table salt?", "expect_refusal": true, "note": "Chemistry, clearly outside the wavelet course."}
 {"question": "Who painted the Mona Lisa and in which century?", "expect_refusal": true, "note": "Art history, clearly outside the wavelet course."}
+{"question": "What is the two-channel analysis filter bank in the wavelet transform?", "expect_refusal": false, "note": "Two-channel filter banks implement the analysis stage of the DWT.", "expect_keywords": ["filter bank", "analysis"]}
+{"question": "How does perfect reconstruction work in a filter bank?", "expect_refusal": false, "note": "Perfect reconstruction is the design goal of the synthesis filter bank.", "expect_keywords": ["reconstruction", "filter bank"]}
+{"question": "What is the low-pass filter associated with the scaling function?", "expect_refusal": false, "note": "The scaling function corresponds to a low-pass filter in the filter bank.", "expect_keywords": ["low-pass", "scaling function"]}
+{"question": "What is the high-pass filter associated with the wavelet function?", "expect_refusal": false, "note": "The wavelet function corresponds to a high-pass filter in the filter bank.", "expect_keywords": ["high-pass", "wavelet function"]}
+{"question": "How is upsampling used in the synthesis stage of the wavelet transform?", "expect_refusal": false, "note": "Upsampling by two precedes the synthesis filters during reconstruction.", "expect_keywords": ["upsampling", "synthesis"]}
+{"question": "What does the refinement equation tell us about the scaling function?", "expect_refusal": false, "note": "The refinement (two-scale) equation expresses the scaling function recursively.", "expect_keywords": ["refinement", "scaling function"]}
+{"question": "How are the wavelet coefficients obtained at each level of decomposition?", "expect_refusal": false, "note": "Wavelet coefficients come from the high-pass branch at each decomposition level.", "expect_keywords": ["wavelet coefficient", "decomposition"]}
+{"question": "What is the difference between the analysis and synthesis filters?", "expect_refusal": false, "note": "Analysis decomposes the signal while synthesis reconstructs it.", "expect_keywords": ["analysis", "synthesis"]}
+{"question": "Why does the wavelet transform offer better time localization than the Fourier transform?", "expect_refusal": false, "note": "Wavelets trade frequency resolution for time localization, unlike the Fourier basis.", "expect_keywords": ["time", "localization"]}
+{"question": "What is the role of the mother wavelet in the continuous wavelet transform?", "expect_refusal": false, "note": "The mother wavelet is dilated and translated to form the CWT basis.", "expect_keywords": ["mother wavelet", "continuous wavelet transform"]}
+{"question": "How does translation of a wavelet shift it along the signal?", "expect_refusal": false, "note": "Translation moves the wavelet in time to analyze different positions.", "expect_keywords": ["translation", "wavelet"]}
+{"question": "What is the approximation coefficient at the coarsest scale?", "expect_refusal": false, "note": "The coarsest approximation coefficients summarize the low-frequency content.", "expect_keywords": ["approximation", "coefficient"]}
+{"question": "How does a wavelet basis achieve orthonormality?", "expect_refusal": false, "note": "Orthonormal wavelet bases combine orthogonality with unit norm.", "expect_keywords": ["orthonormal", "basis"]}
+{"question": "What is a vanishing moment of a wavelet?", "expect_refusal": false, "note": "Vanishing moments control how many polynomial degrees a wavelet annihilates.", "expect_keywords": ["vanishing moment", "wavelet"]}
+{"question": "How is decimation by two applied after the analysis filters?", "expect_refusal": false, "note": "Decimation by two follows the analysis filters in the fast wavelet transform.", "expect_keywords": ["decimation", "downsampling"]}
+{"question": "What is the recipe for a classic French ratatouille?", "expect_refusal": true, "note": "Cooking, unrelated to the course material."}
+{"question": "How do I change a flat tire on my car?", "expect_refusal": true, "note": "Automotive how-to, outside the course."}
+{"question": "What is the capital city of Japan?", "expect_refusal": true, "note": "Geography, clearly outside the wavelet course."}
+{"question": "Who wrote the novel War and Peace?", "expect_refusal": true, "note": "Literature, clearly outside the wavelet course."}
+{"question": "What is the average distance from the Earth to the Moon?", "expect_refusal": true, "note": "Astronomy, clearly outside the wavelet course."}
+{"question": "How do I write a for loop in JavaScript?", "expect_refusal": true, "note": "General programming how-to, unrelated to the course material."}
+{"question": "What are the symptoms of the common cold?", "expect_refusal": true, "note": "Medicine, clearly outside the wavelet course."}
+{"question": "How does photosynthesis convert light into energy?", "expect_refusal": true, "note": "Biology, clearly outside the wavelet course."}
+{"question": "What is the exchange rate between the euro and the dollar?", "expect_refusal": true, "note": "Finance, out of scope and time-varying."}
+{"question": "Who is the current president of the United States?", "expect_refusal": true, "note": "Current affairs, clearly outside the wavelet course."}
