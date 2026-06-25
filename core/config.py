@@ -109,6 +109,12 @@ class Settings(BaseSettings):
     # local setup would be wrong. Enable it only when the API is served over TLS.
     enable_hsts: bool = False
 
+    # Root logging level for the JSON structured logger configured on API
+    # startup. A standard level name ("DEBUG", "INFO", "WARNING", "ERROR"); an
+    # unknown value falls back to "INFO" so a typo never crashes startup. Default
+    # "INFO" keeps the test suite quiet (DEBUG would be noisy).
+    log_level: str = "INFO"
+
     # Secret used to sign user JWTs (HS256). The default is an insecure
     # placeholder for local development only and MUST be overridden in
     # production via `JWT_SECRET` (or `.env`); leaking it lets anyone forge a

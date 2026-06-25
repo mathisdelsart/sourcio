@@ -15,13 +15,19 @@ code change.
 
 import threading
 import time
+import uuid
 from collections import deque
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
+from api.logging_config import request_id_var
 from core.config import get_settings
+
+# Canonical request-id header name, used both for the inbound value (if a client
+# or upstream proxy supplies one) and the echoed response header.
+REQUEST_ID_HEADER = "x-request-id"
 
 # One rolling window is 60 seconds wide; the limit is expressed per minute.
 _WINDOW_SECONDS = 60.0
@@ -168,3 +174,58 @@ class RateLimitMiddleware:
             headers={"Retry-After": str(max(1, int(retry_after) + 1))},
         )
         await response(scope, receive, send)
+
+
+class RequestIdMiddleware:
+    """Attach a request id to every request for correlation and tracing.
+
+    On each HTTP request it reuses an inbound ``X-Request-ID`` header when the
+    client (or an upstream proxy/load balancer) supplies one, otherwise it mints
+    a fresh ``uuid4``. The id is published on a contextvar so the JSON log
+    formatter can stamp every log line emitted while handling the request, and it
+    is echoed back as the ``X-Request-ID`` response header so callers can quote
+    it when reporting an issue. The contextvar is always reset afterwards so ids
+    never leak between requests.
+
+    This middleware is pure pass-through for the body and status; it only adds a
+    header and the logging context, so existing behavior is unchanged.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request_id = self._inbound_id(scope) or uuid.uuid4().hex
+        token = request_id_var.set(request_id)
+        # Also stash the id on the request scope's state. Starlette's
+        # ServerErrorMiddleware sits *above* this middleware, so when an
+        # unhandled exception is converted to a 500 the contextvar has already
+        # been reset by the ``finally`` below; the exception handler reads the id
+        # from here instead, where it survives.
+        scope.setdefault("state", {})["request_id"] = request_id
+
+        async def send_with_id(message) -> None:
+            if message["type"] == "http.response.start":
+                headers = message.setdefault("headers", [])
+                headers.append((REQUEST_ID_HEADER.encode("latin-1"), request_id.encode("latin-1")))
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_with_id)
+        finally:
+            request_id_var.reset(token)
+
+    @staticmethod
+    def _inbound_id(scope) -> str | None:
+        """Return a non-empty inbound ``X-Request-ID`` header, or ``None``."""
+        target = REQUEST_ID_HEADER.encode("latin-1")
+        for name, value in scope.get("headers", []):
+            if name.lower() == target:
+                decoded = value.decode("latin-1").strip()
+                if decoded:
+                    return decoded
+        return None
