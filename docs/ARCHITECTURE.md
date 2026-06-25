@@ -285,6 +285,8 @@ nodes — no retrieval or prompting is reimplemented. Endpoints group by area:
 | Quiz | `POST /quiz/{quiz_id}/grade` | grade one quiz answer against its stored reference solution (404 on unknown question) |
 | Feedback | `POST /feedback` | record a thumbs up/down on a tutor answer (rating validated to ±1) |
 | Feedback | `GET /feedback/summary` | aggregate up/down counts for a student |
+| Spaced repetition | `POST /reviews` | record a recall rating (`0..5`) and reschedule a notion (SM-2); 422 out of range |
+| Spaced repetition | `GET /reviews/due` | notions whose `due_at` has passed, soonest first (empty for an unknown student) |
 | Sessions | `POST /sessions` | open a named conversation thread for a student |
 | Sessions | `GET /sessions/{student_id}` | list a student's threads, newest first |
 | Sessions | `GET /sessions/{student_id}/{session_id}/messages` | one thread's messages, chronological (404 if not the student's) |
@@ -312,6 +314,12 @@ Two **independent** auth layers coexist (`api/auth.py`, `api/main.py`):
   exercises, quizzes and feedback become the user's own data, without changing any
   answer. Anonymous, `external_id`-keyed students stay unlinked.
 
+**Spaced repetition** (`core/scheduling.py`) is a small, LLM-free scheduler: `schedule(ease,
+interval_days, repetitions, quality)` applies one **SM-2** step (a recall `quality` below 3 resets the
+streak). `POST /reviews` keeps at most one `Review` row per `(student, notion)`, updates it in place,
+and stores the next `due_at`; `GET /reviews/due` returns the rows already due. No retrieval, no model
+call.
+
 The database engine is bound on startup (or injected by tests via
 `configure_engine`).
 
@@ -323,6 +331,16 @@ share one contract. `ui/metrics.py` is a read-only dashboard surfacing the
 offline eval metrics (from `eval/results.json`) and DB usage stats. All
 non-Streamlit logic lives in pure helpers that are unit-tested without the
 optional `ui` extra (`tests/test_ui.py`, `tests/test_metrics.py`).
+
+A separate **Next.js (App Router) · TypeScript · Tailwind** frontend lives in
+`web/` — the premium UI, distinct from the Streamlit demo. It is likewise a thin
+typed client over the same FastAPI backend (`web/lib/api.ts`, one function per
+endpoint), adding bilingual **EN/FR** copy (`web/lib/i18n.tsx`), a light/dark
+theme toggle, **streaming answers** over Server-Sent Events (`askStream`),
+citation chips, an auth menu, a dynamic course picker (`GET /courses`), and
+per-answer feedback. Its tabs are Ask · Re-explain · Exercise · Grade · Quiz ·
+Threads · History (`web/components/panels/`). Build/run details are in
+`web/README.md`.
 
 ## Quality layer (offline / CI)
 
@@ -349,7 +367,7 @@ product-side grading of a student's answer.
 | Where | What |
 | --- | --- |
 | **Qdrant** | course chunks as `{vector, payload}` (collection `courses`) |
-| **SQL** (SQLite in dev, PostgreSQL later) | users, students, exercises + reference solutions, grades, quizzes, conversation messages, threads, feedback |
+| **SQL** (SQLite in dev, PostgreSQL later) | users, students, exercises + reference solutions, grades, quizzes, conversation messages, threads, feedback, spaced-repetition reviews |
 | **LangFuse** (optional) | traces and per-step evaluation signals |
 
 The relational layer uses SQLAlchemy 2.0 declarative models (`db/models.py`):
@@ -369,6 +387,9 @@ The relational layer uses SQLAlchemy 2.0 declarative models (`db/models.py`):
 - `Message` — one conversation turn.
 - `Feedback` — a student's thumbs up/down (±1) on a tutor answer, capturing the
   question and answer verbatim for later offline evaluation.
+- `Review` — one notion's spaced-repetition state for a student (ease, interval,
+  repetitions, `last_reviewed`, `due_at`); at most one row per `(student,
+  notion)`, advanced by the SM-2 scheduler.
 
 The engine is created lazily from `Settings.database_url` (`db/session.py`), so
 swapping SQLite for PostgreSQL is just a URL change — see
@@ -484,7 +505,9 @@ guard apply transparently when enabled.
 | HTTP API | `api/main.py` |
 | User auth (bcrypt + JWT) | `api/auth.py` |
 | Logging / middleware (request-id, security headers, rate limit) | `api/logging_config.py`, `api/middleware.py` |
+| Spaced-repetition scheduler (SM-2) | `core/scheduling.py` |
 | Streamlit UI + metrics dashboard | `ui/app.py`, `ui/metrics.py` |
+| Next.js web frontend (premium UI) | `web/` (`web/app/`, `web/components/`, `web/lib/`) |
 | Relational store | `db/models.py`, `db/session.py`, `alembic/` |
 | LLM factory, settings, cache | `core/config.py` |
 | Tracing (LangFuse) / latency / budget | `core/obs.py`, `core/budget.py` |
