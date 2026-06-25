@@ -15,6 +15,8 @@ Endpoints:
     GET  /sessions/{id}/{sid}/messages  messages of one thread (chronological)
     POST /feedback          record a thumbs up/down on a tutor answer
     GET  /feedback/summary  thumbs up/down counts for a student
+    POST /reviews           record a recall rating and reschedule a notion (SM-2)
+    GET  /reviews/due       notions due for spaced-repetition review
 
 The layer stays thin: each route delegates to the existing grounded functions
 and graph nodes. No retrieval or prompting logic is reimplemented here. The API
@@ -27,6 +29,7 @@ import json
 import logging
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
@@ -59,7 +62,8 @@ from api.middleware import (
 from core.answer import answer, stream_answer
 from core.config import get_settings
 from core.courses import list_courses
-from db.models import Feedback, Student
+from core.scheduling import MAX_QUALITY, MIN_QUALITY, schedule
+from db.models import Feedback, Review, Student
 from db.models import Message as MessageModel
 from db.models import Session as SessionModel
 from db.session import (
@@ -393,6 +397,36 @@ class FeedbackSummary(BaseModel):
 
     up: int
     down: int
+
+
+class ReviewRequest(BaseModel):
+    """A recall rating for one notion, driving its spaced-repetition schedule.
+
+    ``quality`` is how well the student just recalled the notion, an integer in
+    ``0..5`` (SM-2): ratings below ``3`` are lapses that reset the streak. The
+    bound is validated, so an out-of-range value is rejected with 422.
+    """
+
+    student_id: str
+    notion: str
+    quality: int = Field(description="Recall quality in 0..5 (>=3 passes).")
+
+    @field_validator("quality")
+    @classmethod
+    def _quality_in_range(cls, value: int) -> int:
+        """Reject a recall quality outside the SM-2 ``0..5`` range."""
+        if not (MIN_QUALITY <= value <= MAX_QUALITY):
+            raise ValueError(f"quality must be in {MIN_QUALITY}..{MAX_QUALITY}.")
+        return value
+
+
+class ReviewSchedule(BaseModel):
+    """The spaced-repetition schedule of a notion after a recall."""
+
+    notion: str
+    ease: float
+    interval_days: int
+    due_at: str
 
 
 @app.get("/health")
@@ -890,6 +924,96 @@ def feedback_summary(student_id: str) -> dict[str, int]:
             .where(Feedback.student_id == student.id, Feedback.rating == -1)
         )
     return {"up": up or 0, "down": down or 0}
+
+
+@app.post(
+    "/reviews",
+    response_model=ReviewSchedule,
+    dependencies=[Depends(require_api_key)],
+)
+def record_review(request: ReviewRequest, user: UserOut | None = OptionalUser) -> dict[str, Any]:
+    """Record a recall rating for a notion and return its updated schedule.
+
+    The student is ensured to exist (and linked to the caller when
+    authenticated). At most one review row exists per ``(student, notion)``: an
+    existing row is updated in place, otherwise a fresh one is created. The SM-2
+    step is applied by ``core.scheduling.schedule`` and ``due_at`` is computed
+    from a timezone-aware "now" plus the new interval. An out-of-range
+    ``quality`` is rejected with 422 by request validation. This route reaches no
+    LLM and runs no retrieval.
+    """
+    now = datetime.now(UTC)
+    with get_session(_engine) as session:
+        student = _resolve_student(session, request.student_id, user)
+        row = session.scalar(
+            select(Review).where(Review.student_id == student.id, Review.notion == request.notion)
+        )
+        if row is None:
+            # A fresh notion starts from the SM-2 defaults; the column defaults
+            # only materialise on flush, so seed the values explicitly here.
+            row = Review(
+                student_id=student.id,
+                notion=request.notion,
+                ease=2.5,
+                interval_days=0,
+                repetitions=0,
+            )
+            session.add(row)
+
+        state = schedule(
+            ease=row.ease,
+            interval_days=row.interval_days,
+            repetitions=row.repetitions,
+            quality=request.quality,
+        )
+        row.ease = state.ease
+        row.interval_days = state.interval_days
+        row.repetitions = state.repetitions
+        row.last_reviewed = now
+        due_at = now + timedelta(days=state.interval_days)
+        row.due_at = due_at
+        session.flush()
+
+        return {
+            "notion": row.notion,
+            "ease": row.ease,
+            "interval_days": row.interval_days,
+            "due_at": due_at.isoformat(),
+        }
+
+
+@app.get(
+    "/reviews/due",
+    response_model=list[ReviewSchedule],
+    dependencies=[Depends(require_api_key)],
+)
+def due_reviews(student_id: str) -> list[dict[str, Any]]:
+    """List the student's notions due for review, soonest first.
+
+    A notion is due when its ``due_at`` is at or before "now". Newly created
+    rows default ``due_at`` to their creation time, so brand-new notions are due
+    immediately and surface here too. An unknown student yields an empty list
+    rather than an error. This route reaches no LLM and runs no retrieval.
+    """
+    now = datetime.now(UTC)
+    with get_session(_engine) as session:
+        student = session.scalar(select(Student).where(Student.external_id == student_id))
+        if student is None:
+            return []
+        rows = session.scalars(
+            select(Review)
+            .where(Review.student_id == student.id, Review.due_at <= now)
+            .order_by(Review.due_at.asc(), Review.id.asc())
+        )
+        return [
+            {
+                "notion": row.notion,
+                "ease": row.ease,
+                "interval_days": row.interval_days,
+                "due_at": row.due_at.isoformat() if row.due_at else "",
+            }
+            for row in rows
+        ]
 
 
 if __name__ == "__main__":
