@@ -9,6 +9,7 @@ Endpoints:
     POST /quiz              generate a grounded multi-question quiz (no solutions)
     POST /quiz/{id}/grade   grade one quiz answer against its stored reference
     GET  /courses           list the distinct courses indexed in Qdrant
+    GET  /source/{chunk_id} fetch a cited source chunk's text and metadata
     GET  /history/{id}      recent conversation turns for a student
     POST /sessions          open a named conversation thread for a student
     GET  /sessions/{id}     list a student's conversation threads
@@ -63,6 +64,7 @@ from core.answer import answer, stream_answer
 from core.config import get_settings
 from core.courses import list_courses
 from core.scheduling import MAX_QUALITY, MIN_QUALITY, schedule
+from core.sources import get_source
 from db.models import Feedback, Review, Student
 from db.models import Message as MessageModel
 from db.models import Session as SessionModel
@@ -337,6 +339,20 @@ class CoursesResponse(BaseModel):
     """The distinct courses currently indexed in Qdrant, sorted."""
 
     courses: list[str]
+
+
+class SourceResponse(BaseModel):
+    """A cited source chunk: its full text and citation metadata.
+
+    Lets a UI turn a citation into a readable excerpt. ``chapter`` may be absent
+    for material indexed without a chapter, so it is optional.
+    """
+
+    id: str
+    course: str
+    chapter: str | None = None
+    page: int
+    text: str
 
 
 class SessionCreateRequest(BaseModel):
@@ -742,6 +758,28 @@ def courses() -> dict[str, list[str]]:
     indexed yet; it never reaches the LLM and runs no retrieval.
     """
     return {"courses": list_courses()}
+
+
+@app.get(
+    "/source/{chunk_id}",
+    response_model=SourceResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def source(chunk_id: str) -> dict[str, Any]:
+    """Return a cited source chunk's full text and citation metadata.
+
+    Lets a client resolve a citation (the chunk id surfaced with an answer) into
+    the underlying course excerpt, so a UI can show what an answer was grounded
+    in. Yields 404 when the id is unknown or the collection is missing; it never
+    reaches the LLM and runs no retrieval.
+    """
+    chunk = get_source(chunk_id)
+    if chunk is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source chunk not found.",
+        )
+    return chunk
 
 
 @app.get(
