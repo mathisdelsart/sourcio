@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     qdrant_url: str = "http://localhost:6333"
+    # API key for a managed Qdrant (e.g. Qdrant Cloud). None for a local,
+    # unauthenticated instance, so the default local setup is unchanged.
+    qdrant_api_key: str | None = None
     qdrant_collection: str = "courses"
 
     # Multilingual embeddings (documents and questions are in French).

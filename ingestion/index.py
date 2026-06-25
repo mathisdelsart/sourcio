@@ -28,7 +28,8 @@ DENSE_VECTOR_NAME = "dense"
 
 
 def _client() -> QdrantClient:
-    return QdrantClient(url=get_settings().qdrant_url)
+    settings = get_settings()
+    return QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
 
 
 def _ensure_collection(client: QdrantClient, name: str, *, sparse: bool) -> None:
