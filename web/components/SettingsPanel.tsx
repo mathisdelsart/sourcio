@@ -34,11 +34,11 @@ export function SettingsPanel({ studentId, baseUrl, apiKey, onSave }: SettingsPa
   }
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white shadow-card dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="rounded-2xl border border-zinc-200 bg-white shadow-card dark:border-zinc-800 dark:bg-zinc-900">
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900"
+        className="flex w-full items-center justify-between gap-3 rounded-2xl px-5 py-3.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900"
       >
         <span className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
           {t("settings.title")}
@@ -57,7 +57,7 @@ export function SettingsPanel({ studentId, baseUrl, apiKey, onSave }: SettingsPa
         </span>
       </button>
       {open && (
-        <div className="animate-fade-in space-y-4 border-t border-zinc-100 px-4 py-4 dark:border-zinc-800">
+        <div className="animate-fade-in space-y-4 border-t border-zinc-100 px-5 py-5 dark:border-zinc-800">
           <TextField
             label={t("settings.studentId")}
             hint={t("settings.studentIdHint")}

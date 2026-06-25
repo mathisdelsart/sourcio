@@ -12,10 +12,28 @@ export function EmptyState({
   description?: string;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-200 px-6 py-12 text-center dark:border-zinc-700">
-      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{title}</p>
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 px-6 py-14 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
+      <span
+        aria-hidden
+        className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.7}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" />
+          <path d="M14 3v5h5" />
+          <path d="M9.5 13.5h5M9.5 16.5h3" />
+        </svg>
+      </span>
+      <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{title}</p>
       {description && (
-        <p className="mt-1 max-w-sm text-sm text-zinc-400 dark:text-zinc-500">{description}</p>
+        <p className="mt-1 max-w-sm text-sm text-zinc-500 dark:text-zinc-400">{description}</p>
       )}
     </div>
   );

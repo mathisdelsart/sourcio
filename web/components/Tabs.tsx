@@ -23,7 +23,7 @@ export function Tabs({
     <div
       role="tablist"
       aria-label={t("tabs.aria")}
-      className="flex flex-wrap gap-1 rounded-xl border border-zinc-200 bg-zinc-50/80 p-1 dark:border-zinc-800 dark:bg-zinc-900/80"
+      className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {tabs.map((tab) => {
         const selected = tab.id === active;
@@ -34,11 +34,11 @@ export function Tabs({
             aria-selected={selected}
             onClick={() => onChange(tab.id)}
             className={cn(
-              "rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-zinc-900",
+              "whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950",
               selected
-                ? "bg-white text-zinc-900 shadow-card dark:bg-zinc-700 dark:text-zinc-50"
-                : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100",
+                ? "bg-zinc-900 text-white shadow-sm dark:bg-white dark:text-zinc-900"
+                : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800",
             )}
           >
             {tab.label}
