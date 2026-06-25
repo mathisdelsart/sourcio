@@ -69,8 +69,10 @@ offline / in CI.
 
 Run once per course: `python -m ingestion.run path/to/course.pdf --course "..."`
 (`ingestion/run.py`); add `--sparse` to also index bge-m3 lexical vectors and
-enable opt-in hybrid retrieval. The shared data contract for the whole pipeline
-lives in `ingestion/schema.py` (`Page`, `Chunk`, `Retrieved`).
+enable opt-in hybrid retrieval. The same entry point also ingests prose `.md` and
+`.txt` files, which take the overlapping-window chunking path instead of the
+per-slide one. The shared data contract for the whole pipeline lives in
+`ingestion/schema.py` (`Page`, `Chunk`, `Retrieved`).
 
 ### 1. Math-aware extraction (`ingestion/extract.py`)
 
@@ -148,17 +150,44 @@ an explicit refusal rather than a guess.
 The threshold is not a magic number: it depends on the embedding model and is
 calibrated empirically (see `eval/calibrate.py`).
 
-An **opt-in hybrid dense + sparse path** (`Settings.hybrid_retrieval`, set via
-`HYBRID_RETRIEVAL=1`) fuses two branches with **Reciprocal Rank Fusion (RRF)**
-through Qdrant's Query API: a dense kNN branch (bge-m3 dense vectors, still
-filtered by the similarity threshold so grounding is preserved) and a lexical
-**sparse** branch (bge-m3 lexical weights, a BM25-style signal). It engages only
-when the collection actually carries the named sparse vector
-(`_collection_has_sparse`); if hybrid is requested but the collection has no
-sparse vector, retrieval transparently **falls back to dense**. Sparse vectors
-are produced at ingest time when the course is indexed with `--sparse`
-(`ingestion/embed.py:embed_sparse_texts`, `ingestion/index.py`), so hybrid
-retrieval needs a one-off `--sparse` re-ingest of the course.
+**Advanced retrieval modes** are all **opt-in and default off**; each is gated by
+a `Settings` flag (`core/config.py`) and **preserves the refusal guard** — the
+dense similarity threshold still pre-filters, so an out-of-course question yields
+nothing and is refused. They compose, and the answer layer selects them in
+`core/answer.py:_retrieve`:
+
+- **Cross-encoder reranker** (`reranker_model`, `rerank_candidates`): fetches more
+  thresholded candidates, rescores each `(question, chunk)` pair locally with a
+  cross-encoder (`rerank`), and keeps the best k. The returned `.score` becomes
+  the cross-encoder relevance. No re-ingestion required.
+- **Hybrid dense + sparse** (`hybrid_retrieval`, set via `HYBRID_RETRIEVAL=1`):
+  fuses two branches with **Reciprocal Rank Fusion (RRF)** through Qdrant's Query
+  API — a dense kNN branch (bge-m3 dense vectors, threshold-filtered) and a
+  lexical **sparse** branch (bge-m3 lexical weights, a BM25-style signal,
+  `sparse_vector_name`, `hybrid_prefetch`). It engages only when the collection
+  actually carries the named sparse vector (`_collection_has_sparse`); if hybrid
+  is requested but the collection has no sparse vector, retrieval transparently
+  **falls back to dense**. Sparse vectors are produced at ingest time with
+  `--sparse` (`ingestion/embed.py:embed_sparse_texts`, `ingestion/index.py`), so
+  hybrid needs a one-off `--sparse` re-ingest.
+- **Multi-query expansion** (`multi_query`, `multi_query_n`): `retrieve_multi`
+  rewrites the question into a few diverse sub-queries
+  (`core/query.py:expand_query`), retrieves per query, and fuses the candidate
+  lists by chunk id (best score) before the threshold and the optional reranker
+  apply. It only widens recall.
+- **HyDE** (`hyde`): embeds a short hypothetical answer passage
+  (`core/query.py:hyde_passage`) instead of the bare question for the dense
+  branch, which often lands closer to indexed chunks; the threshold is applied to
+  that probe unchanged. Multi-query takes precedence when both are set.
+- **Neighbor-chunk expansion** (`neighbor_expansion`, `neighbor_window`): *after*
+  the thresholded (and optionally reranked) top results are chosen, pulls adjacent
+  slides/windows (same course/chapter, page within `±window`) via a payload-only
+  `scroll` and appends them as context, de-duped and capped. It never runs on an
+  empty retrieval (refusal untouched) and degrades to the un-expanded results on
+  any error.
+
+The dense, hybrid, and HyDE branches share `_fetch_candidates`; reranking and
+neighbor expansion wrap whichever base path runs.
 
 ### Citation-by-construction (`core/answer.py`)
 
@@ -241,26 +270,50 @@ in-memory SQLite engine.
 ### API (`api/main.py`)
 
 A thin FastAPI layer; each route delegates to the existing grounded functions and
-nodes — no retrieval or prompting is reimplemented.
+nodes — no retrieval or prompting is reimplemented. Endpoints group by area:
 
-| Endpoint | Role |
-| --- | --- |
-| `GET /health` | liveness probe (always open) |
-| `POST /ask` | answer a question, grounded; persists the turn as history |
-| `POST /ask/stream` | same answer as Server-Sent Events: token deltas, then a final sources/refusal event; persists on completion |
-| `POST /reexplain` | rephrase the last answer at a chosen level (beginner / intermediate / advanced) |
-| `POST /exercise` | generate an exercise; never returns the reference solution |
-| `POST /grade` | grade a student's answer |
-| `POST /quiz` | generate a grounded multi-question quiz; reference solutions stay server-side |
-| `POST /quiz/{quiz_id}/grade` | grade one quiz answer against its stored reference solution (404 on unknown question) |
-| `GET /history/{student_id}` | recent conversation turns, chronological |
+| Area | Endpoint | Role |
+| --- | --- | --- |
+| Health | `GET /health` | liveness probe (always open) |
+| Health | `GET /ready` | readiness probe: 200 once the database engine is bound, else 503 |
+| Tutoring | `POST /ask` | answer a question, grounded; persists the turn as history |
+| Tutoring | `POST /ask/stream` | same answer as Server-Sent Events: token deltas, then a final sources/refusal event; persists on completion |
+| Tutoring | `POST /reexplain` | rephrase the last answer at a chosen level (beginner / intermediate / advanced) |
+| Tutoring | `POST /exercise` | generate an exercise; never returns the reference solution |
+| Tutoring | `POST /grade` | grade a student's answer |
+| Quiz | `POST /quiz` | generate a grounded multi-question quiz; reference solutions stay server-side |
+| Quiz | `POST /quiz/{quiz_id}/grade` | grade one quiz answer against its stored reference solution (404 on unknown question) |
+| Feedback | `POST /feedback` | record a thumbs up/down on a tutor answer (rating validated to ±1) |
+| Feedback | `GET /feedback/summary` | aggregate up/down counts for a student |
+| Sessions | `POST /sessions` | open a named conversation thread for a student |
+| Sessions | `GET /sessions/{student_id}` | list a student's threads, newest first |
+| Sessions | `GET /sessions/{student_id}/{session_id}/messages` | one thread's messages, chronological (404 if not the student's) |
+| Sessions | `GET /history/{student_id}` | recent conversation turns, chronological |
+| Auth | `POST /auth/register` | create an account (bcrypt-hashed password); 409 on duplicate email |
+| Auth | `POST /auth/login` | verify credentials, return a signed JWT bearer token |
+| Auth | `GET /auth/me` | the authenticated user (bearer token required) |
+| Auth | `GET /me/students` | student identities owned by the caller |
+| Courses | `GET /courses` | distinct courses currently indexed in Qdrant |
 
 The API is **stateful**: a `student_id` identifies the user (get-or-create),
-`/ask` turns are persisted, and `/history` replays them. **API-key auth** is
-opt-in (`Settings.api_key`): empty leaves the API open; a non-empty value
-requires a matching `X-API-Key` header on the mutating endpoints and `/history`,
-while `/health` stays open. The database engine is bound on startup (or injected
-by tests via `configure_engine`).
+`/ask` turns are persisted, and `/history` replays them. An optional
+`session_id` on `/ask` attaches the turn to a named thread (`Session`), validated
+to belong to the student.
+
+Two **independent** auth layers coexist (`api/auth.py`, `api/main.py`):
+
+- **Opt-in API key** (`Settings.api_key`): empty leaves the API open; a non-empty
+  value requires a matching `X-API-Key` header on the mutating endpoints and
+  `/history` (`require_api_key`). `/health` and `/ready` stay open.
+- **JWT account auth**: `register` / `login` issue a bearer token (HS256, signed
+  with `Settings.jwt_secret`, expiring after `jwt_expire_minutes`); bcrypt hashes
+  the password. Auth is **additive** — when a request carries a valid token, the
+  resolved student is linked to that account (`_resolve_student`), so its turns,
+  exercises, quizzes and feedback become the user's own data, without changing any
+  answer. Anonymous, `external_id`-keyed students stay unlinked.
+
+The database engine is bound on startup (or injected by tests via
+`configure_engine`).
 
 ### UI (`ui/`)
 
@@ -296,14 +349,32 @@ product-side grading of a student's answer.
 | Where | What |
 | --- | --- |
 | **Qdrant** | course chunks as `{vector, payload}` (collection `courses`) |
-| **SQL** (SQLite in dev, PostgreSQL later) | students, exercises + reference solutions, grades, conversation messages |
+| **SQL** (SQLite in dev, PostgreSQL later) | users, students, exercises + reference solutions, grades, quizzes, conversation messages, threads, feedback |
 | **LangFuse** (optional) | traces and per-step evaluation signals |
 
 The relational layer uses SQLAlchemy 2.0 declarative models (`db/models.py`):
-`Student`, `Exercise`, `Grade`, `Quiz`, `QuizQuestion`, `Message`. The engine is created lazily from
-`Settings.database_url` (`db/session.py`), so swapping SQLite for PostgreSQL is
-just a URL change. Schema migrations are managed by Alembic (`alembic/`), which
-resolves the same URL at runtime and diffs against the declarative `Base`.
+
+- `User` — a registered account (email + bcrypt password hash) that may own zero
+  or more students; the link is optional, so anonymous `external_id`-keyed
+  students stay unlinked and existing flows are unaffected.
+- `Student` — a reviser, optionally owned by a `User` (`user_id`).
+- `Exercise`, `Grade` — a generated exercise with its server-side reference
+  solution, and a judged answer. A `Grade` links to either an `Exercise` or a
+  `QuizQuestion` (exactly one foreign key set).
+- `Quiz`, `QuizQuestion` — a multi-question quiz and its grounded questions, each
+  with a withheld reference solution.
+- `Session` — a named conversation thread grouping a student's messages; a
+  `Message` references it through a nullable `session_id`, so unthreaded messages
+  stay valid (purely additive).
+- `Message` — one conversation turn.
+- `Feedback` — a student's thumbs up/down (±1) on a tutor answer, capturing the
+  question and answer verbatim for later offline evaluation.
+
+The engine is created lazily from `Settings.database_url` (`db/session.py`), so
+swapping SQLite for PostgreSQL is just a URL change — see
+[POSTGRES.md](POSTGRES.md). Schema migrations are managed by Alembic
+(`alembic/`), which resolves the same URL at runtime and diffs against the
+declarative `Base`.
 
 ## The model-agnostic factory (`core/config.py`)
 
@@ -344,6 +415,27 @@ configured once per process to avoid re-billing identical prompts.
 All settings live in `Settings` (`core/config.py`), overridable via `.env` or
 environment variables. See `.env.example` for the full list.
 
+## Ops and hardening (`api/`)
+
+Three concerns wrap the HTTP layer, all safe by default:
+
+- **Structured logging + request id** (`api/logging_config.py`,
+  `api/middleware.py:RequestIdMiddleware`): startup configures a JSON logger at
+  `Settings.log_level`. Each request reuses an inbound `X-Request-ID` or generates
+  one, propagates it through a contextvar so every log line carries it, and echoes
+  it on the response. A global handler turns unhandled exceptions into a generic
+  500 body (with the request id) without leaking the stack trace.
+- **Readiness vs liveness**: `/health` is always-open liveness; `/ready` reports
+  whether startup wiring (chiefly the database engine) completed, returning 503
+  until then — safe for an orchestrator to poll.
+- **Security headers + rate limiting** (`api/middleware.py`): security headers are
+  added on every response (`SecurityHeadersMiddleware`), with
+  `Strict-Transport-Security` only when `enable_hsts` is set (TLS deployments).
+  The in-process limiter (`RateLimitMiddleware`) is a no-op unless
+  `rate_limit_per_minute` is positive; when set it caps each client (by IP) per
+  rolling minute and rejects excess with `429` + `Retry-After`. It is per-process,
+  not a substitute for an edge limiter in a multi-replica deployment.
+
 ## Request lifecycle: `POST /ask`
 
 A walkthrough of a single question, end to end:
@@ -381,18 +473,22 @@ guard apply transparently when enabled.
 | Indexing into Qdrant | `ingestion/index.py` |
 | Ingestion entry point | `ingestion/run.py` |
 | Data contract | `ingestion/schema.py` |
-| Retrieval + threshold + filter + hybrid RRF | `core/retrieval.py` |
+| Retrieval (threshold, filter, hybrid RRF, reranker, HyDE, multi-query, neighbors) | `core/retrieval.py` |
+| Query rewriting (multi-query, HyDE) | `core/query.py` |
+| Course discovery | `core/courses.py` |
 | Grounded answer + citations + streaming | `core/answer.py` |
 | CLI ask | `core/ask.py` |
 | Agent graph + router | `agent/graph.py`, `agent/state.py` |
 | Agent nodes (explain / generate / grade / reexplain / quiz) | `agent/nodes/*.py` |
 | Node persistence | `agent/persistence.py` |
 | HTTP API | `api/main.py` |
+| User auth (bcrypt + JWT) | `api/auth.py` |
+| Logging / middleware (request-id, security headers, rate limit) | `api/logging_config.py`, `api/middleware.py` |
 | Streamlit UI + metrics dashboard | `ui/app.py`, `ui/metrics.py` |
 | Relational store | `db/models.py`, `db/session.py`, `alembic/` |
 | LLM factory, settings, cache | `core/config.py` |
 | Tracing (LangFuse) / latency / budget | `core/obs.py`, `core/budget.py` |
-| Deployment guides | `docs/DEPLOY-API.md` (Docker image), `docs/DEPLOY.md` (free-tier), `docs/LOCAL.md` (Ollama), `docs/OBSERVABILITY.md` |
+| Deployment guides | `docs/DEPLOY-API.md` (Docker image), `docs/DEPLOY.md` (free-tier), `docs/LOCAL.md` (Ollama), `docs/OBSERVABILITY.md`, `docs/POSTGRES.md` |
 | Faithfulness eval / calibration | `eval/run_eval.py`, `eval/calibrate.py` |
 | Containerization | `docker-compose.yml`, `Dockerfile` |
 | CI | `.github/workflows/ci.yml` |

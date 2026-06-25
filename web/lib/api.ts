@@ -17,6 +17,15 @@ export interface AskRequest {
   k?: number;
   course?: string | null;
   chapter?: string | null;
+  /** When set, the turn is attached to this conversation thread. */
+  session_id?: number | null;
+}
+
+/** A conversation thread (session) for a student. `title` may be unset. */
+export interface SessionOut {
+  id: number;
+  title: string | null;
+  created_at: string;
 }
 
 export interface AskResponse {
@@ -211,6 +220,7 @@ export async function ask(
   };
   if (body.course) payload.course = body.course;
   if (body.chapter) payload.chapter = body.chapter;
+  if (body.session_id != null) payload.session_id = body.session_id;
   return request<AskResponse>(
     "/ask",
     { method: "POST", headers: buildHeaders(config, true), body: JSON.stringify(payload) },
@@ -245,6 +255,7 @@ export async function askStream(
   };
   if (body.course) payload.course = body.course;
   if (body.chapter) payload.chapter = body.chapter;
+  if (body.session_id != null) payload.session_id = body.session_id;
 
   const url = `${resolveBaseUrl(config)}/ask/stream`;
   let response: Response;
@@ -450,6 +461,46 @@ export async function sendFeedback(
   return request<FeedbackResponse>(
     "/feedback",
     { method: "POST", headers: buildHeaders(config, true), body: JSON.stringify(payload) },
+    config,
+  );
+}
+
+/** List a student's conversation threads, newest first. Empty when none. */
+export async function listSessions(
+  studentId: string,
+  config?: ConnectionConfig,
+): Promise<SessionOut[]> {
+  return request<SessionOut[]>(
+    `/sessions/${encodeURIComponent(studentId)}`,
+    { method: "GET", headers: buildHeaders(config) },
+    config,
+  );
+}
+
+/** Open a new conversation thread for a student. The title is only sent when set. */
+export async function createSession(
+  studentId: string,
+  title?: string | null,
+  config?: ConnectionConfig,
+): Promise<SessionOut> {
+  const body: Record<string, unknown> = { student_id: studentId };
+  if (title && title.trim()) body.title = title.trim();
+  return request<SessionOut>(
+    "/sessions",
+    { method: "POST", headers: buildHeaders(config, true), body: JSON.stringify(body) },
+    config,
+  );
+}
+
+/** Return the messages of one thread, chronological. */
+export async function getSessionMessages(
+  studentId: string,
+  sessionId: number,
+  config?: ConnectionConfig,
+): Promise<HistoryItem[]> {
+  return request<HistoryItem[]>(
+    `/sessions/${encodeURIComponent(studentId)}/${sessionId}/messages`,
+    { method: "GET", headers: buildHeaders(config) },
     config,
   );
 }
