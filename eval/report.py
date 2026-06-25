@@ -86,10 +86,7 @@ def render_report(
         else:
             status = "FAIL"
             overall_ok = False
-        lines.append(
-            f"| {label} | {_format_percent(value)} | "
-            f"{threshold:.0%} | {status} |"
-        )
+        lines.append(f"| {label} | {_format_percent(value)} | {threshold:.0%} | {status} |")
     if not any_rate:
         lines.append("| _(no metrics)_ | n/a | n/a | n/a |")
 
