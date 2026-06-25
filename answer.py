@@ -9,7 +9,7 @@ the question is refused rather than answered from the model's own knowledge.
 import re
 
 from config import get_llm
-from ingestion.schema import Retrieved
+from ingestion.schema import Retrieved, format_numbered_sources
 from obs import timer
 from retrieval import retrieve
 
@@ -22,10 +22,6 @@ _SYSTEM = (
     f"- If the sources do not answer the question, reply exactly: {REFUSAL}\n"
     "- Keep the course's own notation and definitions."
 )
-
-
-def _format_sources(results: list[Retrieved]) -> str:
-    return "\n\n".join(f"[{i}] {r.chunk.text}" for i, r in enumerate(results, 1))
 
 
 def _remap_citations(text: str, results: list[Retrieved]) -> str:
@@ -75,7 +71,7 @@ def answer(
     if not results:
         return {"answer": REFUSAL, "refused": True, "sources": [], "raw": REFUSAL, "retrieved": []}
 
-    prompt = f"Sources:\n{_format_sources(results)}\n\nQuestion: {question}"
+    prompt = f"Sources:\n{format_numbered_sources(results)}\n\nQuestion: {question}"
     with timer("llm"):
         raw = get_llm("explain").invoke([("system", _SYSTEM), ("human", prompt)]).content.strip()
 

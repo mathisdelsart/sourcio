@@ -42,3 +42,12 @@ class Retrieved:
         if self.chunk.chapter:
             return f"({self.chunk.course}, {self.chunk.chapter}, p.{self.chunk.page})"
         return f"({self.chunk.course}, p.{self.chunk.page})"
+
+
+def format_numbered_sources(results: list[Retrieved]) -> str:
+    """Render retrieved chunks as a numbered context block for the prompt.
+
+    Each chunk is prefixed with a 1-based index ``[n]`` so the model can cite
+    sources by index without ever handling page numbers directly.
+    """
+    return "\n\n".join(f"[{i}] {r.chunk.text}" for i, r in enumerate(results, 1))
