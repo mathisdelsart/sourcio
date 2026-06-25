@@ -6,6 +6,8 @@ Endpoints:
     POST /reexplain         rephrase the last tutor answer at a chosen level
     POST /exercise          generate an exercise (never returns the reference solution)
     POST /grade             grade a student's answer
+    POST /quiz              generate a grounded multi-question quiz (no solutions)
+    POST /quiz/{id}/grade   grade one quiz answer against its stored reference
     GET  /history/{id}      recent conversation turns for a student
 
 The layer stays thin: each route delegates to the existing grounded functions
@@ -27,6 +29,7 @@ from sqlalchemy import Engine, select
 
 from agent.nodes.generate import generate
 from agent.nodes.grade import grade
+from agent.nodes.quiz import generate_quiz, grade_quiz_answer
 from agent.nodes.reexplain import reexplain
 from agent.state import Level, TutorState, to_history
 from core.answer import answer, stream_answer
@@ -156,6 +159,42 @@ class GradeResponse(BaseModel):
 
     score: int
     feedback: str
+
+
+class QuizRequest(BaseModel):
+    """A notion to build a multi-question quiz on, for a student.
+
+    ``n`` is the desired number of questions; it is clamped to a small range so a
+    request can never ask for an unbounded quiz.
+    """
+
+    student_id: str
+    notion: str
+    n: int = Field(default=3, ge=1, le=10)
+
+
+class QuizQuestionOut(BaseModel):
+    """One quiz question, problem only. The reference solution is withheld."""
+
+    id: int | None = None
+    problem: str
+
+
+class QuizResponse(BaseModel):
+    """A course-grounded quiz. Reference solutions are never returned."""
+
+    quiz_id: int | None = None
+    notion: str
+    questions: list[QuizQuestionOut]
+    refused: bool
+
+
+class QuizGradeRequest(BaseModel):
+    """A student's answer to one quiz question, graded against its reference."""
+
+    student_id: str
+    question_id: int
+    answer: str
 
 
 class HistoryItem(BaseModel):
@@ -313,6 +352,45 @@ def grade_answer(request: GradeRequest) -> dict[str, Any]:
     # grade always populates "grade" with the judge's verdict.
     verdict = grade(state).get("grade")
     assert verdict is not None
+    return {"score": verdict["score"], "feedback": verdict["feedback"]}
+
+
+@app.post("/quiz", response_model=QuizResponse, dependencies=[Depends(require_api_key)])
+def quiz(request: QuizRequest) -> dict[str, Any]:
+    """Generate a course-grounded quiz of ``n`` questions on the requested notion.
+
+    Reference solutions stay server-side and are never returned: each question is
+    surfaced as ``{id, problem}`` only. The student is ensured to exist; quiz
+    persistence is owned by the quiz node, which needs the ``student_id`` to store
+    the quiz and its questions. A refusal (empty ``questions``) is returned when
+    the course does not cover the notion.
+    """
+    with get_session(_engine) as session:
+        get_or_create_student(session, request.student_id)
+    return generate_quiz(request.notion, request.n, request.student_id)
+
+
+@app.post(
+    "/quiz/{quiz_id}/grade",
+    response_model=GradeResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def quiz_grade(quiz_id: int, request: QuizGradeRequest) -> dict[str, Any]:
+    """Grade one quiz answer against the question's stored reference solution.
+
+    The reference solution is never sent by the client: it is loaded server-side
+    from the persisted quiz question. The verdict is persisted as a grade linked
+    to the question. An unknown question (or one not belonging to ``quiz_id``)
+    yields 404.
+    """
+    with get_session(_engine) as session:
+        get_or_create_student(session, request.student_id)
+    verdict = grade_quiz_answer(quiz_id, request.question_id, request.answer, request.student_id)
+    if verdict is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quiz question not found.",
+        )
     return {"score": verdict["score"], "feedback": verdict["feedback"]}
 
 

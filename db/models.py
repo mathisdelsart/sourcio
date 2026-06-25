@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -34,6 +34,9 @@ class Student(Base):
         back_populates="student", cascade="all, delete-orphan"
     )
     messages: Mapped[list[Message]] = relationship(
+        back_populates="student", cascade="all, delete-orphan"
+    )
+    quizzes: Mapped[list[Quiz]] = relationship(
         back_populates="student", cascade="all, delete-orphan"
     )
 
@@ -60,13 +63,21 @@ class Exercise(Base):
 
 
 class Grade(Base):
-    """A graded answer for an exercise (LLM-as-a-Judge output)."""
+    """A graded answer (LLM-as-a-Judge output).
+
+    A grade links to the source it was marked against: either a standalone
+    ``Exercise`` or a single ``QuizQuestion``. Exactly one of the two foreign
+    keys is set; the other stays ``None``.
+    """
 
     __tablename__ = "grades"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    exercise_id: Mapped[int] = mapped_column(
-        ForeignKey("exercises.id", ondelete="CASCADE"), index=True
+    exercise_id: Mapped[int | None] = mapped_column(
+        ForeignKey("exercises.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    quiz_question_id: Mapped[int | None] = mapped_column(
+        ForeignKey("quiz_questions.id", ondelete="CASCADE"), index=True, nullable=True
     )
     student_id: Mapped[int] = mapped_column(
         ForeignKey("students.id", ondelete="CASCADE"), index=True
@@ -76,8 +87,46 @@ class Grade(Base):
     feedback: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    exercise: Mapped[Exercise] = relationship(back_populates="grades")
+    exercise: Mapped[Exercise | None] = relationship(back_populates="grades")
+    quiz_question: Mapped[QuizQuestion | None] = relationship(back_populates="grades")
     student: Mapped[Student] = relationship(back_populates="grades")
+
+
+class Quiz(Base):
+    """A multi-question quiz generated for a student on a single notion."""
+
+    __tablename__ = "quizzes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), index=True
+    )
+    notion: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    student: Mapped[Student] = relationship(back_populates="quizzes")
+    questions: Mapped[list[QuizQuestion]] = relationship(
+        back_populates="quiz",
+        cascade="all, delete-orphan",
+        order_by="QuizQuestion.position",
+    )
+
+
+class QuizQuestion(Base):
+    """One grounded question of a quiz, with its server-side reference solution."""
+
+    __tablename__ = "quiz_questions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    quiz_id: Mapped[int] = mapped_column(ForeignKey("quizzes.id", ondelete="CASCADE"), index=True)
+    problem: Mapped[str] = mapped_column(Text)
+    reference_solution: Mapped[str] = mapped_column(Text)
+    position: Mapped[int] = mapped_column(Integer)
+
+    quiz: Mapped[Quiz] = relationship(back_populates="questions")
+    grades: Mapped[list[Grade]] = relationship(
+        back_populates="quiz_question", cascade="all, delete-orphan"
+    )
 
 
 class Message(Base):

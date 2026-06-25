@@ -40,6 +40,18 @@ export interface GradeResponse {
   feedback: string;
 }
 
+export interface QuizQuestionOut {
+  id: number | null;
+  problem: string;
+}
+
+export interface QuizResponse {
+  quiz_id: number | null;
+  notion: string;
+  questions: QuizQuestionOut[];
+  refused: boolean;
+}
+
 export interface HistoryItem {
   role: string;
   content: string;
@@ -299,6 +311,43 @@ export async function grade(
   return request<GradeResponse>(
     "/grade",
     { method: "POST", headers: buildHeaders(config, true), body: JSON.stringify(body) },
+    config,
+  );
+}
+
+/** Generate a course-grounded quiz of `n` questions on a notion. */
+export async function quiz(
+  studentId: string,
+  notion: string,
+  n: number,
+  config?: ConnectionConfig,
+): Promise<QuizResponse> {
+  return request<QuizResponse>(
+    "/quiz",
+    {
+      method: "POST",
+      headers: buildHeaders(config, true),
+      body: JSON.stringify({ student_id: studentId, notion, n }),
+    },
+    config,
+  );
+}
+
+/** Grade one quiz answer against the question's stored reference solution. */
+export async function gradeQuizAnswer(
+  studentId: string,
+  quizId: number,
+  questionId: number,
+  answer: string,
+  config?: ConnectionConfig,
+): Promise<GradeResponse> {
+  return request<GradeResponse>(
+    `/quiz/${quizId}/grade`,
+    {
+      method: "POST",
+      headers: buildHeaders(config, true),
+      body: JSON.stringify({ student_id: studentId, question_id: questionId, answer }),
+    },
     config,
   );
 }

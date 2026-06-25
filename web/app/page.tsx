@@ -10,6 +10,7 @@ import { AskPanel } from "@/components/panels/AskPanel";
 import { ReexplainPanel } from "@/components/panels/ReexplainPanel";
 import { ExercisePanel } from "@/components/panels/ExercisePanel";
 import { GradePanel } from "@/components/panels/GradePanel";
+import { QuizPanel } from "@/components/panels/QuizPanel";
 import { HistoryPanel } from "@/components/panels/HistoryPanel";
 
 const TABS: TabItem[] = [
@@ -17,6 +18,7 @@ const TABS: TabItem[] = [
   { id: "reexplain", label: "Re-explain" },
   { id: "exercise", label: "Exercise" },
   { id: "grade", label: "Grade" },
+  { id: "quiz", label: "Quiz" },
   { id: "history", label: "History" },
 ];
 
@@ -114,6 +116,7 @@ export default function Home() {
           {active === "grade" && (
             <GradePanel studentId={studentId} config={config} lastExercise={lastExercise} />
           )}
+          {active === "quiz" && <QuizPanel studentId={studentId} config={config} />}
           {active === "history" && (
             <HistoryPanel
               studentId={studentId}

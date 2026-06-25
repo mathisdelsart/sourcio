@@ -664,6 +664,167 @@ def test_grade_without_exercise_id_is_not_persisted(client, monkeypatch):
         assert session.scalars(select(Grade)).first() is None
 
 
+# --- /quiz and /quiz/{id}/grade ----------------------------------------------
+
+
+def test_quiz_returns_questions_without_solutions(client, monkeypatch):
+    captured = {}
+
+    def fake_generate_quiz(notion, n, student_id):
+        captured["args"] = (notion, n, student_id)
+        return {
+            "quiz_id": 1,
+            "notion": notion,
+            "questions": [
+                {"id": 10, "problem": "Q1?"},
+                {"id": 11, "problem": "Q2?"},
+            ],
+            "refused": False,
+        }
+
+    monkeypatch.setattr(api_main, "generate_quiz", fake_generate_quiz)
+
+    response = client.post("/quiz", json={"student_id": "s1", "notion": "groups", "n": 2})
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {
+        "quiz_id": 1,
+        "notion": "groups",
+        "questions": [{"id": 10, "problem": "Q1?"}, {"id": 11, "problem": "Q2?"}],
+        "refused": False,
+    }
+    # The notion, count and student id reached the node.
+    assert captured["args"] == ("groups", 2, "s1")
+    # No reference solution field is present on any question.
+    assert all("solution" not in q for q in body["questions"])
+
+
+def test_quiz_defaults_question_count(client, monkeypatch):
+    captured = {}
+
+    def fake_generate_quiz(notion, n, student_id):
+        captured["n"] = n
+        return {"quiz_id": 1, "notion": notion, "questions": [], "refused": False}
+
+    monkeypatch.setattr(api_main, "generate_quiz", fake_generate_quiz)
+
+    client.post("/quiz", json={"student_id": "s1", "notion": "groups"})
+    assert captured["n"] == 3
+
+
+def test_quiz_surfaces_refusal(client, monkeypatch):
+    monkeypatch.setattr(
+        api_main,
+        "generate_quiz",
+        lambda notion, n, student_id: {
+            "quiz_id": None,
+            "notion": notion,
+            "questions": [],
+            "refused": True,
+        },
+    )
+
+    response = client.post("/quiz", json={"student_id": "s1", "notion": "off-topic"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["refused"] is True
+    assert body["questions"] == []
+
+
+def test_quiz_rejects_out_of_range_count(client):
+    response = client.post("/quiz", json={"student_id": "s1", "notion": "n", "n": 0})
+    assert response.status_code == 422
+    response = client.post("/quiz", json={"student_id": "s1", "notion": "n", "n": 99})
+    assert response.status_code == 422
+
+
+def test_quiz_grade_returns_score_and_feedback(client, monkeypatch):
+    captured = {}
+
+    def fake_grade_quiz_answer(quiz_id, question_id, answer, student_id):
+        captured["args"] = (quiz_id, question_id, answer, student_id)
+        return {"score": 80, "feedback": "Good."}
+
+    monkeypatch.setattr(api_main, "grade_quiz_answer", fake_grade_quiz_answer)
+
+    response = client.post(
+        "/quiz/5/grade",
+        json={"student_id": "s1", "question_id": 10, "answer": "my answer"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"score": 80, "feedback": "Good."}
+    assert captured["args"] == (5, 10, "my answer", "s1")
+
+
+def test_quiz_grade_unknown_question_is_404(client, monkeypatch):
+    monkeypatch.setattr(
+        api_main, "grade_quiz_answer", lambda quiz_id, question_id, answer, student_id: None
+    )
+
+    response = client.post(
+        "/quiz/5/grade", json={"student_id": "s1", "question_id": 999, "answer": "a"}
+    )
+    assert response.status_code == 404
+
+
+def test_quiz_grade_missing_field_is_422(client):
+    response = client.post("/quiz/5/grade", json={"student_id": "s1", "answer": "a"})
+    assert response.status_code == 422
+
+
+def test_quiz_then_grade_end_to_end(client, monkeypatch):
+    # Exercise the REAL quiz/grade nodes end to end: only the LLM and retrieval
+    # are mocked, so no OpenAI call and no Qdrant are needed.
+    monkeypatch.setattr("core.retrieval.retrieve", lambda *a, **k: _make_retrieved("Group axioms."))
+    monkeypatch.setattr(
+        "agent.nodes.quiz.get_llm",
+        lambda role="default": _FakeLLM(
+            '[{"problem": "Prove closure.", "solution": "By axiom 1."},'
+            ' {"problem": "Prove identity.", "solution": "Element e."}]'
+        ),
+    )
+    monkeypatch.setattr(
+        "agent.nodes.grade.get_llm",
+        lambda role="default": _FakeLLM('{"score": 90, "feedback": "Correct."}'),
+    )
+
+    quiz_response = client.post("/quiz", json={"student_id": "zed", "notion": "groups", "n": 2})
+    assert quiz_response.status_code == 200
+    quiz_body = quiz_response.json()
+    assert quiz_body["refused"] is False
+    quiz_id = quiz_body["quiz_id"]
+    assert isinstance(quiz_id, int)
+    question_id = quiz_body["questions"][0]["id"]
+    # No reference solution is exposed by the quiz response.
+    assert "By axiom 1." not in quiz_response.text
+
+    # The quiz and its questions exist, with reference solutions server-side.
+    from db.models import Grade, Quiz, QuizQuestion
+    from db.session import get_session
+
+    with get_session(api_main._engine) as session:
+        quiz = session.get(Quiz, quiz_id)
+        assert quiz is not None
+        questions = list(
+            session.scalars(select(QuizQuestion).where(QuizQuestion.quiz_id == quiz_id))
+        )
+        assert {q.reference_solution for q in questions} == {"By axiom 1.", "Element e."}
+
+    grade_response = client.post(
+        f"/quiz/{quiz_id}/grade",
+        json={"student_id": "zed", "question_id": question_id, "answer": "Closure holds."},
+    )
+    assert grade_response.status_code == 200
+    assert grade_response.json() == {"score": 90, "feedback": "Correct."}
+
+    # The grade row links to the quiz question, not an exercise.
+    with get_session(api_main._engine) as session:
+        grades = list(session.scalars(select(Grade).where(Grade.quiz_question_id == question_id)))
+        assert len(grades) == 1
+        assert grades[0].exercise_id is None
+        assert grades[0].score == 90
+
+
 # --- API-key authentication --------------------------------------------------
 
 _API_KEY = "secret-key"
@@ -717,6 +878,21 @@ def _stub_nodes(monkeypatch):
         "reexplain",
         lambda state: {"answer": "rephrased"},
     )
+    monkeypatch.setattr(
+        api_main,
+        "generate_quiz",
+        lambda notion, n, student_id: {
+            "quiz_id": 1,
+            "notion": notion,
+            "questions": [{"id": 1, "problem": "Q?"}],
+            "refused": False,
+        },
+    )
+    monkeypatch.setattr(
+        api_main,
+        "grade_quiz_answer",
+        lambda quiz_id, question_id, answer, student_id: {"score": 50, "feedback": "ok"},
+    )
 
 
 def test_health_open_without_api_key(client, monkeypatch):
@@ -735,6 +911,8 @@ def test_health_open_without_api_key(client, monkeypatch):
         ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),
+        ("post", "/quiz", {"student_id": "s1", "notion": "n"}),
+        ("post", "/quiz/1/grade", {"student_id": "s1", "question_id": 1, "answer": "a"}),
         ("get", "/history/s1", None),
     ],
 )
@@ -753,6 +931,8 @@ def test_protected_endpoint_rejects_missing_key(client, monkeypatch, method, pat
         ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),
+        ("post", "/quiz", {"student_id": "s1", "notion": "n"}),
+        ("post", "/quiz/1/grade", {"student_id": "s1", "question_id": 1, "answer": "a"}),
         ("get", "/history/s1", None),
     ],
 )
@@ -771,6 +951,8 @@ def test_protected_endpoint_rejects_wrong_key(client, monkeypatch, method, path,
         ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),
+        ("post", "/quiz", {"student_id": "s1", "notion": "n"}),
+        ("post", "/quiz/1/grade", {"student_id": "s1", "question_id": 1, "answer": "a"}),
         ("get", "/history/s1", None),
     ],
 )
@@ -789,6 +971,8 @@ def test_protected_endpoint_accepts_correct_key(client, monkeypatch, method, pat
         ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),
+        ("post", "/quiz", {"student_id": "s1", "notion": "n"}),
+        ("post", "/quiz/1/grade", {"student_id": "s1", "question_id": 1, "answer": "a"}),
         ("get", "/history/s1", None),
     ],
 )
