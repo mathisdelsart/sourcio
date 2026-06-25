@@ -47,6 +47,7 @@ const en = {
   "tabs.exercise": "Exercise",
   "tabs.grade": "Grade",
   "tabs.quiz": "Quiz",
+  "tabs.threads": "Threads",
   "tabs.history": "History",
 
   // Health badge
@@ -190,6 +191,34 @@ const en = {
   "history.empty.description":
     "Ask a question or generate an exercise — your turns will appear here.",
 
+  // Threads (conversation sessions)
+  "threads.title": "Conversation threads",
+  "threads.description":
+    "Group your questions into threads. The active thread is attached to new questions in the Ask tab.",
+  "threads.refresh": "Refresh",
+  "threads.list.title": "Threads",
+  "threads.new": "New thread",
+  "threads.newTitleLabel": "Thread title",
+  "threads.newTitlePlaceholder": "Optional — e.g. Wavelet basics",
+  "threads.create": "Create",
+  "threads.created": "Thread created.",
+  "threads.createFailed": "Could not create the thread.",
+  "threads.none": "All history (unthreaded)",
+  "threads.noneHint": "New questions are not attached to any thread.",
+  "threads.untitled": "Untitled thread",
+  "threads.active": "Active",
+  "threads.activeBanner": "New questions are attached to this thread.",
+  "threads.select": "Select thread {title}",
+  "threads.empty.title": "No threads yet",
+  "threads.empty.description":
+    "Create a thread to group related questions, or keep asking without one.",
+  "threads.messages.title": "Thread messages",
+  "threads.messages.empty.title": "No messages in this thread yet",
+  "threads.messages.empty.description":
+    "Select this thread, then ask a question in the Ask tab to start it.",
+  "threads.loadFailed": "Could not load threads.",
+  "threads.messagesFailed": "Could not load the thread's messages.",
+
   // Export actions
   "export.copy": "Copy as Markdown",
   "export.copyAria": "Copy answer and citations as Markdown",
@@ -241,6 +270,7 @@ const fr: Record<TranslationKey, string> = {
   "tabs.exercise": "Exercice",
   "tabs.grade": "Corriger",
   "tabs.quiz": "Quiz",
+  "tabs.threads": "Fils",
   "tabs.history": "Historique",
 
   // Health badge
@@ -392,6 +422,34 @@ const fr: Record<TranslationKey, string> = {
   "history.empty.title": "Pas encore d'historique",
   "history.empty.description":
     "Posez une question ou générez un exercice — vos échanges apparaîtront ici.",
+
+  // Threads (conversation sessions)
+  "threads.title": "Fils de conversation",
+  "threads.description":
+    "Regroupez vos questions en fils. Le fil actif est rattaché aux nouvelles questions de l'onglet Demander.",
+  "threads.refresh": "Actualiser",
+  "threads.list.title": "Fils",
+  "threads.new": "Nouveau fil",
+  "threads.newTitleLabel": "Titre du fil",
+  "threads.newTitlePlaceholder": "Optionnel — ex. Bases des ondelettes",
+  "threads.create": "Créer",
+  "threads.created": "Fil créé.",
+  "threads.createFailed": "Impossible de créer le fil.",
+  "threads.none": "Tout l'historique (sans fil)",
+  "threads.noneHint": "Les nouvelles questions ne sont rattachées à aucun fil.",
+  "threads.untitled": "Fil sans titre",
+  "threads.active": "Actif",
+  "threads.activeBanner": "Les nouvelles questions sont rattachées à ce fil.",
+  "threads.select": "Sélectionner le fil {title}",
+  "threads.empty.title": "Pas encore de fil",
+  "threads.empty.description":
+    "Créez un fil pour regrouper des questions liées, ou continuez sans fil.",
+  "threads.messages.title": "Messages du fil",
+  "threads.messages.empty.title": "Pas encore de message dans ce fil",
+  "threads.messages.empty.description":
+    "Sélectionnez ce fil, puis posez une question dans l'onglet Demander pour le démarrer.",
+  "threads.loadFailed": "Impossible de charger les fils.",
+  "threads.messagesFailed": "Impossible de charger les messages du fil.",
 
   // Export actions
   "export.copy": "Copier en Markdown",

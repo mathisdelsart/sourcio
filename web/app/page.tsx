@@ -16,6 +16,7 @@ import { ReexplainPanel } from "@/components/panels/ReexplainPanel";
 import { ExercisePanel } from "@/components/panels/ExercisePanel";
 import { GradePanel } from "@/components/panels/GradePanel";
 import { QuizPanel } from "@/components/panels/QuizPanel";
+import { ThreadsPanel } from "@/components/panels/ThreadsPanel";
 import { HistoryPanel } from "@/components/panels/HistoryPanel";
 
 export default function Home() {
@@ -26,6 +27,7 @@ export default function Home() {
     { id: "exercise", label: t("tabs.exercise") },
     { id: "grade", label: t("tabs.grade") },
     { id: "quiz", label: t("tabs.quiz") },
+    { id: "threads", label: t("tabs.threads") },
     { id: "history", label: t("tabs.history") },
   ];
 
@@ -41,6 +43,9 @@ export default function Home() {
   // and the last exercise (Grade links to it).
   const [lastAnswer, setLastAnswer] = useState<AskResponse | null>(null);
   const [lastExercise, setLastExercise] = useState<ExerciseResponse | null>(null);
+  // Active conversation thread shared between the Ask and Threads tabs.
+  // null means "All history (unthreaded)" — no session_id is sent.
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
 
   // Hydrate identity + connection overrides from localStorage on first mount,
   // generating a fresh student id when none exists yet.
@@ -55,8 +60,17 @@ export default function Home() {
     setApiKey(readLocal(KEYS.apiKey));
     setToken(readLocal(KEYS.authToken));
     setAuthEmail(readLocal(KEYS.authEmail));
+    const storedSession = readLocal(KEYS.sessionId);
+    const parsedSession = storedSession ? Number(storedSession) : NaN;
+    setActiveSessionId(Number.isInteger(parsedSession) ? parsedSession : null);
     setReady(true);
   }, []);
+
+  // Persist the active thread selection so it survives reloads.
+  function selectSession(id: number | null) {
+    setActiveSessionId(id);
+    writeLocal(KEYS.sessionId, id == null ? "" : String(id));
+  }
 
   const config: ConnectionConfig = useMemo(
     () => ({
@@ -150,6 +164,7 @@ export default function Home() {
               config={config}
               lastAnswer={lastAnswer}
               setLastAnswer={setLastAnswer}
+              sessionId={activeSessionId}
             />
           )}
           {active === "reexplain" && (
@@ -167,6 +182,15 @@ export default function Home() {
             <GradePanel studentId={studentId} config={config} lastExercise={lastExercise} />
           )}
           {active === "quiz" && <QuizPanel studentId={studentId} config={config} />}
+          {active === "threads" && (
+            <ThreadsPanel
+              studentId={studentId}
+              config={config}
+              active={active === "threads"}
+              activeSessionId={activeSessionId}
+              setActiveSessionId={selectSession}
+            />
+          )}
           {active === "history" && (
             <HistoryPanel
               studentId={studentId}

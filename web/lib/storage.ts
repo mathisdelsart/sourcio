@@ -9,6 +9,7 @@ export const KEYS = {
   theme: "grounded-rag:theme",
   locale: "grounded-rag:locale",
   course: "grounded-rag:course",
+  sessionId: "grounded-rag:session_id",
 } as const;
 
 /** Read a string from localStorage, returning `fallback` when unavailable. */

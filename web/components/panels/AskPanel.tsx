@@ -30,9 +30,17 @@ interface AskPanelProps {
   /** Lifted so the Re-explain tab can act on the last answer too. */
   lastAnswer: AskResponse | null;
   setLastAnswer: (a: AskResponse | null) => void;
+  /** Active conversation thread; when set, questions attach to it. */
+  sessionId: number | null;
 }
 
-export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPanelProps) {
+export function AskPanel({
+  studentId,
+  config,
+  lastAnswer,
+  setLastAnswer,
+  sessionId,
+}: AskPanelProps) {
   const toast = useToast();
   const { t } = useT();
   const [question, setQuestion] = useState("");
@@ -67,6 +75,7 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
       k,
       course: course.trim() || null,
       chapter: chapter.trim() || null,
+      session_id: sessionId,
     };
     try {
       let buffer = "";
