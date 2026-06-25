@@ -36,6 +36,11 @@ ui = [
 migrations = [
     "alembic>=1.13",
 ]
+# Fully local, zero-cost LLM provider (Ollama). Optional so OpenAI users are not
+# forced to install it: `uv sync --extra local`.
+local = [
+    "langchain-ollama>=0.2",
+]
 
 [dependency-groups]
 dev = [

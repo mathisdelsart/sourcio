@@ -7,7 +7,7 @@ SHELL := /bin/sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install qdrant lint fmt fmt-check test check api ui eval eval-report ingest ask up down clean
+.PHONY: help install local-install local qdrant lint fmt fmt-check test check api ui eval eval-report ingest ask up down clean
 
 help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*##"; printf "Available targets:\n"} \
@@ -15,6 +15,17 @@ help: ## Show this help message
 
 install: ## Install all dependencies (extras + dev group)
 	uv sync --all-extras --group dev
+
+local-install: ## Install the Ollama provider extra for fully local runs
+	uv sync --extra local
+
+# Print the env needed to run the whole stack against a local Ollama server
+# (zero cost, fully offline). Eval into your shell, then run make ask / api / ui.
+# Usage: eval "$$(make local)" && make ask Q="..."
+# Requires: `ollama serve` running and the chat/vision models pulled (see docs/LOCAL.md).
+local: ## Print env to switch the stack to local Ollama (eval it in your shell)
+	@echo "export LLM_PROVIDER=ollama"
+	@echo "export OLLAMA_BASE_URL=http://localhost:11434"
 
 qdrant: ## Start the Qdrant vector database in the background
 	docker compose up -d qdrant

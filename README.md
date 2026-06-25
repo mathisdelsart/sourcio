@@ -76,6 +76,9 @@ reference dataset and exits non-zero on regression, so it can gate CI.
 - **Model-agnostic LLM factory:** `get_llm(role)` selects a model per role from `LLM_<ROLE>` env vars,
   defaulting to a small OpenAI chat model. Swapping models (small router, larger generator/grader) is
   an environment change, not a code change.
+- **Fully local / zero-cost option:** set `LLM_PROVIDER=ollama` (or `LLM_<ROLE>=ollama:<model>`) to run
+  every LLM on a local [Ollama](https://ollama.com) server. Embeddings, reranker, and Qdrant are already
+  local, so the whole pipeline then costs nothing and runs offline — see [docs/LOCAL.md](docs/LOCAL.md).
 - **Packaging:** `uv` (lockfile, no `requirements.txt`). **Lint/format:** `ruff`.
 
 ## Quickstart

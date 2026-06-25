@@ -65,6 +65,22 @@ class Settings(BaseSettings):
     # mutating endpoints and `/history`. `/health` is always open.
     api_key: str = ""
 
+    # Global LLM provider switch for fully local, zero-cost runs. "" keeps the
+    # default OpenAI provider; "ollama" routes every role to a local Ollama chat
+    # model (see `get_llm`). Per-role `LLM_<ROLE>` values may still carry their
+    # own `provider:model` prefix, which always wins over this global default.
+    llm_provider: str = ""
+
+    # Base URL of the local Ollama server, used only when the Ollama provider is
+    # active. The default matches Ollama's out-of-the-box bind address.
+    ollama_base_url: str = "http://localhost:11434"
+
+    # Default Ollama model ids used when `llm_provider="ollama"` and a role has no
+    # explicit `LLM_<ROLE>` override. The extract role needs a multimodal model to
+    # transcribe rasterized slides; the others use a general chat model.
+    ollama_chat_model: str = "llama3.1"
+    ollama_vision_model: str = "llama3.2-vision"
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -106,17 +122,56 @@ def configure_cache() -> None:
     _cache_configured = True
 
 
+def _resolve_model(role: str) -> tuple[str, dict]:
+    """Resolve the model id and provider kwargs for a role.
+
+    Selection order, most specific first:
+
+    1. `LLM_<ROLE>` env var. Its value may carry an explicit `provider:model`
+       prefix understood by `init_chat_model` (e.g. `ollama:llama3.1`), in which
+       case it is used verbatim and wins over the global provider.
+    2. The global `llm_provider` setting. When set to "ollama", every role
+       without its own override resolves to a local Ollama model: the multimodal
+       `ollama_vision_model` for the `extract` role and `ollama_chat_model`
+       otherwise. The Ollama `base_url` is forwarded so a non-default server can
+       be targeted.
+    3. The OpenAI default `gpt-4o-mini`.
+
+    Returns the model string (possibly `provider:model`) and a kwargs dict passed
+    through to `init_chat_model` (e.g. `base_url` for Ollama).
+    """
+    override = os.getenv(f"LLM_{role.upper()}")
+    settings = get_settings()
+
+    # An explicit per-role override always wins, including its own provider prefix.
+    if override:
+        kwargs: dict = {}
+        if override.startswith("ollama:"):
+            kwargs["base_url"] = settings.ollama_base_url
+        return override, kwargs
+
+    # Global Ollama switch: pick a sensible default model id per role.
+    if settings.llm_provider.strip().lower() == "ollama":
+        model_id = settings.ollama_vision_model if role == "extract" else settings.ollama_chat_model
+        return f"ollama:{model_id}", {"base_url": settings.ollama_base_url}
+
+    # Default: OpenAI gpt-4o-mini, unchanged.
+    return "gpt-4o-mini", {}
+
+
 def get_llm(role: str = "default"):
     """Build a chat model for the given role, selected by the `LLM_<ROLE>` env var.
 
-    Defaults to `gpt-4o-mini`. Uses `temperature=0` for reproducibility.
+    Defaults to OpenAI `gpt-4o-mini`. Set `LLM_<ROLE>=ollama:<model>` or the
+    global `LLM_PROVIDER=ollama` to run a local Ollama model instead (zero-cost,
+    fully offline). Uses `temperature=0` for reproducibility.
     """
     # Configure the global LLM cache once (no-op unless `llm_cache` is set), so
     # repeated identical prompts are served from cache instead of re-billed.
     configure_cache()
 
-    model = os.getenv(f"LLM_{role.upper()}", "gpt-4o-mini")
-    llm = init_chat_model(model, temperature=0)
+    model, provider_kwargs = _resolve_model(role)
+    llm = init_chat_model(model, temperature=0, **provider_kwargs)
 
     # Compose callbacks: LangFuse tracing (opt-in) and the token budget guard
     # (opt-in). Each helper returns an empty list when disabled, so when both
