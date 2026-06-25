@@ -18,6 +18,15 @@ only when the collection actually carries the named sparse vector; otherwise it
 falls back to the dense path gracefully. The dense branch keeps the similarity
 threshold, so refusal semantics are preserved, and the optional reranker is
 applied on top exactly as in the dense path.
+
+An optional neighbor-chunk context expansion (opt-in via ``neighbor_expansion``)
+runs *after* the thresholded (and optionally reranked) top results are chosen:
+for each result it pulls adjacent slides/windows (same course and chapter, page
+within +/- ``neighbor_window``, excluding the page itself) with a payload-only
+``scroll`` -- no similarity threshold, since these are context, not matches.
+Neighbors are de-duplicated against the originals and appended after them.
+Expansion never runs on an empty retrieval, so the refusal guard is untouched,
+and any neighbor-fetch error degrades to the un-expanded results.
 """
 
 from collections.abc import Callable
@@ -32,6 +41,7 @@ from qdrant_client.models import (
     FusionQuery,
     MatchValue,
     Prefetch,
+    Range,
     SparseVector,
 )
 
@@ -43,6 +53,11 @@ from ingestion.schema import Chunk, Retrieved
 
 # A scorer maps (question, candidate texts) to one relevance score per text.
 Scorer = Callable[[str, list[str]], list[float]]
+
+# Upper bound on how many neighbor chunks are fetched in total per ``retrieve``
+# call, so a large k with a wide window can never balloon the context block or
+# the number of scroll calls without bound.
+_MAX_NEIGHBORS = 20
 
 
 def _build_filter(course: str | None, chapter: str | None) -> Filter | None:
@@ -271,6 +286,115 @@ def _fetch_candidates(
     return [_point_to_retrieved(point) for point in points]
 
 
+def _record_to_retrieved(record) -> Retrieved:
+    """Map a Qdrant scroll record (no score) to a context :class:`Retrieved`.
+
+    Neighbors come from a payload-only ``scroll`` that carries no similarity
+    score, so the score is set to 0.0: they are surrounding context, never
+    ranked matches, and downstream consumers keep them after the real hits.
+    """
+    payload = record.payload or {}
+    chunk = Chunk(
+        id=str(record.id),
+        course=payload["course"],
+        page=payload["page"],
+        text=payload["text"],
+        chapter=payload.get("chapter"),
+    )
+    return Retrieved(chunk=chunk, score=0.0)
+
+
+def _neighbor_filter(result: Retrieved, window: int) -> Filter:
+    """Build the payload filter selecting a result's page-window neighbors.
+
+    Same course and (when present) chapter as the result, with ``page`` in
+    ``[page - window, page + window]`` and the result's own page excluded. This
+    keeps neighbors inside the same course/chapter so expansion never pulls in
+    unrelated material.
+    """
+    page = result.chunk.page
+    must: list[Condition] = [
+        FieldCondition(key="course", match=MatchValue(value=result.chunk.course)),
+        FieldCondition(key="page", range=Range(gte=page - window, lte=page + window)),
+    ]
+    if result.chunk.chapter is not None:
+        must.append(FieldCondition(key="chapter", match=MatchValue(value=result.chunk.chapter)))
+    must_not: list[Condition] = [
+        FieldCondition(key="page", match=MatchValue(value=page)),
+    ]
+    return Filter(must=must, must_not=must_not)
+
+
+def _fetch_neighbors(
+    client: QdrantClient,
+    *,
+    collection: str,
+    result: Retrieved,
+    window: int,
+    limit: int,
+) -> list[Retrieved]:
+    """Scroll the page-window neighbors of one result (no similarity threshold).
+
+    Uses a payload-only ``scroll`` with the neighbor filter; ``limit`` caps how
+    many records are pulled. Returns context-only :class:`Retrieved` (score 0).
+    """
+    records, _ = client.scroll(
+        collection_name=collection,
+        scroll_filter=_neighbor_filter(result, window),
+        limit=limit,
+        with_payload=True,
+        with_vectors=False,
+    )
+    return [_record_to_retrieved(record) for record in records]
+
+
+def _expand_with_neighbors(
+    client: QdrantClient,
+    results: list[Retrieved],
+    *,
+    collection: str,
+    window: int,
+) -> list[Retrieved]:
+    """Append page-window neighbors of each result, de-duped and bounded.
+
+    The original ranked ``results`` are kept first and in order; neighbors are
+    appended after them, de-duplicated by chunk id (against the originals and
+    among themselves), and capped at ``_MAX_NEIGHBORS`` in total. Refusal is
+    decided before this runs: an empty ``results`` is returned untouched (no
+    scroll is issued). Any neighbor-fetch error degrades to the un-expanded
+    ``results`` rather than raising -- expansion is best-effort context.
+    """
+    if not results or window < 1:
+        return results
+
+    seen: set[str] = {r.chunk.id for r in results}
+    neighbors: list[Retrieved] = []
+    try:
+        for result in results:
+            if len(neighbors) >= _MAX_NEIGHBORS:
+                break
+            remaining = _MAX_NEIGHBORS - len(neighbors)
+            fetched = _fetch_neighbors(
+                client,
+                collection=collection,
+                result=result,
+                window=window,
+                limit=remaining,
+            )
+            for neighbor in fetched:
+                if neighbor.chunk.id in seen:
+                    continue
+                seen.add(neighbor.chunk.id)
+                neighbors.append(neighbor)
+                if len(neighbors) >= _MAX_NEIGHBORS:
+                    break
+    except Exception:
+        # Best-effort context: any failure leaves the ranked results intact.
+        return results
+
+    return results + neighbors
+
+
 def _fuse(candidate_lists: list[list[Retrieved]]) -> list[Retrieved]:
     """Fuse per-query candidate lists by chunk id, keeping the best score.
 
@@ -298,6 +422,7 @@ def retrieve(
     chapter: str | None = None,
     scorer: Scorer | None = None,
     hyde: bool = False,
+    expand_neighbors: bool | None = None,
 ) -> list[Retrieved]:
     """Return up to k chunks for the question, best first.
 
@@ -325,6 +450,17 @@ def retrieve(
     relevance. Reranking composes with either base path (dense or hybrid). The
     cross-encoder always scores against the original ``question``, not the HyDE
     passage, so relevance is judged on what the student asked.
+
+    Neighbor expansion path (when ``expand_neighbors`` is True, or None and
+    ``neighbor_expansion`` is set): after the thresholded (and optionally
+    reranked) top results are chosen, each result's adjacent slides/windows are
+    pulled (same course and chapter, page within +/- ``neighbor_window``,
+    excluding the page itself) and appended after the ranked results, de-duped
+    by chunk id and capped in total. Neighbors carry no similarity score and
+    never trigger or suppress refusal: an empty thresholded retrieval is
+    returned untouched, with no neighbor fetch attempted. Any neighbor-fetch
+    error degrades to the un-expanded results. When disabled (the default) no
+    extra Qdrant call is made and behavior is byte-identical.
 
     In all paths, when ``course`` and/or ``chapter`` are given retrieval is
     restricted to chunks whose payload matches them; when both are None the
@@ -360,8 +496,26 @@ def retrieve(
         dense_text=dense_text,
     )
     if reranking:
-        return rerank(question, candidates, k=k, scorer=scorer or _default_scorer)
-    return candidates
+        results = rerank(question, candidates, k=k, scorer=scorer or _default_scorer)
+    else:
+        results = candidates
+
+    # Refusal is decided above (empty -> empty). Only an in-course, non-empty
+    # result set is ever expanded with neighbors, and only when opted in. The
+    # settings are read defensively so a minimal stub without the fields keeps
+    # expansion off.
+    if expand_neighbors is None:
+        expand = bool(getattr(settings, "neighbor_expansion", False))
+    else:
+        expand = expand_neighbors
+    if expand and results:
+        return _expand_with_neighbors(
+            client,
+            results,
+            collection=settings.qdrant_collection,
+            window=int(getattr(settings, "neighbor_window", 1)),
+        )
+    return results
 
 
 def retrieve_multi(

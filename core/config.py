@@ -88,6 +88,22 @@ class Settings(BaseSettings):
     # takes precedence when both are set (multi-query never embeds a HyDE probe).
     hyde: bool = False
 
+    # Opt-in neighbor-chunk context expansion. False keeps retrieval
+    # byte-identical (no extra Qdrant calls). When True, after the thresholded
+    # (and optionally reranked) top results are chosen, adjacent slides/windows
+    # are pulled for each result -- same course and chapter, with `page` within
+    # +/- `neighbor_window` of the result's page (excluding the page itself) --
+    # so the model sees fuller surrounding context. Neighbors are fetched with
+    # no similarity threshold (they are context, not matches) and are appended
+    # after the ranked results. Expansion never runs on an empty retrieval, so
+    # the refusal guard is untouched.
+    neighbor_expansion: bool = False
+
+    # Half-width of the neighbor page window when `neighbor_expansion` is on:
+    # for a result on page p, pages in [p - window, p + window] (excluding p)
+    # are pulled as context. Ignored when expansion is disabled.
+    neighbor_window: int = 1
+
     # Relational store (SQLite in development, PostgreSQL later).
     database_url: str = "sqlite:///./app.db"
 

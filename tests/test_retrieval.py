@@ -70,6 +70,8 @@ def _set_settings(monkeypatch, **overrides):
         "hybrid_retrieval": False,
         "sparse_vector_name": "sparse",
         "hybrid_prefetch": 50,
+        "neighbor_expansion": False,
+        "neighbor_window": 1,
     }
     base.update(overrides)
     settings = SimpleNamespace(**base)
