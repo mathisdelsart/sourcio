@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from budget import get_budget_callbacks
-from obs import get_callbacks
+from core.budget import get_budget_callbacks
+from core.obs import get_callbacks
 
 # Load `.env` into the process environment so provider SDKs (e.g. OpenAI) can
 # read OPENAI_API_KEY directly. pydantic-settings only populates Settings fields.

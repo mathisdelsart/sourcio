@@ -476,7 +476,7 @@ def test_exercise_then_grade_persist_and_link(client, monkeypatch):
     # vector retrieval are mocked, so no OpenAI call and no Qdrant are needed.
     # ``generate`` does ``from retrieval import retrieve`` lazily, so the source
     # module is patched; the nodes import ``get_llm`` at module load.
-    monkeypatch.setattr("retrieval.retrieve", lambda *a, **k: _make_retrieved("Group axioms."))
+    monkeypatch.setattr("core.retrieval.retrieve", lambda *a, **k: _make_retrieved("Group axioms."))
     monkeypatch.setattr(
         "agent.nodes.generate.get_llm",
         lambda role="default": _FakeLLM("EXERCISE:\nProve closure.\n\nSOLUTION:\nBy axiom 1."),
@@ -555,7 +555,7 @@ def _set_api_key(monkeypatch, key):
     replacing it there lets us drive the configured key without touching the
     process environment or the lru-cached real settings.
     """
-    from config import Settings
+    from core.config import Settings
 
     settings = Settings(api_key=key)
     monkeypatch.setattr(api_main, "get_settings", lambda: settings)

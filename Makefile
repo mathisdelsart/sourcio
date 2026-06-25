@@ -66,7 +66,7 @@ ingest: ## Ingest a PDF (vars: PDF=..., COURSE="...")
 # Ask a question from the command line.
 # Usage: make ask Q="your question"
 ask: ## Ask a question (var: Q="...")
-	uv run python -m ask "$(Q)"
+	uv run python -m core.ask "$(Q)"
 
 up: ## Start all services (app + qdrant)
 	docker compose up -d

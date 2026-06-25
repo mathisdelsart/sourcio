@@ -67,7 +67,7 @@ testpaths = ["tests"]
 [tool.pyright]
 # Static type-check the application source only. Tests, migrations, the local
 # virtualenv and the web frontend are out of scope.
-include = ["agent", "api", "db", "ingestion", "eval", "config.py", "answer.py", "retrieval.py"]
+include = ["agent", "api", "core", "db", "ingestion", "eval"]
 exclude = ["tests", "alembic", ".venv", "web"]
 # Resolve imports against the project virtualenv so installed extras are seen.
 venvPath = "."

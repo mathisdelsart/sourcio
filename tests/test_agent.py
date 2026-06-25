@@ -7,14 +7,14 @@ monkeypatched where the explain node would otherwise run RAG.
 
 import pytest
 
-import config
+import core.config as config
 from agent import graph as graph_mod
 from agent.graph import INTENTS, build_graph, classify_intent, route
 from agent.nodes.explain import explain
 from agent.nodes.generate import generate
 from agent.nodes.grade import grade
 from agent.nodes.reexplain import reexplain
-from answer import REFUSAL
+from core.answer import REFUSAL
 from ingestion.schema import Chunk, Retrieved
 
 
@@ -35,7 +35,7 @@ def fake_retrieve(monkeypatch):
         holder["question"] = question
         return holder["results"]
 
-    import retrieval as retrieval_mod
+    import core.retrieval as retrieval_mod
 
     monkeypatch.setattr(retrieval_mod, "retrieve", _retrieve)
     return holder
@@ -186,7 +186,7 @@ def test_explain_delegates_to_answer(monkeypatch):
         }
 
     # explain imports answer lazily from the answer module, so patch it there.
-    import answer as answer_mod
+    import core.answer as answer_mod
 
     monkeypatch.setattr(answer_mod, "answer", fake_answer)
 
@@ -208,7 +208,7 @@ def test_graph_routes_explain_via_answer(monkeypatch, fake_llm):
             "raw": "Grounded reply",
         }
 
-    import answer as answer_mod
+    import core.answer as answer_mod
 
     monkeypatch.setattr(answer_mod, "answer", fake_answer)
 

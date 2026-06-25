@@ -8,8 +8,8 @@ import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 
-import budget
-import config
+import core.budget as budget
+import core.config as config
 
 
 def _result(total_tokens: int) -> LLMResult:

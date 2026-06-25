@@ -18,7 +18,7 @@ from functools import lru_cache
 from qdrant_client import QdrantClient
 from qdrant_client.models import Condition, FieldCondition, Filter, MatchValue
 
-from config import get_settings
+from core.config import get_settings
 from ingestion.embed import embed_query
 from ingestion.schema import Chunk, Retrieved
 

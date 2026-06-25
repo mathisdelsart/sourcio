@@ -6,7 +6,7 @@ Usage:
 
 import argparse
 
-from answer import answer
+from core.answer import answer
 
 
 def main() -> None:

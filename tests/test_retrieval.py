@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 from qdrant_client.models import Filter
 
-import retrieval
+import core.retrieval as retrieval
 
 
 def _point(point_id, score, text, *, course="Wavelet Transform", chapter="Intro", page=11):
@@ -106,7 +106,7 @@ def test_payload_maps_to_chunk():
 
 
 def test_answer_threads_course_and_chapter_to_retrieve(monkeypatch):
-    import answer as answer_mod
+    import core.answer as answer_mod
 
     captured = {}
 

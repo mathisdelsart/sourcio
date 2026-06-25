@@ -9,7 +9,7 @@ import logging
 
 from qdrant_client import QdrantClient, models
 
-from config import get_settings
+from core.config import get_settings
 from ingestion.embed import embed_texts, embedding_dim
 from ingestion.schema import Chunk
 

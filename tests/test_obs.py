@@ -2,8 +2,8 @@
 
 import pytest
 
-import config
-import obs
+import core.config as config
+import core.obs as obs
 
 _LANGFUSE_ENV = ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_HOST")
 

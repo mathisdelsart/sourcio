@@ -187,7 +187,7 @@ def _default_score_fn(k: int = 5) -> ScoreFn:
     """
     from qdrant_client import QdrantClient
 
-    from config import get_settings
+    from core.config import get_settings
     from ingestion.embed import embed_query
 
     settings = get_settings()
@@ -281,7 +281,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    from config import get_settings
+    from core.config import get_settings
 
     calibration = calibrate(dataset_path=args.dataset, score_fn=_default_score_fn(k=args.k))
     print(format_report(calibration, get_settings().similarity_threshold))

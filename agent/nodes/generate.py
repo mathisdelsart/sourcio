@@ -9,8 +9,8 @@ not in the course (mirroring the refusal contract in ``answer.py``).
 
 from agent.persistence import persist_exercise
 from agent.state import TutorState
-from answer import REFUSAL
-from config import get_llm
+from core.answer import REFUSAL
+from core.config import get_llm
 from ingestion.schema import format_numbered_sources
 
 _SYSTEM = (
@@ -42,7 +42,7 @@ def generate(state: TutorState) -> TutorState:
     produced (not refused) it is persisted for the student via the optional
     persistence layer, which is a no-op without a student or database.
     """
-    from retrieval import retrieve
+    from core.retrieval import retrieve
 
     message = state.get("message", "")
     results = retrieve(message)

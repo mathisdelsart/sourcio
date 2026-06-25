@@ -14,7 +14,7 @@ from agent.nodes.generate import generate
 from agent.nodes.grade import grade
 from agent.nodes.reexplain import reexplain
 from agent.state import Intent, TutorState
-from config import get_llm
+from core.config import get_llm
 
 # Every valid intent label, derived from the Intent type so the two cannot drift.
 INTENTS: tuple[str, ...] = get_args(Intent)

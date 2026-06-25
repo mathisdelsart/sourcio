@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from obs import (
+from core.obs import (
     LatencySample,
     StageStats,
     latency_enabled,
@@ -138,7 +138,7 @@ def test_timer_uses_process_sink_by_default(monkeypatch):
     monkeypatch.setenv("LATENCY_ENABLED", "1")
     with timer("judge"):
         pass
-    from obs import get_samples
+    from core.obs import get_samples
 
     samples = get_samples()
     assert [s.stage for s in samples] == ["judge"]

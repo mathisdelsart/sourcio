@@ -8,8 +8,8 @@ Ollama environment variables take effect within a test.
 
 import pytest
 
-import config
-from config import _resolve_model, get_settings
+import core.config as config
+from core.config import _resolve_model, get_settings
 
 
 @pytest.fixture(autouse=True)

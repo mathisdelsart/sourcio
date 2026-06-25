@@ -20,7 +20,7 @@ from alembic import context
 # Alembic loads this file (it is executed outside the normal package context).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from config import get_settings  # noqa: E402
+from core.config import get_settings  # noqa: E402
 from db.models import Base  # noqa: E402
 
 # Alembic Config object, providing access to values in alembic.ini.

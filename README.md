@@ -133,7 +133,7 @@ cp .env.example .env        # then set OPENAI_API_KEY
 uv run python -m ingestion.run path/to/course.pdf --course "Wavelet Transform" --hybrid
 
 # 5. Ask a grounded, cited question from the CLI
-uv run python -m ask "What is a piecewise constant approximation?"
+uv run python -m core.ask "What is a piecewise constant approximation?"
 
 # 6. (Optional) run the offline faithfulness/relevance evaluation
 uv run python -m eval.run_eval
@@ -161,7 +161,7 @@ uv run uvicorn api.main:app --reload
 A grounded answer cites only the sources it relies on:
 
 ```
-$ uv run python -m ask "What is a piecewise constant approximation?"
+$ uv run python -m core.ask "What is a piecewise constant approximation?"
 
 A piecewise constant approximation represents a signal as a sum of scaled,
 shifted box functions that are constant on each dyadic interval, capturing the
@@ -174,7 +174,7 @@ Sources:
 A question the course does not cover is refused, not answered:
 
 ```
-$ uv run python -m ask "How do I set up a Kubernetes cluster?"
+$ uv run python -m core.ask "How do I set up a Kubernetes cluster?"
 
 This is not covered in the course material.
 ```

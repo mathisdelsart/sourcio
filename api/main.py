@@ -27,8 +27,8 @@ from agent.nodes.generate import generate
 from agent.nodes.grade import grade
 from agent.nodes.reexplain import reexplain
 from agent.state import Level, TutorState, to_history
-from answer import answer
-from config import get_settings
+from core.answer import answer
+from core.config import get_settings
 from db.models import Student
 from db.session import (
     add_message,

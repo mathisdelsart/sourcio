@@ -13,7 +13,7 @@ import re
 
 from agent.persistence import persist_grade
 from agent.state import TutorState
-from config import get_llm
+from core.config import get_llm
 
 _SYSTEM = (
     "You are a strict but fair grader for a course tutor.\n"

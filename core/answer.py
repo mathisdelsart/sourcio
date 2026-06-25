@@ -8,10 +8,10 @@ the question is refused rather than answered from the model's own knowledge.
 
 import re
 
-from config import get_llm
+from core.config import get_llm
+from core.obs import timer
+from core.retrieval import retrieve
 from ingestion.schema import Retrieved, format_numbered_sources
-from obs import timer
-from retrieval import retrieve
 
 REFUSAL = "This is not covered in the course material."
 

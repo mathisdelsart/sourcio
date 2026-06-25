@@ -13,7 +13,7 @@ from agent.state import TutorState
 
 def explain(state: TutorState) -> TutorState:
     """Answer ``state['message']`` from the course and record it in memory."""
-    from answer import answer
+    from core.answer import answer
 
     result = answer(state.get("message", ""))
 

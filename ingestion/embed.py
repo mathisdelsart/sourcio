@@ -7,7 +7,7 @@ normalized, which makes cosine similarity equal to the dot product.
 
 from functools import lru_cache
 
-from config import get_settings
+from core.config import get_settings
 
 
 @lru_cache

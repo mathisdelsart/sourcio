@@ -46,9 +46,9 @@ offline / in CI.
       v                         |
   api/main.py  (FastAPI)        |
       |   \                     |
-      |    \---------> retrieval.py --> [ Qdrant ]  top-k + similarity threshold
+      |    \---------> core/retrieval.py --> [ Qdrant ]  top-k + similarity threshold
       |   /                          \
-      v  v                            +--> answer.py  citation-by-construction
+      v  v                            +--> core/answer.py  citation-by-construction
   agent/graph.py (LangGraph)               (used by /ask and the explain node)
       |
    router --> explain | generate | grade | reexplain   (agent/nodes/*)
@@ -57,7 +57,7 @@ offline / in CI.
       |          [ SQL store: students, exercises, grades, messages ]
       |                                (db/, via agent/persistence.py)
       v
-  config.get_llm(role)  model-agnostic factory  (+ obs.py LangFuse, budget.py)
+  core/config.get_llm(role)  model-agnostic factory  (+ core/obs.py LangFuse, core/budget.py)
 
                          QUALITY LAYER (offline / CI)
   eval/run_eval.py     faithfulness + relevance + refusal + retrieval-hit
@@ -127,7 +127,7 @@ chunk ids make a re-run safe.
 
 ## Online serving
 
-### Retrieval with threshold-based refusal (`retrieval.py`)
+### Retrieval with threshold-based refusal (`core/retrieval.py`)
 
 `retrieve(question, k, course, chapter)` embeds the question, queries Qdrant for
 the top-k most similar chunks, and applies the **similarity threshold**
@@ -139,7 +139,7 @@ an explicit refusal rather than a guess.
 The threshold is not a magic number: it depends on the embedding model and is
 calibrated empirically (see `eval/calibrate.py`).
 
-### Citation-by-construction (`answer.py`)
+### Citation-by-construction (`core/answer.py`)
 
 This is the single place where retrieval, the threshold, refusal, and citation
 all live, so the grounding guarantees cannot drift. The mechanism makes invented
@@ -155,7 +155,7 @@ page numbers impossible:
    answer actually relies on are returned (`_cited_indices`).
 
 If retrieval finds nothing, `answer` returns the refusal directly without calling
-the model. The CLI entry point is `ask.py` (`python -m ask "..."`).
+the model. The CLI entry point is `core/ask.py` (`python -m core.ask "..."`).
 
 ### Agent graph (`agent/`)
 
@@ -179,7 +179,7 @@ output key.
   `answer.answer` and appends the turn to `history`.
 - **generate** (`agent/nodes/generate.py`): retrieves chunks for the notion and
   builds an exercise + reference solution **only** from them, refusing when
-  nothing is retrieved (mirroring `answer.py`). The reference solution is stored
+  nothing is retrieved (mirroring `core/answer.py`). The reference solution is stored
   server-side and never returned by the API.
 - **grade** (`agent/nodes/grade.py`): judge #1, the **product** feature. Marks
   the student's answer against the reference solution and returns a numeric score
@@ -263,7 +263,7 @@ The relational layer uses SQLAlchemy 2.0 declarative models (`db/models.py`):
 just a URL change. Schema migrations are managed by Alembic (`alembic/`), which
 resolves the same URL at runtime and diffs against the declarative `Base`.
 
-## The model-agnostic factory (`config.py`)
+## The model-agnostic factory (`core/config.py`)
 
 Models are **never hard-coded in a node**. Everything goes through
 `get_llm(role)`, selected by the `LLM_<ROLE>` environment variable (defaulting to
@@ -275,9 +275,9 @@ grader can coexist.
 The factory also composes two opt-in, zero-cost-when-disabled cross-cutting
 concerns:
 
-- **LangFuse tracing** (`obs.py`): activates only when LangFuse credentials are
+- **LangFuse tracing** (`core/obs.py`): activates only when LangFuse credentials are
   present; the package is imported lazily.
-- **Token budget guard** (`budget.py`): a callback that accumulates reported
+- **Token budget guard** (`core/budget.py`): a callback that accumulates reported
   token usage and raises `BudgetExceeded` once a configured cap is reached. Off
   by default (`llm_budget_tokens=0`); it reads token counts straight from the
   result and never makes a network call.
@@ -285,7 +285,7 @@ concerns:
 An optional **LLM response cache** (`llm_cache`: `""`, `memory`, or `sqlite`) is
 configured once per process to avoid re-billing identical prompts.
 
-All settings live in `Settings` (`config.py`), overridable via `.env` or
+All settings live in `Settings` (`core/config.py`), overridable via `.env` or
 environment variables. See `.env.example` for the full list.
 
 ## Request lifecycle: `POST /ask`
@@ -295,8 +295,8 @@ A walkthrough of a single question, end to end:
 1. **Client → API.** The client (Streamlit UI or any HTTP caller) sends
    `{student_id, question, k}` to `POST /ask` (`api/main.py`). If an API key is
    configured, `require_api_key` validates the `X-API-Key` header.
-2. **API → answer.** The route calls `answer(question, k)` (`answer.py`).
-3. **Retrieve.** `answer` calls `retrieve` (`retrieval.py`), which embeds the
+2. **API → answer.** The route calls `answer(question, k)` (`core/answer.py`).
+3. **Retrieve.** `answer` calls `retrieve` (`core/retrieval.py`), which embeds the
    question with `embed_query` (bge-m3) and queries Qdrant for the top-k chunks
    **above the similarity threshold**.
 4. **Refuse early, if needed.** If nothing clears the threshold, `answer` returns
@@ -325,17 +325,17 @@ guard apply transparently when enabled.
 | Indexing into Qdrant | `ingestion/index.py` |
 | Ingestion entry point | `ingestion/run.py` |
 | Data contract | `ingestion/schema.py` |
-| Retrieval + threshold + filter | `retrieval.py` |
-| Grounded answer + citations | `answer.py` |
-| CLI ask | `ask.py` |
+| Retrieval + threshold + filter | `core/retrieval.py` |
+| Grounded answer + citations | `core/answer.py` |
+| CLI ask | `core/ask.py` |
 | Agent graph + router | `agent/graph.py`, `agent/state.py` |
 | Agent nodes | `agent/nodes/*.py` |
 | Node persistence | `agent/persistence.py` |
 | HTTP API | `api/main.py` |
 | Streamlit UI + metrics dashboard | `ui/app.py`, `ui/metrics.py` |
 | Relational store | `db/models.py`, `db/session.py`, `alembic/` |
-| LLM factory, settings, cache | `config.py` |
-| Tracing / budget | `obs.py`, `budget.py` |
+| LLM factory, settings, cache | `core/config.py` |
+| Tracing / budget | `core/obs.py`, `core/budget.py` |
 | Faithfulness eval / calibration | `eval/run_eval.py`, `eval/calibrate.py` |
 | Containerization | `docker-compose.yml`, `Dockerfile` |
 | CI | `.github/workflows/ci.yml` |

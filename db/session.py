@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from config import get_settings
+from core.config import get_settings
 from db.models import Base, Exercise, Grade, Message, Student
 
 # Bound on first use by ``get_session`` / ``configure_session_factory``.

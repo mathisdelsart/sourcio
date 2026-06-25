@@ -2,8 +2,8 @@
 
 from types import SimpleNamespace
 
-import answer as answer_mod
-from answer import _cited_indices, _remap_citations
+import core.answer as answer_mod
+from core.answer import _cited_indices, _remap_citations
 from ingestion.chunk import chunk_pages
 from ingestion.schema import Chunk, Page, Retrieved
 

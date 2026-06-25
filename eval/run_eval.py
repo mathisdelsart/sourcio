@@ -250,15 +250,15 @@ def _default_answer_fn() -> AnswerFn:
     Importing inside the function keeps this module importable in CI (dev-only
     sync) without pulling retrieval/embedding dependencies at import time.
     """
-    from answer import answer
+    from core.answer import answer
 
     return lambda question: answer(question)
 
 
 def _default_judge_fn() -> JudgeFn:
     """Wire the real faithfulness judge via the model-agnostic factory."""
-    from config import get_llm
-    from obs import timer
+    from core.config import get_llm
+    from core.obs import timer
 
     llm = get_llm("judge")
 
@@ -275,7 +275,7 @@ def _default_judge_fn() -> JudgeFn:
 
 def _default_retrieve_fn() -> RetrieveFn:
     """Wire the real retrieval step, imported lazily to keep CI import-light."""
-    from retrieval import retrieve
+    from core.retrieval import retrieve
 
     def fetch(question: str) -> list[str]:
         return [r.chunk.text for r in retrieve(question)]
@@ -453,7 +453,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.latency_out is not None:
         # Flush any per-stage timings collected during the run (only present
         # when LATENCY_ENABLED is set) so the dashboard can render p50/p95.
-        from obs import get_samples, write_latency
+        from core.obs import get_samples, write_latency
 
         write_latency(get_samples(), args.latency_out)
         print(f"  wrote latency: {args.latency_out}")

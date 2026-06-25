@@ -6,7 +6,7 @@ retrieval again, so the explanation stays anchored to what was already grounded.
 """
 
 from agent.state import Level, TutorState
-from config import get_llm
+from core.config import get_llm
 
 _SYSTEM = (
     "You are a course tutor re-explaining a point the student did not grasp.\n"
