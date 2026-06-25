@@ -66,6 +66,9 @@ class Student(Base):
     feedback: Mapped[list[Feedback]] = relationship(
         back_populates="student", cascade="all, delete-orphan"
     )
+    sessions: Mapped[list[Session]] = relationship(
+        back_populates="student", cascade="all, delete-orphan"
+    )
 
 
 class Exercise(Base):
@@ -156,6 +159,28 @@ class QuizQuestion(Base):
     )
 
 
+class Session(Base):
+    """A named conversation thread grouping a student's messages.
+
+    A student can hold several threads (e.g. one per topic). The ``title`` is
+    optional so an untitled thread is valid. Messages reference a thread through
+    a nullable ``Message.session_id``; existing, unthreaded messages stay valid
+    with ``session_id = NULL``, so this model is purely additive.
+    """
+
+    __tablename__ = "sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    student: Mapped[Student] = relationship(back_populates="sessions")
+    messages: Mapped[list[Message]] = relationship(back_populates="session")
+
+
 class Message(Base):
     """A single turn of conversation history (e.g. ``user`` or ``assistant``)."""
 
@@ -165,11 +190,15 @@ class Message(Base):
     student_id: Mapped[int] = mapped_column(
         ForeignKey("students.id", ondelete="CASCADE"), index=True
     )
+    session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sessions.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     role: Mapped[str] = mapped_column(String(32))
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     student: Mapped[Student] = relationship(back_populates="messages")
+    session: Mapped[Session | None] = relationship(back_populates="messages")
 
 
 class Feedback(Base):

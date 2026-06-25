@@ -132,9 +132,20 @@ def add_grade(
     return grade
 
 
-def add_message(session: Session, *, student_id: int, role: str, content: str) -> Message:
-    """Append a conversation message and return the flushed instance."""
-    message = Message(student_id=student_id, role=role, content=content)
+def add_message(
+    session: Session,
+    *,
+    student_id: int,
+    role: str,
+    content: str,
+    session_id: int | None = None,
+) -> Message:
+    """Append a conversation message and return the flushed instance.
+
+    ``session_id`` optionally attaches the turn to a conversation thread. It
+    defaults to ``None`` (unthreaded), so existing callers are unaffected.
+    """
+    message = Message(student_id=student_id, role=role, content=content, session_id=session_id)
     session.add(message)
     session.flush()
     return message

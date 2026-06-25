@@ -10,6 +10,9 @@ Endpoints:
     POST /quiz/{id}/grade   grade one quiz answer against its stored reference
     GET  /courses           list the distinct courses indexed in Qdrant
     GET  /history/{id}      recent conversation turns for a student
+    POST /sessions          open a named conversation thread for a student
+    GET  /sessions/{id}     list a student's conversation threads
+    GET  /sessions/{id}/{sid}/messages  messages of one thread (chronological)
     POST /feedback          record a thumbs up/down on a tutor answer
     GET  /feedback/summary  thumbs up/down counts for a student
 
@@ -57,6 +60,8 @@ from core.answer import answer, stream_answer
 from core.config import get_settings
 from core.courses import list_courses
 from db.models import Feedback, Student
+from db.models import Message as MessageModel
+from db.models import Session as SessionModel
 from db.session import (
     add_message,
     configure_session_factory,
@@ -190,6 +195,29 @@ def _resolve_student(session: Any, external_id: str, user: UserOut | None) -> St
     return student
 
 
+def _resolve_session_id(session: Any, student_id: int, session_id: int | None) -> int | None:
+    """Validate that ``session_id`` is a thread owned by ``student_id``.
+
+    Returns the id unchanged when it names one of the student's threads. When it
+    is ``None`` (the default), the turn stays unthreaded and ``None`` is
+    returned, so existing behaviour is preserved. An id that does not belong to
+    the student yields 404 rather than silently mis-attaching the message.
+    """
+    if session_id is None:
+        return None
+    thread = session.scalar(
+        select(SessionModel).where(
+            SessionModel.id == session_id, SessionModel.student_id == student_id
+        )
+    )
+    if thread is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found for this student.",
+        )
+    return session_id
+
+
 class AskRequest(BaseModel):
     """A question to answer from the course, on behalf of a student.
 
@@ -203,6 +231,7 @@ class AskRequest(BaseModel):
     k: int = Field(default=5, ge=1)
     course: str | None = None
     chapter: str | None = None
+    session_id: int | None = None
 
 
 class AskResponse(BaseModel):
@@ -304,6 +333,21 @@ class CoursesResponse(BaseModel):
     """The distinct courses currently indexed in Qdrant, sorted."""
 
     courses: list[str]
+
+
+class SessionCreateRequest(BaseModel):
+    """A request to open a new conversation thread for a student."""
+
+    student_id: str
+    title: str | None = None
+
+
+class SessionOut(BaseModel):
+    """A conversation thread owned by a student."""
+
+    id: int
+    title: str | None
+    created_at: str
 
 
 class StudentOut(BaseModel):
@@ -447,8 +491,21 @@ def ask(request: AskRequest, user: UserOut | None = OptionalUser) -> dict[str, A
     result = answer(request.question, k=request.k, course=request.course, chapter=request.chapter)
     with get_session(_engine) as session:
         student = _resolve_student(session, request.student_id, user)
-        add_message(session, student_id=student.id, role="user", content=request.question)
-        add_message(session, student_id=student.id, role="assistant", content=result["answer"])
+        thread_id = _resolve_session_id(session, student.id, request.session_id)
+        add_message(
+            session,
+            student_id=student.id,
+            role="user",
+            content=request.question,
+            session_id=thread_id,
+        )
+        add_message(
+            session,
+            student_id=student.id,
+            role="assistant",
+            content=result["answer"],
+            session_id=thread_id,
+        )
     return {
         "answer": result["answer"],
         "refused": result["refused"],
@@ -482,8 +539,21 @@ def _stream_ask_events(request: AskRequest, user: UserOut | None = None) -> Iter
 
     with get_session(_engine) as session:
         student = _resolve_student(session, request.student_id, user)
-        add_message(session, student_id=student.id, role="user", content=request.question)
-        add_message(session, student_id=student.id, role="assistant", content=final_answer)
+        thread_id = _resolve_session_id(session, student.id, request.session_id)
+        add_message(
+            session,
+            student_id=student.id,
+            role="user",
+            content=request.question,
+            session_id=thread_id,
+        )
+        add_message(
+            session,
+            student_id=student.id,
+            role="assistant",
+            content=final_answer,
+            session_id=thread_id,
+        )
 
 
 REFUSAL_FALLBACK = "This is not covered in the course material."
@@ -655,6 +725,103 @@ def history(student_id: str, limit: int = 20) -> list[dict[str, str]]:
         if student is None:
             return []
         rows = recent_messages(session, student.id, limit=limit)
+        return [
+            {
+                "role": row.role,
+                "content": row.content,
+                "created_at": row.created_at.isoformat() if row.created_at else "",
+            }
+            for row in rows
+        ]
+
+
+@app.post(
+    "/sessions",
+    response_model=SessionOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_api_key)],
+)
+def create_session(
+    request: SessionCreateRequest, user: UserOut | None = OptionalUser
+) -> dict[str, Any]:
+    """Open a new conversation thread for a student.
+
+    The student is ensured to exist (and linked to the caller when
+    authenticated). Returns 201 with the new thread's id, title and creation
+    time. This route is additive: the existing flat ``/history`` keeps working
+    and threads are entirely opt-in.
+    """
+    with get_session(_engine) as session:
+        student = _resolve_student(session, request.student_id, user)
+        thread = SessionModel(student_id=student.id, title=request.title)
+        session.add(thread)
+        session.flush()
+        return {
+            "id": thread.id,
+            "title": thread.title,
+            "created_at": thread.created_at.isoformat() if thread.created_at else "",
+        }
+
+
+@app.get(
+    "/sessions/{student_id}",
+    response_model=list[SessionOut],
+    dependencies=[Depends(require_api_key)],
+)
+def list_sessions(student_id: str) -> list[dict[str, Any]]:
+    """List a student's conversation threads, newest first.
+
+    An unknown student yields an empty list rather than an error.
+    """
+    with get_session(_engine) as session:
+        student = session.scalar(select(Student).where(Student.external_id == student_id))
+        if student is None:
+            return []
+        rows = session.scalars(
+            select(SessionModel)
+            .where(SessionModel.student_id == student.id)
+            .order_by(SessionModel.created_at.desc(), SessionModel.id.desc())
+        )
+        return [
+            {
+                "id": row.id,
+                "title": row.title,
+                "created_at": row.created_at.isoformat() if row.created_at else "",
+            }
+            for row in rows
+        ]
+
+
+@app.get(
+    "/sessions/{student_id}/{session_id}/messages",
+    response_model=list[HistoryItem],
+    dependencies=[Depends(require_api_key)],
+)
+def session_messages(student_id: str, session_id: int) -> list[dict[str, str]]:
+    """Return the messages of one thread in chronological order.
+
+    Yields 404 when the thread does not exist or does not belong to the student,
+    so a caller can never read another student's thread.
+    """
+    with get_session(_engine) as session:
+        student = session.scalar(select(Student).where(Student.external_id == student_id))
+        thread = None
+        if student is not None:
+            thread = session.scalar(
+                select(SessionModel).where(
+                    SessionModel.id == session_id, SessionModel.student_id == student.id
+                )
+            )
+        if thread is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session not found for this student.",
+            )
+        rows = session.scalars(
+            select(MessageModel)
+            .where(MessageModel.session_id == thread.id)
+            .order_by(MessageModel.created_at.asc(), MessageModel.id.asc())
+        )
         return [
             {
                 "role": row.role,

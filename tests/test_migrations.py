@@ -91,3 +91,24 @@ def test_feedback_table_upgrade_and_downgrade(database_url: str) -> None:
         assert "feedback" not in set(inspect(engine).get_table_names())
     finally:
         engine.dispose()
+
+
+def test_sessions_table_upgrade_and_downgrade(database_url: str) -> None:
+    """The 0006 migration adds the ``sessions`` table and ``messages.session_id``."""
+    cfg = _make_config(database_url)
+    command.upgrade(cfg, "head")
+
+    engine = create_engine(database_url, future=True)
+    try:
+        assert "sessions" in set(inspect(engine).get_table_names())
+        session_cols = {c["name"] for c in inspect(engine).get_columns("sessions")}
+        assert {"id", "student_id", "title", "created_at"} <= session_cols
+        message_cols = {c["name"] for c in inspect(engine).get_columns("messages")}
+        assert "session_id" in message_cols
+
+        command.downgrade(cfg, "0005")
+        assert "sessions" not in set(inspect(engine).get_table_names())
+        message_cols = {c["name"] for c in inspect(engine).get_columns("messages")}
+        assert "session_id" not in message_cols
+    finally:
+        engine.dispose()
