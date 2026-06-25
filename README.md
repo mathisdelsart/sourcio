@@ -133,6 +133,11 @@ answer, capturing the question and answer verbatim so each row is self-contained
 `GET /feedback/summary` returns aggregate up/down counts — a lightweight quality signal that reaches no
 LLM and runs no retrieval.
 
+**Spaced repetition.** `POST /reviews` records a recall rating (`0..5`) for a notion and reschedules it
+with **SM-2** (ease, interval, repetitions; a rating below 3 resets the streak), keeping at most one row
+per `(student, notion)`. `GET /reviews/due` lists the notions whose `due_at` has passed, soonest first.
+Both reach no LLM and run no retrieval.
+
 **Dynamic course discovery.** `GET /courses` lists the distinct courses currently indexed in Qdrant
 (via the facet API, with a scroll fallback), so a client can populate a course picker instead of
 hardcoding names.
@@ -227,6 +232,8 @@ endpoints use JWT bearer auth.
 | Quiz | `POST /quiz/{quiz_id}/grade` | grade one quiz answer against its stored reference solution |
 | Feedback | `POST /feedback` | record a thumbs up/down on a tutor answer |
 | Feedback | `GET /feedback/summary` | aggregate thumbs up/down counts for a student |
+| Spaced repetition | `POST /reviews` | record a recall rating and reschedule a notion (SM-2) |
+| Spaced repetition | `GET /reviews/due` | notions due for spaced-repetition review, soonest first |
 | Sessions | `POST /sessions` | open a named conversation thread |
 | Sessions | `GET /sessions/{student_id}` | list a student's threads, newest first |
 | Sessions | `GET /sessions/{student_id}/{session_id}/messages` | one thread's messages, chronological |
@@ -314,6 +321,16 @@ make ui                       # 3. Streamlit UI on http://localhost:8501
 - **API docs** — <http://localhost:8000/docs>
 
 Do **not** run `docker compose down` while demoing — it stops Qdrant.
+
+### Web frontend (Next.js)
+
+The Streamlit UI is the demo client; the premium frontend lives in [`web/`](web/) — a separate
+**Next.js (App Router) · TypeScript · Tailwind** app, a thin typed client over the same FastAPI
+backend (one function per endpoint, no logic reimplemented). It adds bilingual **EN/FR** copy, a
+light/dark **theme toggle**, **streaming answers** over Server-Sent Events, source **citation chips**,
+an **auth menu** (register / login), a **dynamic course picker** populated from `GET /courses`, and
+per-answer **feedback**. Tabs: Ask · Re-explain · Exercise · Grade · Quiz · Threads · History. Run it
+with `cd web && npm install && npm run dev` (http://localhost:3000); see [`web/README.md`](web/README.md).
 
 A known-good in-course question, *"What is the piecewise constant approximation?"*, returns a cited
 answer with LaTeX preserved. An out-of-course question is refused with
