@@ -5,6 +5,7 @@ import { login, me, register, type AuthUser, type ConnectionConfig } from "@/lib
 import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
 import { useToast } from "@/components/Toast";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 
 interface AuthMenuProps {
@@ -24,6 +25,7 @@ type Mode = "login" | "register";
  */
 export function AuthMenu({ config, email, onLogin, onLogout }: AuthMenuProps) {
   const toast = useToast();
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("login");
   const [emailInput, setEmailInput] = useState("");
@@ -45,17 +47,17 @@ export function AuthMenu({ config, email, onLogin, onLogout }: AuthMenuProps) {
       const trimmedEmail = emailInput.trim();
       if (mode === "register") {
         await register(trimmedEmail, password, config);
-        toast.push("Account created. Signing you in…", "success");
+        toast.push(t("auth.accountCreated"), "success");
       }
       const { access_token } = await login(trimmedEmail, password, config);
       // Confirm the token resolves and read back the canonical email.
       const user: AuthUser = await me({ ...config, token: access_token });
       onLogin(access_token, user.email);
-      toast.push(`Signed in as ${user.email}.`, "success");
+      toast.push(t("auth.signedInToast", { email: user.email }), "success");
       reset();
       setOpen(false);
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : "Authentication failed.", "error");
+      toast.push(err instanceof Error ? err.message : t("auth.failed"), "error");
     } finally {
       setLoading(false);
     }
@@ -64,7 +66,7 @@ export function AuthMenu({ config, email, onLogin, onLogout }: AuthMenuProps) {
   function logout() {
     onLogout();
     setOpen(false);
-    toast.push("Signed out.", "info");
+    toast.push(t("auth.signedOutToast"), "info");
   }
 
   return (
@@ -90,24 +92,24 @@ export function AuthMenu({ config, email, onLogin, onLogout }: AuthMenuProps) {
         {isAuthed ? (
           <span className="max-w-[12rem] truncate">{email}</span>
         ) : (
-          <span>Sign in</span>
+          <span>{t("header.signIn")}</span>
         )}
       </button>
 
       {open && (
         <div
           role="dialog"
-          aria-label="Account"
+          aria-label={t("auth.aria")}
           className="animate-fade-in absolute right-0 z-30 mt-2 w-72 rounded-xl border border-zinc-200 bg-white p-4 shadow-card-hover dark:border-zinc-700 dark:bg-zinc-900"
         >
           {isAuthed ? (
             <div className="space-y-3">
               <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                Signed in as{" "}
+                {t("auth.signedInAs")}{" "}
                 <span className="font-medium text-zinc-900 dark:text-zinc-100">{email}</span>
               </p>
               <Button variant="secondary" className="w-full" onClick={logout}>
-                Sign out
+                {t("auth.signOut")}
               </Button>
             </div>
           ) : (
@@ -125,12 +127,12 @@ export function AuthMenu({ config, email, onLogin, onLogout }: AuthMenuProps) {
                         : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800",
                     )}
                   >
-                    {m === "login" ? "Sign in" : "Register"}
+                    {m === "login" ? t("auth.signIn") : t("auth.register")}
                   </button>
                 ))}
               </div>
               <TextField
-                label="Email"
+                label={t("auth.email")}
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
@@ -138,11 +140,11 @@ export function AuthMenu({ config, email, onLogin, onLogout }: AuthMenuProps) {
                 onChange={(e) => setEmailInput(e.target.value)}
               />
               <TextField
-                label="Password"
+                label={t("auth.password")}
                 type="password"
                 autoComplete={mode === "register" ? "new-password" : "current-password"}
                 placeholder="••••••••"
-                hint={mode === "register" ? "At least 8 characters." : undefined}
+                hint={mode === "register" ? t("auth.passwordHint") : undefined}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => {
@@ -150,7 +152,7 @@ export function AuthMenu({ config, email, onLogin, onLogout }: AuthMenuProps) {
                 }}
               />
               <Button className="w-full" onClick={submit} loading={loading} disabled={!canSubmit}>
-                {mode === "login" ? "Sign in" : "Create account"}
+                {mode === "login" ? t("auth.signIn") : t("auth.createAccount")}
               </Button>
             </div>
           )}

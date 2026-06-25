@@ -14,6 +14,7 @@ import { TextField, TextArea } from "@/components/TextField";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, RefusalBanner, Skeleton } from "@/components/States";
 import { useToast } from "@/components/Toast";
+import { useT } from "@/lib/i18n";
 import { submitOnCmdEnter } from "@/lib/keys";
 import { cn } from "@/lib/cn";
 
@@ -38,6 +39,7 @@ const COUNTS = [3, 5, 7] as const;
 
 export function QuizPanel({ studentId, config }: QuizPanelProps) {
   const toast = useToast();
+  const { t } = useT();
   const [notion, setNotion] = useState("");
   const [count, setCount] = useState<number>(3);
   const [loading, setLoading] = useState(false);
@@ -69,7 +71,7 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
       const data = await fetchQuiz(studentId, notion.trim(), count, config);
       setResult(data);
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : "Request failed.", "error");
+      toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
     } finally {
       setLoading(false);
     }
@@ -90,7 +92,7 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
       );
       setVerdicts((v) => ({ ...v, [questionId]: verdict }));
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : "Request failed.", "error");
+      toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
     } finally {
       setGrading((g) => ({ ...g, [questionId]: false }));
     }
@@ -100,15 +102,15 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
     <div className="space-y-5">
       <Card>
         <CardHeader
-          title="Generate a quiz"
-          description="A set of practice questions grounded in the course, using its notation."
+          title={t("quiz.title")}
+          description={t("quiz.description")}
         />
         <CardBody className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               <TextField
-                label="Notion to quiz on"
-                placeholder="e.g. continuous wavelet transform"
+                label={t("quiz.notionLabel")}
+                placeholder={t("quiz.notionPlaceholder")}
                 value={notion}
                 onChange={(e) => setNotion(e.target.value)}
                 onKeyDown={submitOnCmdEnter(generate)}
@@ -116,7 +118,7 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
             </div>
             <div className="space-y-1.5">
               <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Questions
+                {t("quiz.questions")}
               </span>
               <div className="inline-flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
                 {COUNTS.map((c) => (
@@ -138,7 +140,7 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
               </div>
             </div>
             <Button onClick={generate} loading={loading} disabled={!canGenerate}>
-              Generate
+              {t("quiz.generate")}
             </Button>
           </div>
         </CardBody>
@@ -146,11 +148,11 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
 
       <Card>
         <CardHeader
-          title="Quiz"
+          title={t("quiz.resultTitle")}
           action={
             total != null ? (
               <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium tabular-nums text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
-                Total {total}/100
+                {t("quiz.total", { total })}
               </span>
             ) : undefined
           }
@@ -160,11 +162,11 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
             <Skeleton lines={5} />
           ) : result == null ? (
             <EmptyState
-              title="No quiz yet"
-              description="Enter a notion above to generate a course-grounded quiz."
+              title={t("quiz.empty.title")}
+              description={t("quiz.empty.description")}
             />
           ) : result.refused || result.questions.length === 0 ? (
-            <RefusalBanner message="This notion is not covered by the course material." />
+            <RefusalBanner message={t("quiz.refused")} />
           ) : (
             <ol className="space-y-6">
               {result.questions.map((q, i) => {
@@ -186,8 +188,8 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
                     </div>
                     <div className="pl-9">
                       <TextArea
-                        label="Your answer"
-                        placeholder="Write your solution here…"
+                        label={t("quiz.answerLabel")}
+                        placeholder={t("quiz.answerPlaceholder")}
                         rows={4}
                         value={answer}
                         disabled={qid == null}
@@ -204,7 +206,7 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
                           disabled={!canGrade}
                           onClick={() => qid != null && gradeOne(qid)}
                         >
-                          Grade answer
+                          {t("quiz.gradeAnswer")}
                         </Button>
                       </div>
                       {verdict && (
@@ -212,7 +214,7 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
                           <div className="space-y-1.5">
                             <div className="flex items-baseline justify-between">
                               <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                                Score
+                                {t("quiz.score")}
                               </span>
                               <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
                                 {score}/100

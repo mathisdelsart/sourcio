@@ -8,6 +8,7 @@ import { TextArea } from "@/components/TextField";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, Skeleton } from "@/components/States";
 import { useToast } from "@/components/Toast";
+import { useT } from "@/lib/i18n";
 import { submitOnCmdEnter } from "@/lib/keys";
 import { cn } from "@/lib/cn";
 
@@ -31,6 +32,7 @@ function scoreTone(score: number): string {
 
 export function GradePanel({ studentId, config, lastExercise }: GradePanelProps) {
   const toast = useToast();
+  const { t } = useT();
   const [answer, setAnswer] = useState("");
   const [result, setResult] = useState<GradeResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -51,7 +53,7 @@ export function GradePanel({ studentId, config, lastExercise }: GradePanelProps)
       const verdict = await grade(studentId, answer.trim(), payload, config);
       setResult(verdict);
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : "Request failed.", "error");
+      toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
     } finally {
       setLoading(false);
     }
@@ -63,14 +65,14 @@ export function GradePanel({ studentId, config, lastExercise }: GradePanelProps)
     <div className="space-y-5">
       <Card>
         <CardHeader
-          title="Grade your answer"
-          description="An LLM judge scores your answer and explains why."
+          title={t("grade.title")}
+          description={t("grade.description")}
         />
         <CardBody className="space-y-4">
           {linkable && (
             <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4 dark:border-indigo-500/30 dark:bg-indigo-500/10">
               <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500 dark:text-indigo-300">
-                Grading against exercise #{linkable.id}
+                {t("grade.against", { id: String(linkable.id) })}
               </p>
               <div className="mt-2">
                 <Markdown>{linkable.problem}</Markdown>
@@ -78,8 +80,8 @@ export function GradePanel({ studentId, config, lastExercise }: GradePanelProps)
             </div>
           )}
           <TextArea
-            label="Your answer"
-            placeholder="Write your solution here…"
+            label={t("grade.answerLabel")}
+            placeholder={t("grade.answerPlaceholder")}
             rows={6}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
@@ -87,30 +89,30 @@ export function GradePanel({ studentId, config, lastExercise }: GradePanelProps)
           />
           <div className="flex items-center justify-between">
             <p className="text-xs text-zinc-400 dark:text-zinc-500">
-              Press ⌘/Ctrl + Enter to submit.
+              {t("common.submitHint")}
             </p>
             <Button onClick={run} loading={loading} disabled={!canGrade}>
-              Grade
+              {t("grade.submit")}
             </Button>
           </div>
         </CardBody>
       </Card>
 
       <Card>
-        <CardHeader title="Verdict" />
+        <CardHeader title={t("grade.verdictTitle")} />
         <CardBody>
           {loading ? (
             <Skeleton lines={3} />
           ) : result == null ? (
             <EmptyState
-              title="Not graded yet"
-              description="Submit an answer above to get a score and feedback."
+              title={t("grade.empty.title")}
+              description={t("grade.empty.description")}
             />
           ) : (
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Score</span>
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("grade.score")}</span>
                   <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
                     {score}/100
                   </span>

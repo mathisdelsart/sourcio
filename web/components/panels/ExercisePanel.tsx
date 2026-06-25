@@ -8,6 +8,7 @@ import { TextField } from "@/components/TextField";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, RefusalBanner, Skeleton } from "@/components/States";
 import { useToast } from "@/components/Toast";
+import { useT } from "@/lib/i18n";
 import { submitOnCmdEnter } from "@/lib/keys";
 
 interface ExercisePanelProps {
@@ -25,6 +26,7 @@ export function ExercisePanel({
   setLastExercise,
 }: ExercisePanelProps) {
   const toast = useToast();
+  const { t } = useT();
   const [notion, setNotion] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -37,7 +39,7 @@ export function ExercisePanel({
       const result = await exercise(studentId, notion.trim(), config);
       setLastExercise(result);
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : "Request failed.", "error");
+      toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
     } finally {
       setLoading(false);
     }
@@ -47,22 +49,22 @@ export function ExercisePanel({
     <div className="space-y-5">
       <Card>
         <CardHeader
-          title="Generate an exercise"
-          description="A practice problem grounded in the course, using its notation."
+          title={t("exercise.title")}
+          description={t("exercise.description")}
         />
         <CardBody className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               <TextField
-                label="Notion to practice"
-                placeholder="e.g. continuous wavelet transform"
+                label={t("exercise.notionLabel")}
+                placeholder={t("exercise.notionPlaceholder")}
                 value={notion}
                 onChange={(e) => setNotion(e.target.value)}
                 onKeyDown={submitOnCmdEnter(run)}
               />
             </div>
             <Button onClick={run} loading={loading} disabled={!canGenerate}>
-              Generate
+              {t("exercise.generate")}
             </Button>
           </div>
         </CardBody>
@@ -70,7 +72,7 @@ export function ExercisePanel({
 
       <Card>
         <CardHeader
-          title="Exercise"
+          title={t("exercise.resultTitle")}
           action={
             lastExercise && !lastExercise.refused && lastExercise.id != null ? (
               <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium tabular-nums text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
@@ -84,8 +86,8 @@ export function ExercisePanel({
             <Skeleton lines={4} />
           ) : lastExercise == null ? (
             <EmptyState
-              title="No exercise yet"
-              description="Enter a notion above to generate a course-grounded problem."
+              title={t("exercise.empty.title")}
+              description={t("exercise.empty.description")}
             />
           ) : lastExercise.refused ? (
             <RefusalBanner message={lastExercise.problem} />
@@ -93,7 +95,7 @@ export function ExercisePanel({
             <div className="space-y-3">
               <Markdown>{lastExercise.problem}</Markdown>
               <p className="text-xs text-zinc-400 dark:text-zinc-500">
-                Solve it, then head to the Grade tab — your answer is linked to this exercise.
+                {t("exercise.solveHint")}
               </p>
             </div>
           )}

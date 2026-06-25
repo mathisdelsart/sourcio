@@ -7,6 +7,7 @@ import { Button } from "@/components/Button";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, Skeleton } from "@/components/States";
 import { useToast } from "@/components/Toast";
+import { useT, type Locale } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 
 interface HistoryPanelProps {
@@ -15,11 +16,11 @@ interface HistoryPanelProps {
   active: boolean;
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, locale: Locale): string {
   if (!iso) return "";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(locale, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -33,6 +34,7 @@ function isUser(role: string): boolean {
 
 export function HistoryPanel({ studentId, config, active }: HistoryPanelProps) {
   const toast = useToast();
+  const { t, locale } = useT();
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -44,11 +46,11 @@ export function HistoryPanel({ studentId, config, active }: HistoryPanelProps) {
       setItems(rows);
       setLoaded(true);
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : "Request failed.", "error");
+      toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
     } finally {
       setLoading(false);
     }
-  }, [studentId, config, toast]);
+  }, [studentId, config, toast, t]);
 
   // Auto-load when the tab becomes active for a student that hasn't loaded yet.
   useEffect(() => {
@@ -61,11 +63,11 @@ export function HistoryPanel({ studentId, config, active }: HistoryPanelProps) {
   return (
     <Card>
       <CardHeader
-        title="Conversation history"
-        description="Your recent turns with the tutor, oldest first."
+        title={t("history.title")}
+        description={t("history.description")}
         action={
           <Button variant="secondary" onClick={load} loading={loading}>
-            Refresh
+            {t("history.refresh")}
           </Button>
         }
       />
@@ -74,8 +76,8 @@ export function HistoryPanel({ studentId, config, active }: HistoryPanelProps) {
           <Skeleton lines={5} />
         ) : items.length === 0 ? (
           <EmptyState
-            title="No history yet"
-            description="Ask a question or generate an exercise — your turns will appear here."
+            title={t("history.empty.title")}
+            description={t("history.empty.description")}
           />
         ) : (
           <ol className="space-y-4">
@@ -88,7 +90,7 @@ export function HistoryPanel({ studentId, config, active }: HistoryPanelProps) {
                   <span className="font-medium capitalize text-zinc-500 dark:text-zinc-400">
                     {turn.role}
                   </span>
-                  {turn.created_at && <span>· {formatTime(turn.created_at)}</span>}
+                  {turn.created_at && <span>· {formatTime(turn.created_at, locale)}</span>}
                 </div>
                 <div
                   className={cn(

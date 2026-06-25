@@ -8,6 +8,7 @@ import { Markdown } from "@/components/Markdown";
 import { EmptyState, Skeleton } from "@/components/States";
 import { LevelSelector } from "@/components/LevelSelector";
 import { useToast } from "@/components/Toast";
+import { useT } from "@/lib/i18n";
 
 interface ReexplainPanelProps {
   studentId: string;
@@ -23,6 +24,7 @@ interface ReexplainPanelProps {
  */
 export function ReexplainPanel({ studentId, config, lastAnswer }: ReexplainPanelProps) {
   const toast = useToast();
+  const { t } = useT();
   const [level, setLevel] = useState<Level>("beginner");
   const [answer, setAnswer] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,7 +35,7 @@ export function ReexplainPanel({ studentId, config, lastAnswer }: ReexplainPanel
       const result = await reexplain(studentId, level, config);
       setAnswer(result.answer);
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : "Request failed.", "error");
+      toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
     } finally {
       setLoading(false);
     }
@@ -43,14 +45,14 @@ export function ReexplainPanel({ studentId, config, lastAnswer }: ReexplainPanel
     <div className="space-y-5">
       <Card>
         <CardHeader
-          title="Re-explain the last answer"
-          description="Hear your most recent answer again, tuned to a different audience level."
+          title={t("reexplain.title")}
+          description={t("reexplain.description")}
         />
         <CardBody className="space-y-4">
           {lastAnswer && !lastAnswer.refused && (
             <div className="rounded-lg border border-zinc-100 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-                Last answer
+                {t("reexplain.lastAnswer")}
               </p>
               <Markdown>{lastAnswer.answer}</Markdown>
             </div>
@@ -58,21 +60,21 @@ export function ReexplainPanel({ studentId, config, lastAnswer }: ReexplainPanel
           <div className="flex flex-wrap items-center gap-3">
             <LevelSelector value={level} onChange={setLevel} disabled={loading} />
             <Button onClick={run} loading={loading}>
-              Re-explain
+              {t("reexplain.action")}
             </Button>
           </div>
         </CardBody>
       </Card>
 
       <Card>
-        <CardHeader title="Re-explanation" />
+        <CardHeader title={t("reexplain.resultTitle")} />
         <CardBody>
           {loading ? (
             <Skeleton lines={4} />
           ) : answer == null ? (
             <EmptyState
-              title="Nothing re-explained yet"
-              description="Pick a level and press Re-explain. Ask a question first if you have not yet."
+              title={t("reexplain.empty.title")}
+              description={t("reexplain.empty.description")}
             />
           ) : (
             <Markdown>{answer}</Markdown>

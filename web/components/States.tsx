@@ -1,3 +1,6 @@
+"use client";
+
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 
 /** Neutral empty-state placeholder for a section with no content yet. */
@@ -43,10 +46,11 @@ export function Skeleton({ lines = 3 }: { lines?: number }) {
  * obvious at a glance.
  */
 export function RefusalBanner({ message }: { message: string }) {
+  const { t } = useT();
   return (
     <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-500/30 dark:bg-amber-500/10">
       <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-        Refused — not covered by the course
+        {t("refusal.title")}
       </p>
       {message && <p className="mt-1 text-sm text-amber-800 dark:text-amber-300/90">{message}</p>}
     </div>

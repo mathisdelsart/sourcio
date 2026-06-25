@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/Toast";
+import { I18nProvider } from "@/lib/i18n";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -45,7 +46,9 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="font-sans antialiased">
-        <ToastProvider>{children}</ToastProvider>
+        <I18nProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </I18nProvider>
       </body>
     </html>
   );

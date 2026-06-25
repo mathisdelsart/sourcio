@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { checkHealth, type ConnectionConfig } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 
 type Status = "checking" | "online" | "offline";
 
 /** Persistent badge that polls `/health` and shows a green/red status dot. */
 export function HealthBadge({ config }: { config: ConnectionConfig }) {
+  const { t } = useT();
   const [status, setStatus] = useState<Status>("checking");
   const configRef = useRef(config);
   configRef.current = config;
@@ -28,7 +30,11 @@ export function HealthBadge({ config }: { config: ConnectionConfig }) {
   }, [config.baseUrl, config.apiKey]);
 
   const label =
-    status === "online" ? "Backend online" : status === "offline" ? "Backend offline" : "Checking…";
+    status === "online"
+      ? t("health.online")
+      : status === "offline"
+        ? t("health.offline")
+        : t("health.checking");
   const dot =
     status === "online"
       ? "bg-emerald-500"

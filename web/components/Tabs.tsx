@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 
 export interface TabItem {
@@ -17,10 +18,11 @@ export function Tabs({
   active: string;
   onChange: (id: string) => void;
 }) {
+  const { t } = useT();
   return (
     <div
       role="tablist"
-      aria-label="Tutor sections"
+      aria-label={t("tabs.aria")}
       className="flex flex-wrap gap-1 rounded-xl border border-zinc-200 bg-zinc-50/80 p-1 dark:border-zinc-800 dark:bg-zinc-900/80"
     >
       {tabs.map((tab) => {

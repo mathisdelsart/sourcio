@@ -18,6 +18,7 @@ import { ExportActions } from "@/components/ExportActions";
 import { EmptyState, RefusalBanner, Skeleton } from "@/components/States";
 import { LevelSelector } from "@/components/LevelSelector";
 import { useToast } from "@/components/Toast";
+import { useT } from "@/lib/i18n";
 import { submitOnCmdEnter } from "@/lib/keys";
 
 interface AskPanelProps {
@@ -30,6 +31,7 @@ interface AskPanelProps {
 
 export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPanelProps) {
   const toast = useToast();
+  const { t } = useT();
   const [question, setQuestion] = useState("");
   const [course, setCourse] = useState("");
   const [chapter, setChapter] = useState("");
@@ -77,7 +79,7 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
         const result = await ask(req, config);
         setLastAnswer(result);
       } catch (err) {
-        toast.push(err instanceof Error ? err.message : "Request failed.", "error");
+        toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
       }
     } finally {
       setStreaming(null);
@@ -101,13 +103,13 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
     <div className="space-y-5">
       <Card>
         <CardHeader
-          title="Ask a question"
-          description="Answers come strictly from your indexed course material."
+          title={t("ask.title")}
+          description={t("ask.description")}
         />
         <CardBody className="space-y-4">
           <TextArea
-            label="Question"
-            placeholder="e.g. What is the admissibility condition for a wavelet?"
+            label={t("ask.questionLabel")}
+            placeholder={t("ask.questionPlaceholder")}
             rows={4}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
@@ -115,16 +117,16 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
           />
           <div className="grid gap-4 sm:grid-cols-2">
             <TextField
-              label="Course filter"
-              hint="Optional — restrict retrieval to one course."
-              placeholder="e.g. ELEC2885 Wavelet Transform"
+              label={t("ask.courseLabel")}
+              hint={t("ask.courseHint")}
+              placeholder={t("ask.coursePlaceholder")}
               value={course}
               onChange={(e) => setCourse(e.target.value)}
             />
             <TextField
-              label="Chapter filter"
-              hint="Optional — restrict to a single chapter."
-              placeholder="e.g. Chapter 3"
+              label={t("ask.chapterLabel")}
+              hint={t("ask.chapterHint")}
+              placeholder={t("ask.chapterPlaceholder")}
               value={chapter}
               onChange={(e) => setChapter(e.target.value)}
             />
@@ -135,7 +137,7 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
                 htmlFor="ask-k"
                 className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
               >
-                Sources to retrieve:{" "}
+                {t("ask.kLabel")}{" "}
                 <span className="tabular-nums text-zinc-500 dark:text-zinc-400">{k}</span>
               </label>
               <input
@@ -149,17 +151,17 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
               />
             </div>
             <Button onClick={runAsk} loading={loading} disabled={!canAsk}>
-              Ask
+              {t("ask.submit")}
             </Button>
           </div>
           <p className="text-xs text-zinc-400 dark:text-zinc-500">
-            Press ⌘/Ctrl + Enter to submit.
+            {t("common.submitHint")}
           </p>
         </CardBody>
       </Card>
 
       <Card>
-        <CardHeader title="Answer" />
+        <CardHeader title={t("ask.answerTitle")} />
         <CardBody>
           {streaming != null ? (
             streaming.length === 0 ? (
@@ -174,8 +176,8 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
             <Skeleton lines={4} />
           ) : lastAnswer == null ? (
             <EmptyState
-              title="No answer yet"
-              description="Ask a question above to see a grounded, cited explanation."
+              title={t("ask.empty.title")}
+              description={t("ask.empty.description")}
             />
           ) : lastAnswer.refused ? (
             <RefusalBanner message={lastAnswer.answer} />
@@ -184,7 +186,7 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
               <Markdown>{lastAnswer.answer}</Markdown>
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-                  Sources
+                  {t("common.sources")}
                 </p>
                 {lastAnswer.sources.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
@@ -193,7 +195,7 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-zinc-400 dark:text-zinc-500">No sources cited.</p>
+                  <p className="text-sm text-zinc-400 dark:text-zinc-500">{t("common.noSources")}</p>
                 )}
               </div>
 
@@ -207,12 +209,12 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
 
               <div className="border-t border-zinc-100 pt-4 dark:border-zinc-800">
                 <p className="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Didn&apos;t get it? Re-explain at a level:
+                  {t("ask.reexplainPrompt")}
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
                   <LevelSelector value={level} onChange={setLevel} disabled={reLoading} />
                   <Button variant="secondary" onClick={runReexplain} loading={reLoading}>
-                    Re-explain
+                    {t("ask.reexplain")}
                   </Button>
                 </div>
                 {reexplained && (

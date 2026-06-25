@@ -7,6 +7,8 @@ import { Tabs, type TabItem } from "@/components/Tabs";
 import { HealthBadge } from "@/components/HealthBadge";
 import { AuthMenu } from "@/components/AuthMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { LanguageToggle } from "@/components/LanguageToggle";
+import { useT } from "@/lib/i18n";
 import { Hero } from "@/components/Hero";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { AskPanel } from "@/components/panels/AskPanel";
@@ -16,16 +18,17 @@ import { GradePanel } from "@/components/panels/GradePanel";
 import { QuizPanel } from "@/components/panels/QuizPanel";
 import { HistoryPanel } from "@/components/panels/HistoryPanel";
 
-const TABS: TabItem[] = [
-  { id: "ask", label: "Ask" },
-  { id: "reexplain", label: "Re-explain" },
-  { id: "exercise", label: "Exercise" },
-  { id: "grade", label: "Grade" },
-  { id: "quiz", label: "Quiz" },
-  { id: "history", label: "History" },
-];
-
 export default function Home() {
+  const { t } = useT();
+  const TABS: TabItem[] = [
+    { id: "ask", label: t("tabs.ask") },
+    { id: "reexplain", label: t("tabs.reexplain") },
+    { id: "exercise", label: t("tabs.exercise") },
+    { id: "grade", label: t("tabs.grade") },
+    { id: "quiz", label: t("tabs.quiz") },
+    { id: "history", label: t("tabs.history") },
+  ];
+
   const [ready, setReady] = useState(false);
   const [studentId, setStudentId] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -101,10 +104,10 @@ export default function Home() {
             </div>
             <div className="leading-tight">
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                Grounded Tutor
+                {t("app.name")}
               </p>
               <p className="text-xs text-zinc-400 dark:text-zinc-500">
-                Answers only from your course
+                {t("app.tagline")}
               </p>
             </div>
           </div>
@@ -118,6 +121,7 @@ export default function Home() {
               onLogin={onLogin}
               onLogout={onLogout}
             />
+            <LanguageToggle />
             <ThemeToggle />
           </div>
         </div>
@@ -173,7 +177,7 @@ export default function Home() {
         </div>
 
         <footer className="pt-2 text-center text-xs text-zinc-400 dark:text-zinc-500">
-          Grounded retrieval · citations by construction · honest refusals
+          {t("footer.tagline")}
         </footer>
       </main>
     </div>

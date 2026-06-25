@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { KEYS, writeLocal } from "@/lib/storage";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 
 type Theme = "light" | "dark";
@@ -55,6 +56,7 @@ function applyTheme(theme: Theme) {
  * persists changes to localStorage and updates the class on click.
  */
 export function ThemeToggle() {
+  const { t } = useT();
   const [theme, setTheme] = useState<Theme>("light");
   const [mounted, setMounted] = useState(false);
 
@@ -73,7 +75,7 @@ export function ThemeToggle() {
   }
 
   const isDark = theme === "dark";
-  const label = isDark ? "Switch to light theme" : "Switch to dark theme";
+  const label = isDark ? t("theme.switchToLight") : t("theme.switchToDark");
 
   return (
     <button

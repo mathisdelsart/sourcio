@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 
 interface SettingsPanelProps {
@@ -17,6 +18,7 @@ interface SettingsPanelProps {
  * override, and an optional API key. Values are persisted by the parent.
  */
 export function SettingsPanel({ studentId, baseUrl, apiKey, onSave }: SettingsPanelProps) {
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const [draftStudent, setDraftStudent] = useState(studentId);
   const [draftBase, setDraftBase] = useState(baseUrl);
@@ -39,7 +41,7 @@ export function SettingsPanel({ studentId, baseUrl, apiKey, onSave }: SettingsPa
         className="flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900"
       >
         <span className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
-          Settings
+          {t("settings.title")}
           <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs font-normal text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
             {studentId}
           </span>
@@ -57,31 +59,31 @@ export function SettingsPanel({ studentId, baseUrl, apiKey, onSave }: SettingsPa
       {open && (
         <div className="animate-fade-in space-y-4 border-t border-zinc-100 px-4 py-4 dark:border-zinc-800">
           <TextField
-            label="Student id"
-            hint="Identifies you to the tutor. Persisted in this browser."
+            label={t("settings.studentId")}
+            hint={t("settings.studentIdHint")}
             value={draftStudent}
             onChange={(e) => setDraftStudent(e.target.value)}
           />
           <TextField
-            label="API base URL"
-            hint="Overrides NEXT_PUBLIC_API_BASE_URL. Leave empty to use the default."
+            label={t("settings.baseUrl")}
+            hint={t("settings.baseUrlHint")}
             placeholder="http://localhost:8000"
             value={draftBase}
             onChange={(e) => setDraftBase(e.target.value)}
           />
           <TextField
-            label="API key"
-            hint="Optional — sent as the X-API-Key header when set."
+            label={t("settings.apiKey")}
+            hint={t("settings.apiKeyHint")}
             type="password"
-            placeholder="(none)"
+            placeholder={t("settings.apiKeyPlaceholder")}
             value={draftKey}
             onChange={(e) => setDraftKey(e.target.value)}
           />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
-            <Button onClick={save}>Save</Button>
+            <Button onClick={save}>{t("common.save")}</Button>
           </div>
         </div>
       )}

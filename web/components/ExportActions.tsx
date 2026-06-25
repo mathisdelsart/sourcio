@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/Button";
 import { useToast } from "@/components/Toast";
+import { useT } from "@/lib/i18n";
 import { answerFilename, buildAnswerMarkdown, type ExportAnswerInput } from "@/lib/exportAnswer";
 
 /** Inline copy icon. */
@@ -50,15 +51,16 @@ function DownloadIcon() {
  */
 export function ExportActions({ question, answer, sources }: ExportAnswerInput) {
   const toast = useToast();
+  const { t } = useT();
   const payload: ExportAnswerInput = { question, answer, sources };
 
   async function copyMarkdown() {
     const markdown = buildAnswerMarkdown(payload);
     try {
       await navigator.clipboard.writeText(markdown);
-      toast.push("Copied to clipboard.", "success");
+      toast.push(t("export.copied"), "success");
     } catch {
-      toast.push("Could not copy to clipboard.", "error");
+      toast.push(t("export.copyFailed"), "error");
     }
   }
 
@@ -74,29 +76,21 @@ export function ExportActions({ question, answer, sources }: ExportAnswerInput) 
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      toast.push("Download started.", "success");
+      toast.push(t("export.downloadStarted"), "success");
     } catch {
-      toast.push("Could not prepare the download.", "error");
+      toast.push(t("export.downloadFailed"), "error");
     }
   }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button
-        variant="ghost"
-        onClick={copyMarkdown}
-        aria-label="Copy answer and citations as Markdown"
-      >
+      <Button variant="ghost" onClick={copyMarkdown} aria-label={t("export.copyAria")}>
         <CopyIcon />
-        Copy as Markdown
+        {t("export.copy")}
       </Button>
-      <Button
-        variant="ghost"
-        onClick={downloadMarkdown}
-        aria-label="Download answer and citations as a Markdown file"
-      >
+      <Button variant="ghost" onClick={downloadMarkdown} aria-label={t("export.downloadAria")}>
         <DownloadIcon />
-        Download .md
+        {t("export.download")}
       </Button>
     </div>
   );

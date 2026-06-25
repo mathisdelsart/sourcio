@@ -1,7 +1,14 @@
 "use client";
 
 import { LEVELS, type Level } from "@/lib/api";
+import { useT, type TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
+
+const LEVEL_KEYS: Record<Level, TranslationKey> = {
+  beginner: "level.beginner",
+  intermediate: "level.intermediate",
+  advanced: "level.advanced",
+};
 
 /** Segmented control for choosing the re-explanation audience level. */
 export function LevelSelector({
@@ -13,10 +20,11 @@ export function LevelSelector({
   onChange: (level: Level) => void;
   disabled?: boolean;
 }) {
+  const { t } = useT();
   return (
     <div
       role="radiogroup"
-      aria-label="Re-explanation level"
+      aria-label={t("level.aria")}
       className="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-800"
     >
       {LEVELS.map((level) => {
@@ -38,7 +46,7 @@ export function LevelSelector({
                 : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100",
             )}
           >
-            {level}
+            {t(LEVEL_KEYS[level])}
           </button>
         );
       })}
