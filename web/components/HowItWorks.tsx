@@ -100,7 +100,7 @@ export function HowItWorks() {
         {STEPS.map((step, i) => (
           <li key={step.title} className="group relative text-center">
             <div className="flex justify-center">
-              <span className="relative inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-200 bg-brand-500/10 text-brand-600 shadow-sm transition group-hover:-translate-y-0.5 group-hover:shadow-md dark:border-brand-900 dark:bg-brand-400/15 dark:text-brand-300">
+              <span className="relative z-10 inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-200 bg-brand-50 text-brand-600 shadow-sm transition group-hover:-translate-y-0.5 group-hover:shadow-md dark:border-brand-900 dark:bg-brand-950 dark:text-brand-300">
                 {step.icon}
                 <span className="absolute -right-2 -top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink text-[11px] font-bold tabular-nums text-white dark:bg-white dark:text-ink">
                   {String(i + 1).padStart(2, "0")}
