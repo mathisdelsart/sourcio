@@ -80,6 +80,14 @@ class Settings(BaseSettings):
     # addition to the original question. Ignored when `multi_query` is False.
     multi_query_n: int = 3
 
+    # Opt-in HyDE (Hypothetical Document Embeddings) retrieval. False keeps the
+    # dense/hybrid path byte-identical. When True, a short hypothetical answer is
+    # generated and embedded instead of the bare question for the dense branch,
+    # which often lands closer to the indexed chunks. The similarity threshold,
+    # refusal guard and optional reranker are applied unchanged. `multi_query`
+    # takes precedence when both are set (multi-query never embeds a HyDE probe).
+    hyde: bool = False
+
     # Relational store (SQLite in development, PostgreSQL later).
     database_url: str = "sqlite:///./app.db"
 

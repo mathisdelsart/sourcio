@@ -36,7 +36,7 @@ from qdrant_client.models import (
 )
 
 from core.config import get_settings
-from core.query import expand_query
+from core.query import expand_query, hyde_passage
 from ingestion.embed import embed_query
 from ingestion.index import DENSE_VECTOR_NAME
 from ingestion.schema import Chunk, Retrieved
@@ -137,13 +137,18 @@ def _dense_points(
     client: QdrantClient,
     *,
     collection: str,
-    question: str,
+    dense_text: str,
     limit: int,
     score_threshold: float,
     query_filter: Filter | None,
     using: str | None = None,
 ):
     """Run the dense-only query.
+
+    ``dense_text`` is the text embedded for the dense kNN lookup. On the plain
+    path it is the question; on the HyDE path it is the hypothetical answer
+    passage, so the probe vector resembles the indexed material more closely.
+    The similarity threshold is unchanged either way, so refusal is preserved.
 
     ``using`` names the dense vector for collections built with named vectors
     (sparse-enabled collections have no default vector, so the dense query must
@@ -152,7 +157,7 @@ def _dense_points(
     """
     response = client.query_points(
         collection_name=collection,
-        query=embed_query(question),
+        query=embed_query(dense_text),
         using=using,
         limit=limit,
         score_threshold=score_threshold,
@@ -167,6 +172,7 @@ def _hybrid_points(
     *,
     collection: str,
     question: str,
+    dense_text: str,
     limit: int,
     score_threshold: float,
     query_filter: Filter | None,
@@ -177,6 +183,11 @@ def _hybrid_points(
     vector, keeping the similarity threshold so refusal is preserved) and a
     sparse lexical branch (bge-m3 weights). RRF merges their ranks; the outer
     query truncates to ``limit``. The reranker, when enabled, runs on top.
+
+    ``dense_text`` is embedded for the dense branch (the hypothetical passage on
+    the HyDE path, the question otherwise). The sparse lexical branch always
+    embeds the original ``question``: HyDE helps semantic matching, whereas
+    lexical overlap is best judged on the student's actual wording.
     """
     from ingestion.embed import embed_sparse_query
 
@@ -184,7 +195,7 @@ def _hybrid_points(
     sparse = embed_sparse_query(question)
     prefetch = [
         Prefetch(
-            query=embed_query(question),
+            query=embed_query(dense_text),
             using=DENSE_VECTOR_NAME,
             limit=settings.hybrid_prefetch,
             score_threshold=score_threshold,
@@ -216,6 +227,7 @@ def _fetch_candidates(
     limit: int,
     score_threshold: float,
     query_filter: Filter | None,
+    dense_text: str | None = None,
 ) -> list[Retrieved]:
     """Fetch threshold-filtered candidates for one query (dense or hybrid).
 
@@ -224,7 +236,12 @@ def _fetch_candidates(
     both cases the dense similarity threshold pre-filters, so an out-of-course
     query yields no candidates. Reranking is intentionally *not* applied here:
     on the multi-query path it must run once over the fused pool.
+
+    ``dense_text`` overrides the text embedded for the dense branch (the HyDE
+    hypothetical passage); when None it defaults to ``question``, so the plain
+    path is unchanged. The sparse lexical branch always uses ``question``.
     """
+    dense_query = dense_text if dense_text is not None else question
     has_sparse = _collection_has_sparse(
         client, settings.qdrant_collection, settings.sparse_vector_name
     )
@@ -233,6 +250,7 @@ def _fetch_candidates(
             client,
             collection=settings.qdrant_collection,
             question=question,
+            dense_text=dense_query,
             limit=limit,
             score_threshold=score_threshold,
             query_filter=query_filter,
@@ -244,7 +262,7 @@ def _fetch_candidates(
         points = _dense_points(
             client,
             collection=settings.qdrant_collection,
-            question=question,
+            dense_text=dense_query,
             limit=limit,
             score_threshold=score_threshold,
             query_filter=query_filter,
@@ -279,6 +297,7 @@ def retrieve(
     course: str | None = None,
     chapter: str | None = None,
     scorer: Scorer | None = None,
+    hyde: bool = False,
 ) -> list[Retrieved]:
     """Return up to k chunks for the question, best first.
 
@@ -292,10 +311,20 @@ def retrieve(
     requested but the collection has no sparse vector, retrieval falls back to
     the dense path gracefully.
 
+    HyDE path (when ``hyde`` is True): a short hypothetical answer passage is
+    generated (see ``core.query.hyde_passage``) and embedded *instead of the
+    question* for the dense branch, on the theory that an answer sits closer to
+    the indexed chunks than a question does. The similarity threshold is applied
+    unchanged to that probe, so an out-of-course question still clears nothing
+    and is refused; the sparse lexical branch (hybrid) still uses the original
+    question. HyDE composes with the dense, hybrid and reranking paths.
+
     Reranking path (when ``reranker_model`` is set): fetches up to
     ``rerank_candidates`` candidates, rescores them with a local cross-encoder,
     and returns the top k. The returned ``.score`` is then the cross-encoder
-    relevance. Reranking composes with either base path (dense or hybrid).
+    relevance. Reranking composes with either base path (dense or hybrid). The
+    cross-encoder always scores against the original ``question``, not the HyDE
+    passage, so relevance is judged on what the student asked.
 
     In all paths, when ``course`` and/or ``chapter`` are given retrieval is
     restricted to chunks whose payload matches them; when both are None the
@@ -316,6 +345,11 @@ def retrieve(
     else:
         limit = k
 
+    # On the HyDE path, embed a hypothetical answer passage for the dense branch
+    # instead of the bare question. hyde_passage() never raises and falls back to
+    # the question, so HyDE degrades to a plain dense query on any LLM error.
+    dense_text = hyde_passage(question) if hyde else None
+
     candidates = _fetch_candidates(
         client,
         settings=settings,
@@ -323,6 +357,7 @@ def retrieve(
         limit=limit,
         score_threshold=score_threshold,
         query_filter=query_filter,
+        dense_text=dense_text,
     )
     if reranking:
         return rerank(question, candidates, k=k, scorer=scorer or _default_scorer)

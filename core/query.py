@@ -23,6 +23,15 @@ _SYSTEM = (
     "- Output one query per line, plain text, no numbering, no extra commentary."
 )
 
+_HYDE_SYSTEM = (
+    "You write a short, plausible textbook passage that would answer a student's "
+    "course question.\n"
+    "- Write 2-4 sentences in the same language as the question.\n"
+    "- Use the kind of terminology and definitions a course would use.\n"
+    "- This is a hypothetical retrieval probe, not a final answer: do not add "
+    "citations, headings, or any commentary, just the passage text."
+)
+
 
 def _parse_rewrites(raw: str) -> list[str]:
     """Extract clean rewrite lines from the raw LLM output.
@@ -93,3 +102,41 @@ def expand_query(question: str, n: int = 3) -> list[str]:
 
     rewrites = _parse_rewrites(raw)[:n]
     return _dedupe([question, *rewrites])
+
+
+def hyde_passage(question: str) -> str:
+    """Return a hypothetical answer passage for the question (HyDE probe).
+
+    Asks the small ``router`` LLM to write a short, plausible course passage
+    that *would* answer the question. Embedding this hypothetical answer instead
+    of the bare question often lands closer to the relevant chunks in vector
+    space, because an answer resembles the indexed material more than a question
+    does (Hypothetical Document Embeddings).
+
+    Robust by construction: any error from the model, non-string output, or an
+    empty/blank passage falls back to the original ``question``. This function
+    never raises, so the retrieval layer can call it unconditionally on the HyDE
+    path. Falling back to the question means HyDE degrades to a plain dense query
+    rather than failing, and the refusal guard downstream is unaffected.
+    """
+    try:
+        raw = (
+            get_llm("router")
+            .invoke(
+                [
+                    ("system", _HYDE_SYSTEM),
+                    ("human", question),
+                ],
+                config={"callbacks": get_callbacks()},
+            )
+            .content
+        )
+    except Exception:
+        # Provider/transport failure: degrade to the original question.
+        return question
+
+    if not isinstance(raw, str):
+        return question
+
+    passage = raw.strip()
+    return passage or question

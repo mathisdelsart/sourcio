@@ -38,15 +38,23 @@ def _remap_citations(text: str, results: list[Retrieved]) -> str:
 
 
 def _retrieve(question: str, *, k: int, course: str | None, chapter: str | None) -> list[Retrieved]:
-    """Dispatch to single- or multi-query retrieval based on settings.
+    """Dispatch to single-, multi-query or HyDE retrieval based on settings.
 
-    With ``multi_query`` off (the default) this calls :func:`retrieve` exactly
-    as before, so the default path is unchanged. With it on, the question is
-    expanded and the fused result is used; the threshold/refusal and reranker
-    behave identically either way.
+    With both ``multi_query`` and ``hyde`` off (the default) this calls
+    :func:`retrieve` exactly as before, so the default path is byte-identical.
+
+    Precedence when more than one is enabled: ``multi_query`` wins. Multi-query
+    already expands into several sub-queries and fuses them, a different recall
+    strategy from embedding a single HyDE probe; rather than nesting the two we
+    keep it simple and let multi-query take over. Otherwise, when only ``hyde``
+    is set, :func:`retrieve` runs with ``hyde=True``. In every case the
+    threshold/refusal and reranker behave identically.
     """
-    if get_settings().multi_query:
+    settings = get_settings()
+    if settings.multi_query:
         return retrieve_multi(question, k=k, course=course, chapter=chapter)
+    if settings.hyde:
+        return retrieve(question, k=k, course=course, chapter=chapter, hyde=True)
     return retrieve(question, k=k, course=course, chapter=chapter)
 
 
