@@ -7,7 +7,7 @@ SHELL := /bin/sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install local-install local qdrant hooks lint fmt fmt-check test check api ui eval eval-report ingest ask up down clean
+.PHONY: help install local-install local qdrant hooks lint fmt fmt-check test check api ui web dev eval eval-report ingest ask up down clean
 
 help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*##"; printf "Available targets:\n"} \
@@ -55,6 +55,23 @@ api: ## Run the FastAPI app with autoreload
 
 ui: ## Run the Streamlit UI
 	uv run streamlit run ui/app.py
+
+web: ## Run the Next.js web frontend (installs deps, http://localhost:3000)
+	cd web && npm install && npm run dev
+
+# Orchestrate the full local stack for free (Ollama provider, zero paid calls).
+# Qdrant is started detached here; the API and the web dev server are both
+# long-running foreground processes, so this target starts Qdrant and then
+# prints the exact two commands to run, one per terminal. See docs/RUN-LOCAL.md.
+dev: qdrant ## Start the full local stack (Qdrant up + the two commands to run)
+	@echo ""
+	@echo "Qdrant is up (http://localhost:6333). Now run these in two terminals:"
+	@echo ""
+	@echo "  1) API  (port 8000):  LLM_PROVIDER=ollama make api"
+	@echo "  2) Web  (port 3000):  make web"
+	@echo ""
+	@echo "Prereqs: 'ollama serve' running with models pulled (see docs/LOCAL.md)."
+	@echo "Full guide: docs/RUN-LOCAL.md"
 
 eval: ## Run the offline evaluation (faithfulness judge)
 	uv run python -m eval.run_eval
