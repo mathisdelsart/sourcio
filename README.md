@@ -213,6 +213,7 @@ then evaluated with the offline harness (`eval/run_eval.py`) and the threshold c
 | **Index** | 63 / 63 slides | Parallel ingestion absorbed 25 rate-limit (HTTP 429) responses via retry + backoff, zero crashes |
 | **Threshold calibration** | **100% in/out accuracy** | In-course scores 0.57–0.68, out-of-course 0.28–0.43 → clean separation; threshold calibrated to ≈ 0.50 (0.497) |
 | **Retrieval hit-rate** | **73% → 82% (+9 pts)** | With the cross-encoder reranker (`cross-encoder/ms-marco-MiniLM-L-6-v2`) enabled |
+| **Hybrid retrieval (dense + BM25)** | **+9.1 pts hit-rate · +6.6 NDCG@5** | RRF fusion of dense + `bge-m3` sparse vs dense-only, 22 in-course questions (hit-rate 63.6% → 72.7%; MRR +6.8). Measured on a locally re-extracted sparse index, so the dense→hybrid *delta* is what's comparable. |
 | **Faithfulness** | **75%** | Offline LLM-as-a-judge (gpt-4o-mini): every claim supported by the retrieved sources |
 | **Relevance** | **100%** | Same judge: answers actually address the question |
 | **Retrieval latency** | **p50 67 ms · p95 466 ms** | Query embedding (`bge-m3`) + Qdrant search over 36 questions; LLM-independent, so it holds across providers. End-to-end answer latency is dominated by the chosen LLM. |
