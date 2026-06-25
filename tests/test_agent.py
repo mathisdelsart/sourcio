@@ -116,6 +116,22 @@ def test_keyword_fallback_prioritises_reexplain_over_generate(fake_llm):
     assert classify_intent("I don't understand this problem again") == "reexplain"
 
 
+def test_classify_falls_back_to_keywords_when_router_llm_raises(monkeypatch):
+    # When the router LLM itself errors (transport/model failure), the
+    # `except Exception` path must degrade gracefully to the keyword heuristic
+    # instead of propagating, so routing never breaks on a flaky provider.
+    class _RaisingLLM:
+        def invoke(self, messages):
+            raise RuntimeError("router transport down")
+
+    monkeypatch.setattr(graph_mod, "get_llm", lambda role="default": _RaisingLLM())
+
+    assert classify_intent("Please give me an exercise on Fourier") == "generate"
+    assert classify_intent("Can you grade my answer?") == "grade"
+    assert classify_intent("Explain that again, simpler") == "reexplain"
+    assert classify_intent("What is a wavelet?") == "explain"
+
+
 # --- (b) compiled graph routes a message to the expected node ----------------
 
 
@@ -309,6 +325,25 @@ def test_reexplain_skips_non_dict_history_turns(fake_llm):
     assert out["answer"] == "Rephrased."
     human_msg = fake_llm["last"].calls[0][-1][1]
     assert "Fallback explanation [1]." in human_msg
+
+
+def test_reexplain_picks_tutor_turn_despite_malformed_turns(fake_llm):
+    fake_llm["reply"] = "Rephrased."
+    # A malformed history mixing a plain-string turn with valid dict turns must
+    # not crash: the non-dict turn is skipped and the latest valid tutor turn is
+    # the one rephrased.
+    history = [
+        {"role": "tutor", "content": "Older explanation."},
+        "stray string turn",
+        {"role": "student", "content": "still confused"},
+        {"role": "tutor", "content": "Latest valid explanation [3]."},
+    ]
+    out = reexplain({"message": "again", "history": history})
+    assert out["answer"] == "Rephrased."
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    # The most recent valid tutor turn is used, earlier ones are not.
+    assert "Latest valid explanation [3]." in human_msg
+    assert "Older explanation." not in human_msg
 
 
 # --- adaptive re-explanation by level ----------------------------------------

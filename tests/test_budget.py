@@ -118,6 +118,32 @@ def test_budget_callback_reads_usage_metadata():
     assert handler.total_tokens == 30
 
 
+def test_extract_total_tokens_prefers_provider_block_over_metadata():
+    """The provider usage block wins; per-message metadata is a fallback only.
+
+    When both a non-zero `token_usage` block and `usage_metadata` are present,
+    the metadata branch must not run, so tokens are counted once, not summed.
+    """
+    message = AIMessage(
+        content="hi",
+        usage_metadata={"input_tokens": 5, "output_tokens": 5, "total_tokens": 10},
+    )
+    result = LLMResult(
+        generations=[[ChatGeneration(message=message)]],
+        llm_output={"token_usage": {"total_tokens": 70}},
+    )
+    assert budget._extract_total_tokens(result) == 70
+
+
+def test_extract_total_tokens_sums_prompt_and_completion():
+    """Without a `total_tokens` field, prompt + completion tokens are summed."""
+    result = LLMResult(
+        generations=[[]],
+        llm_output={"token_usage": {"prompt_tokens": 30, "completion_tokens": 12}},
+    )
+    assert budget._extract_total_tokens(result) == 42
+
+
 def test_configure_cache_memory(monkeypatch):
     """`configure_cache` installs an InMemoryCache for the "memory" mode."""
     from langchain_core.caches import InMemoryCache
