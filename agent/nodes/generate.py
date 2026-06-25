@@ -11,7 +11,7 @@ from agent.persistence import persist_exercise
 from agent.state import TutorState
 from answer import REFUSAL
 from config import get_llm
-from ingestion.schema import Retrieved
+from ingestion.schema import format_numbered_sources
 
 _SYSTEM = (
     "You are a course tutor who writes practice exercises.\n"
@@ -21,10 +21,6 @@ _SYSTEM = (
     "Format your reply exactly as:\n"
     "EXERCISE:\n<the exercise>\n\nSOLUTION:\n<the reference solution>"
 )
-
-
-def _format_sources(results: list[Retrieved]) -> str:
-    return "\n\n".join(f"[{i}] {r.chunk.text}" for i, r in enumerate(results, 1))
 
 
 def _split(raw: str) -> tuple[str, str]:
@@ -55,7 +51,7 @@ def generate(state: TutorState) -> TutorState:
             "retrieved": [],
         }
 
-    prompt = f"Sources:\n{_format_sources(results)}\n\nNotion: {state['message']}"
+    prompt = f"Sources:\n{format_numbered_sources(results)}\n\nNotion: {state['message']}"
     raw = get_llm("generate").invoke([("system", _SYSTEM), ("human", prompt)]).content.strip()
 
     problem, solution = _split(raw)
