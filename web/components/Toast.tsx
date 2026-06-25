@@ -25,9 +25,11 @@ export function useToast(): ToastApi {
 }
 
 const styles: Record<ToastKind, string> = {
-  error: "border-red-200 bg-red-50 text-red-800",
-  success: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  info: "border-zinc-200 bg-white text-zinc-800",
+  error:
+    "border-red-200 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200",
+  success:
+    "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-200",
+  info: "border-zinc-200 bg-white text-zinc-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100",
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {

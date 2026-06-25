@@ -68,8 +68,8 @@ export function GradePanel({ studentId, config, lastExercise }: GradePanelProps)
         />
         <CardBody className="space-y-4">
           {linkable && (
-            <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">
+            <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4 dark:border-indigo-500/30 dark:bg-indigo-500/10">
+              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500 dark:text-indigo-300">
                 Grading against exercise #{linkable.id}
               </p>
               <div className="mt-2">
@@ -86,7 +86,9 @@ export function GradePanel({ studentId, config, lastExercise }: GradePanelProps)
             onKeyDown={submitOnCmdEnter(run)}
           />
           <div className="flex items-center justify-between">
-            <p className="text-xs text-zinc-400">Press ⌘/Ctrl + Enter to submit.</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              Press ⌘/Ctrl + Enter to submit.
+            </p>
             <Button onClick={run} loading={loading} disabled={!canGrade}>
               Grade
             </Button>
@@ -108,19 +110,19 @@ export function GradePanel({ studentId, config, lastExercise }: GradePanelProps)
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-sm font-medium text-zinc-700">Score</span>
-                  <span className="text-sm font-semibold tabular-nums text-zinc-900">
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Score</span>
+                  <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
                     {score}/100
                   </span>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                   <div
                     className={cn("h-full rounded-full transition-all", scoreTone(score))}
                     style={{ width: `${score}%` }}
                   />
                 </div>
               </div>
-              <div className="border-t border-zinc-100 pt-4">
+              <div className="border-t border-zinc-100 pt-4 dark:border-zinc-800">
                 <Markdown>{result.feedback}</Markdown>
               </div>
             </div>

@@ -115,8 +115,10 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
               />
             </div>
             <div className="space-y-1.5">
-              <span className="block text-sm font-medium text-zinc-700">Questions</span>
-              <div className="inline-flex rounded-lg border border-zinc-200 p-0.5">
+              <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Questions
+              </span>
+              <div className="inline-flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
                 {COUNTS.map((c) => (
                   <button
                     key={c}
@@ -124,9 +126,10 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
                     onClick={() => setCount(c)}
                     className={cn(
                       "rounded-md px-3 py-1.5 text-sm font-medium tabular-nums transition-colors",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
                       count === c
-                        ? "bg-indigo-600 text-white"
-                        : "text-zinc-600 hover:bg-zinc-100",
+                        ? "bg-indigo-600 text-white dark:bg-indigo-500"
+                        : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800",
                     )}
                   >
                     {c}
@@ -146,7 +149,7 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
           title="Quiz"
           action={
             total != null ? (
-              <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium tabular-nums text-zinc-500">
+              <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium tabular-nums text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
                 Total {total}/100
               </span>
             ) : undefined
@@ -174,7 +177,7 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
                 return (
                   <li key={qid ?? i} className="space-y-3">
                     <div className="flex items-start gap-3">
-                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-semibold tabular-nums text-indigo-600">
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-semibold tabular-nums text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
                         {i + 1}
                       </span>
                       <div className="min-w-0 flex-1">
@@ -205,15 +208,17 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
                         </Button>
                       </div>
                       {verdict && (
-                        <div className="mt-3 space-y-3 rounded-lg border border-zinc-100 bg-zinc-50/60 p-4">
+                        <div className="mt-3 space-y-3 rounded-lg border border-zinc-100 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
                           <div className="space-y-1.5">
                             <div className="flex items-baseline justify-between">
-                              <span className="text-sm font-medium text-zinc-700">Score</span>
-                              <span className="text-sm font-semibold tabular-nums text-zinc-900">
+                              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                                Score
+                              </span>
+                              <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
                                 {score}/100
                               </span>
                             </div>
-                            <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100">
+                            <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                               <div
                                 className={cn(
                                   "h-full rounded-full transition-all",
@@ -223,7 +228,7 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
                               />
                             </div>
                           </div>
-                          <div className="border-t border-zinc-100 pt-3">
+                          <div className="border-t border-zinc-100 pt-3 dark:border-zinc-700">
                             <Markdown>{verdict.feedback}</Markdown>
                           </div>
                         </div>

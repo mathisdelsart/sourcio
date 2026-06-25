@@ -62,6 +62,30 @@ uv run ruff format --check .        # format check    (make fmt-check)
 `make check` runs lint, format check, and tests together — run it before
 opening a PR.
 
+## Pre-commit hooks
+
+A [`pre-commit`](https://pre-commit.com/) configuration runs ruff (lint with
+autofix and format) plus a few cheap hygiene hooks (trailing whitespace,
+end-of-file, YAML and merge-conflict checks, large-file guard) on every commit,
+so local commits match the `quality` CI job. The ruff hook is pinned to the same
+ruff version as `pyproject.toml` / `uv.lock` to avoid drift with CI.
+
+Enable the hooks once after cloning:
+
+```bash
+make hooks                          # uv run pre-commit install + run on all files
+```
+
+Thereafter the hooks run automatically on `git commit`. To run them on the whole
+repo at any time:
+
+```bash
+uv run pre-commit run --all-files
+```
+
+The hooks are scoped to Python; the `web/` JavaScript frontend and the lockfile
+are excluded.
+
 ## Makefile targets
 
 `make` (or `make help`) lists everything. The common targets:
@@ -70,6 +94,7 @@ opening a PR.
 | --- | --- |
 | `make install` | install all extras + dev group |
 | `make qdrant` | start Qdrant in the background |
+| `make hooks` | install pre-commit hooks and run them on all files |
 | `make lint` / `make fmt` / `make fmt-check` | ruff lint / format / format check |
 | `make test` | run the test suite |
 | `make check` | lint + format check + tests |
@@ -107,8 +132,12 @@ CI is defined in `.github/workflows/ci.yml` and runs on every PR and on pushes t
 `main`. It has two jobs:
 
 - **quality** — installs the dev group and the `api`, `agent`, `obs`, and `ui`
-  extras, then runs `ruff check`, `ruff format --check`, and `pytest`.
+  extras, then enforces the quality gate: `ruff check`, `ruff format --check`,
+  `pyright` (static type check), and `pytest` with a coverage floor
+  (`--cov-fail-under`). The pre-commit hooks cover the ruff half of this gate
+  locally; run `make check` for the rest.
 - **docker** — builds the serving image from the `Dockerfile` (build only, not
   pushed).
 
-A PR does not merge unless both jobs pass, so run `make check` locally first.
+A PR does not merge unless both jobs pass, so enable the hooks (`make hooks`) and
+run `make check` locally first.

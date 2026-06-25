@@ -76,13 +76,14 @@ export function AuthMenu({ config, email, onLogin, onLogout }: AuthMenuProps) {
         className={cn(
           "inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5",
           "text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2",
+          "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950",
         )}
       >
         <span
           className={cn(
             "h-2 w-2 rounded-full",
-            isAuthed ? "bg-emerald-500" : "bg-zinc-300",
+            isAuthed ? "bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-600",
           )}
           aria-hidden
         />
@@ -97,12 +98,13 @@ export function AuthMenu({ config, email, onLogin, onLogout }: AuthMenuProps) {
         <div
           role="dialog"
           aria-label="Account"
-          className="animate-fade-in absolute right-0 z-30 mt-2 w-72 rounded-xl border border-zinc-200 bg-white p-4 shadow-card-hover"
+          className="animate-fade-in absolute right-0 z-30 mt-2 w-72 rounded-xl border border-zinc-200 bg-white p-4 shadow-card-hover dark:border-zinc-700 dark:bg-zinc-900"
         >
           {isAuthed ? (
             <div className="space-y-3">
-              <p className="text-sm text-zinc-600">
-                Signed in as <span className="font-medium text-zinc-900">{email}</span>
+              <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                Signed in as{" "}
+                <span className="font-medium text-zinc-900 dark:text-zinc-100">{email}</span>
               </p>
               <Button variant="secondary" className="w-full" onClick={logout}>
                 Sign out
@@ -110,16 +112,17 @@ export function AuthMenu({ config, email, onLogin, onLogout }: AuthMenuProps) {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="flex rounded-lg border border-zinc-200 p-0.5 text-sm">
+              <div className="flex rounded-lg border border-zinc-200 p-0.5 text-sm dark:border-zinc-700">
                 {(["login", "register"] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setMode(m)}
                     className={cn(
                       "flex-1 rounded-md px-2 py-1 font-medium transition-colors",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
                       mode === m
-                        ? "bg-indigo-600 text-white"
-                        : "text-zinc-600 hover:bg-zinc-50",
+                        ? "bg-indigo-600 text-white dark:bg-indigo-500"
+                        : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800",
                     )}
                   >
                     {m === "login" ? "Sign in" : "Register"}

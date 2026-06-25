@@ -4,7 +4,9 @@ import { cn } from "@/lib/cn";
 const baseField =
   "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 " +
   "transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 " +
-  "disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400";
+  "disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400 " +
+  "dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 " +
+  "dark:focus:border-indigo-400 dark:focus:ring-indigo-400/20 dark:disabled:bg-zinc-800/50 dark:disabled:text-zinc-500";
 
 interface FieldShellProps {
   label?: string;
@@ -17,12 +19,15 @@ function FieldShell({ label, hint, id, children }: FieldShellProps) {
   return (
     <div className="space-y-1.5">
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-zinc-700">
+        <label
+          htmlFor={id}
+          className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+        >
           {label}
         </label>
       )}
       {children}
-      {hint && <p className="text-xs text-zinc-400">{hint}</p>}
+      {hint && <p className="text-xs text-zinc-400 dark:text-zinc-500">{hint}</p>}
     </div>
   );
 }

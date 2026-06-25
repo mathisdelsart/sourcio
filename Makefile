@@ -7,7 +7,7 @@ SHELL := /bin/sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install local-install local qdrant lint fmt fmt-check test check api ui eval eval-report ingest ask up down clean
+.PHONY: help install local-install local qdrant hooks lint fmt fmt-check test check api ui eval eval-report ingest ask up down clean
 
 help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*##"; printf "Available targets:\n"} \
@@ -29,6 +29,12 @@ local: ## Print env to switch the stack to local Ollama (eval it in your shell)
 
 qdrant: ## Start the Qdrant vector database in the background
 	docker compose up -d qdrant
+
+# Install the git pre-commit hook and run it once over the whole repo. The hook
+# mirrors the ruff checks CI enforces, so local commits match CI.
+hooks: ## Install pre-commit hooks and run them on all files
+	uv run pre-commit install
+	uv run pre-commit run --all-files
 
 lint: ## Run the ruff linter
 	uv run ruff check .

@@ -73,7 +73,7 @@ export function ExercisePanel({
           title="Exercise"
           action={
             lastExercise && !lastExercise.refused && lastExercise.id != null ? (
-              <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium tabular-nums text-zinc-500">
+              <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium tabular-nums text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
                 #{lastExercise.id}
               </span>
             ) : undefined
@@ -92,7 +92,7 @@ export function ExercisePanel({
           ) : (
             <div className="space-y-3">
               <Markdown>{lastExercise.problem}</Markdown>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">
                 Solve it, then head to the Grade tab — your answer is linked to this exercise.
               </p>
             </div>

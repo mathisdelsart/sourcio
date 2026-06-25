@@ -1,0 +1,32 @@
+# Pre-commit hooks for grounded-rag.
+#
+# These run on `git commit` once enabled with `make hooks` (or
+# `uv run pre-commit install`). They mirror the checks the `quality` CI job
+# enforces, so local commits match CI. The ruff version is pinned to the exact
+# version resolved in `uv.lock` / `pyproject.toml` to avoid drift with CI.
+#
+# Run on the whole repo at any time with: `uv run pre-commit run --all-files`.
+
+# The web/ frontend is JavaScript and is intentionally left to its own tooling.
+exclude: '^(web/|uv\.lock$)'
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.16
+    hooks:
+      # Lint with autofix, matching `ruff check` in CI.
+      - id: ruff-check
+        args: [--fix]
+        types_or: [python, pyi]
+      # Format, matching `ruff format --check` in CI.
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
