@@ -85,6 +85,9 @@ LaTeX kept inline, so formulas survive ingestion. A `--hybrid` flag routes plain
 free PyMuPDF extraction and reserves the vision path for math- and figure-heavy pages. Transcriptions
 run concurrently (`--concurrency`), and `--pages` / `--max-pages` allow targeting a subset.
 
+**Multi-format ingestion.** The same pipeline ingests slide-deck PDFs (vision/PyMuPDF) as well as
+prose `.md` and `.txt` files, which are loaded and split into overlapping windows rather than per-slide.
+
 **Adaptive chunking.** Chunking follows the document type: slide decks map roughly one slide to one
 chunk (so unrelated slides are not glued together), while prose is split into overlapping windows.
 
@@ -92,10 +95,24 @@ chunk (so unrelated slides are not glued together), while prose is split into ov
 top-k chunks are fetched from Qdrant with a `score_threshold`. If nothing clears the threshold, the
 answer layer returns an explicit refusal rather than answering from the model's own knowledge. The
 threshold is calibrated empirically (in-course questions accepted, out-of-course questions rejected).
-An **opt-in hybrid dense + sparse (BM25-style) path** (`HYBRID_RETRIEVAL=1`, with a `--sparse` re-ingest)
-fuses a dense kNN branch and a `bge-m3` lexical branch with Reciprocal Rank Fusion via Qdrant's Query API;
-the dense branch keeps the same threshold, so grounding and refusal are preserved. It engages only when
-the collection actually carries the sparse vector, and otherwise falls back to dense retrieval.
+
+**Advanced retrieval (all opt-in, default off, refusal preserved).** The dense path is the baseline;
+each booster below is enabled by a single setting and keeps the similarity threshold, so an
+out-of-course question still finds nothing and is refused.
+
+- **Cross-encoder reranker** (`RERANKER_MODEL`): fetches more thresholded candidates, rescores each
+  `(question, chunk)` pair locally with a cross-encoder, and keeps the best k. No re-ingestion needed.
+- **Hybrid dense + sparse (BM25-style)** (`HYBRID_RETRIEVAL=1`, with a `--sparse` re-ingest): fuses a
+  dense kNN branch and a `bge-m3` lexical branch with Reciprocal Rank Fusion via Qdrant's Query API. It
+  engages only when the collection actually carries the sparse vector, otherwise falls back to dense.
+- **Multi-query expansion** (`MULTI_QUERY=1`): rewrites the question into a few diverse sub-queries,
+  retrieves for each, and fuses the candidate lists before the threshold and reranker run — widening
+  recall only.
+- **HyDE** (`HYDE=1`): embeds a short hypothetical answer passage instead of the bare question for the
+  dense branch, often landing closer to the indexed chunks. Multi-query takes precedence when both are set.
+- **Neighbor-chunk expansion** (`NEIGHBOR_EXPANSION=1`): after the top results are chosen, pulls adjacent
+  slides/windows (same course/chapter, page within `±NEIGHBOR_WINDOW`) as extra context, appended after
+  the ranked hits. Never runs on an empty retrieval, so the refusal guard is untouched.
 
 **Streaming.** Alongside `POST /ask`, `POST /ask/stream` returns a `text/event-stream`: token deltas
 arrive first and the explanation renders as it is produced, followed by a single final event carrying
@@ -105,6 +122,27 @@ text, so streamed `[n]` markers can never leak an invented page.
 **Quiz mode.** `POST /quiz` generates a grounded multi-question quiz on a notion (reference solutions
 stay server-side, never returned), and `POST /quiz/{quiz_id}/grade` marks one answer against its stored
 reference solution. Both are grounded in retrieval, so a notion the course does not cover yields a refusal.
+
+**Conversation sessions.** Beyond the flat per-student history, a student can open named threads
+(`POST /sessions`), list them, and read one thread's messages in order. `/ask` accepts an optional
+`session_id` so a turn is attached to a thread; threads are entirely opt-in and the flat `/history`
+keeps working unchanged.
+
+**Answer feedback.** `POST /feedback` records a thumbs up/down (with an optional note) on a tutor
+answer, capturing the question and answer verbatim so each row is self-contained for later evaluation.
+`GET /feedback/summary` returns aggregate up/down counts — a lightweight quality signal that reaches no
+LLM and runs no retrieval.
+
+**Dynamic course discovery.** `GET /courses` lists the distinct courses currently indexed in Qdrant
+(via the facet API, with a scroll fallback), so a client can populate a course picker instead of
+hardcoding names.
+
+**Authentication and per-user ownership.** Account auth is additive and independent of the optional
+`X-API-Key` guard: `POST /auth/register` (bcrypt-hashed password) and `POST /auth/login` (signed JWT,
+HS256) issue a bearer token; `GET /auth/me` returns the caller and `GET /me/students` lists only the
+student identities that caller owns. When a request carries a valid bearer token, the resolved student
+is linked to that account, so its turns, exercises, quizzes and feedback become the user's own data —
+without changing any answer.
 
 **Agent.** A LangGraph router classifies the intent (`explain` / `generate` / `grade` / `reexplain`)
 and dispatches to the matching node, with a deterministic keyword fallback if the model output is
@@ -118,7 +156,20 @@ reference dataset and exits non-zero on regression, so it can gate CI.
 
 **Observability.** Every LLM call goes through one factory, so **LangFuse tracing** (per-step latency,
 tokens, cost) is a drop-in: it activates only when LangFuse credentials are present and is zero-cost
-when off — see [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md).
+when off — see [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md). The API also emits **structured JSON
+logs** carrying a per-request id (reused from an inbound `X-Request-ID` or generated, echoed on the
+response), and exposes a `GET /ready` readiness probe (distinct from `/health` liveness) that reports
+whether startup wiring — chiefly the database engine — completed.
+
+**Security and hardening.** Mutating endpoints (and `/history`) accept an opt-in `X-API-Key` guard,
+independent of the JWT account auth above. Middleware adds **security headers** on every response and
+an opt-in **in-process rate limiter** (`RATE_LIMIT_PER_MINUTE`) that caps each client per rolling
+minute and replies `429` with `Retry-After`; both default to no-ops so the open local setup is
+unchanged. `Strict-Transport-Security` is sent only when `ENABLE_HSTS` is set (behind TLS).
+
+**Storage.** The relational store is SQLite in development and swaps to **PostgreSQL** with a single
+`DATABASE_URL` change — see [docs/POSTGRES.md](docs/POSTGRES.md). Schema is managed by Alembic
+migrations.
 
 ## Tech stack
 
@@ -160,19 +211,33 @@ uv run python -m eval.run_eval
 
 ### Service interface (API)
 
-The same capabilities are exposed as an HTTP service (FastAPI):
+The same capabilities are exposed as an HTTP service (FastAPI). The layer stays thin: each route
+delegates to the existing grounded functions and graph nodes — no retrieval or prompting is
+reimplemented. The mutating routes (and `/history`) honor the opt-in `X-API-Key` guard; account
+endpoints use JWT bearer auth.
 
-| Endpoint | Role |
-| --- | --- |
-| `POST /ask` | ask a question, grounded and cited |
-| `POST /ask/stream` | same answer, streamed token by token as Server-Sent Events |
-| `POST /reexplain` | rephrase the last answer at a chosen level (beginner / intermediate / advanced) |
-| `POST /exercise` | generate an exercise (never returns the reference solution) |
-| `POST /grade` | grade a student's answer |
-| `POST /quiz` | generate a grounded multi-question quiz on a notion |
-| `POST /quiz/{quiz_id}/grade` | grade one quiz answer against its stored reference solution |
-| `GET /history/{student_id}` | recent conversation turns, chronological |
-| `GET /health` | health check |
+| Area | Endpoint | Role |
+| --- | --- | --- |
+| Tutoring | `POST /ask` | ask a question, grounded and cited; persists the turn |
+| Tutoring | `POST /ask/stream` | same answer, streamed token by token as Server-Sent Events |
+| Tutoring | `POST /reexplain` | rephrase the last answer at a chosen level (beginner / intermediate / advanced) |
+| Tutoring | `POST /exercise` | generate an exercise (never returns the reference solution) |
+| Tutoring | `POST /grade` | grade a student's answer |
+| Quiz | `POST /quiz` | generate a grounded multi-question quiz on a notion |
+| Quiz | `POST /quiz/{quiz_id}/grade` | grade one quiz answer against its stored reference solution |
+| Feedback | `POST /feedback` | record a thumbs up/down on a tutor answer |
+| Feedback | `GET /feedback/summary` | aggregate thumbs up/down counts for a student |
+| Sessions | `POST /sessions` | open a named conversation thread |
+| Sessions | `GET /sessions/{student_id}` | list a student's threads, newest first |
+| Sessions | `GET /sessions/{student_id}/{session_id}/messages` | one thread's messages, chronological |
+| Sessions | `GET /history/{student_id}` | recent conversation turns, chronological |
+| Auth | `POST /auth/register` | create an account (bcrypt-hashed password) |
+| Auth | `POST /auth/login` | verify credentials, return a JWT bearer token |
+| Auth | `GET /auth/me` | the authenticated user |
+| Auth | `GET /me/students` | student identities owned by the caller |
+| Courses | `GET /courses` | distinct courses currently indexed in Qdrant |
+| Health | `GET /health` | liveness probe (always open) |
+| Health | `GET /ready` | readiness probe (database engine bound) |
 
 Run it with:
 
@@ -261,6 +326,7 @@ answer with LaTeX preserved. An out-of-course question is refused with
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | module-level walkthrough of the whole system |
 | [docs/LOCAL.md](docs/LOCAL.md) | run fully local / zero-cost with Ollama |
 | [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) | opt-in LangFuse tracing |
+| [docs/POSTGRES.md](docs/POSTGRES.md) | switch the relational store to PostgreSQL |
 | [docs/DEPLOY-API.md](docs/DEPLOY-API.md) | the CPU-only Docker image for the API service |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | free-tier live deployment (Vercel + Hugging Face Spaces + Qdrant Cloud) |
 | [docs/DEMO.md](docs/DEMO.md) | demo recording script for the GIF above |
