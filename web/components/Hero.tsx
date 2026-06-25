@@ -66,8 +66,9 @@ const badgeTone: Record<BadgeTone, string> = {
 /**
  * Landing hero: left-aligned, two-column on desktop. A trust-badges row sits
  * above a two-tone headline (ink lead + brand accent), a supporting line, and a
- * dark ink CTA that smooth-scrolls to the tool. The right column is a self-
- * contained "answer preview" mock card floating on a faint radial texture.
+ * dark ink CTA that smooth-scrolls to the tool. The right column is a larger
+ * app-window mockup — a faux product window showing a grounded, cited answer
+ * plus an honest refusal — floating on a brand radial glow.
  */
 export function Hero({ targetId = "tool" }: { targetId?: string }) {
   const { t } = useT();
@@ -79,10 +80,10 @@ export function Hero({ targetId = "tool" }: { targetId?: string }) {
       {/* Faint concentric radial texture behind the hero. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_75%_30%,theme(colors.brand.500/12%),transparent_70%)] dark:bg-[radial-gradient(60%_60%_at_75%_30%,theme(colors.brand.400/14%),transparent_70%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_78%_30%,theme(colors.brand.500/14%),transparent_70%)] dark:bg-[radial-gradient(60%_60%_at_78%_30%,theme(colors.brand.400/16%),transparent_70%)]"
       />
 
-      <div className="relative grid items-center gap-12 lg:grid-cols-2">
+      <div className="relative grid items-center gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
         {/* Left column: copy + CTA. */}
         <div className="text-left">
           <ul className="flex flex-wrap gap-2" aria-label={t("hero.principles")}>
@@ -99,7 +100,7 @@ export function Hero({ targetId = "tool" }: { targetId?: string }) {
 
           <h1
             id="hero-heading"
-            className="mt-6 max-w-2xl text-balance text-4xl font-bold leading-[1.05] tracking-tight text-ink dark:text-zinc-50 sm:text-5xl lg:text-6xl"
+            className="mt-6 max-w-2xl text-balance text-4xl font-bold leading-[1.03] tracking-tight text-ink dark:text-zinc-50 sm:text-5xl lg:text-[3.75rem]"
           >
             {t("hero.headline.lead")}{" "}
             <span className="text-brand-500 dark:text-brand-400">
@@ -107,11 +108,11 @@ export function Hero({ targetId = "tool" }: { targetId?: string }) {
             </span>
           </h1>
 
-          <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-zinc-600 dark:text-zinc-300 sm:text-lg">
+          <p className="mt-6 max-w-xl text-pretty text-base leading-relaxed text-zinc-600 dark:text-zinc-300 sm:text-lg">
             {t("hero.description")}
           </p>
 
-          <div className="mt-9">
+          <div className="mt-10">
             <button
               type="button"
               onClick={() => scrollToId(targetId)}
@@ -124,37 +125,112 @@ export function Hero({ targetId = "tool" }: { targetId?: string }) {
           </div>
         </div>
 
-        {/* Right column: answer-preview mock. Stacks below on mobile. */}
-        <div className="relative" aria-hidden>
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-card dark:border-zinc-800 dark:bg-zinc-900">
-            <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+        {/* Right column: app-window mockup. Stacks below on mobile. */}
+        <AppMockup />
+      </div>
+    </section>
+  );
+}
+
+/** Three-dot glyph row for the faux window top bar. */
+function WindowDots() {
+  return (
+    <div className="flex items-center gap-1.5" aria-hidden>
+      <span className="h-2.5 w-2.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+      <span className="h-2.5 w-2.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+      <span className="h-2.5 w-2.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+    </div>
+  );
+}
+
+/**
+ * A larger faux app window: top bar with dots + title, a tab strip hint, an
+ * input line, a grounded answer with a periwinkle citation chip, and a small
+ * honest-refusal state. Decorative only (aria-hidden).
+ */
+function AppMockup() {
+  const { t } = useT();
+  const tabs = [
+    t("hero.app.tab.ask"),
+    t("hero.app.tab.exercise"),
+    t("hero.app.tab.grade"),
+  ];
+  return (
+    <div className="relative" aria-hidden>
+      {/* Brand glow pooled behind the window. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -inset-6 rounded-[2rem] bg-[radial-gradient(60%_55%_at_50%_45%,theme(colors.brand.500/22%),transparent_75%)] blur-xl"
+      />
+      <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-ink/10 ring-1 ring-black/[0.02] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/40">
+        {/* Top bar: dots + window title. */}
+        <div className="flex items-center gap-3 border-b border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+          <WindowDots />
+          <span className="mx-auto -ml-6 flex-1 text-center text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            {t("hero.app.window")}
+          </span>
+        </div>
+
+        {/* Tab strip hint. */}
+        <div className="flex items-center gap-1 border-b border-zinc-200 px-3 pt-2.5 dark:border-zinc-800">
+          {tabs.map((label, i) => (
+            <span
+              key={label}
+              className={
+                i === 0
+                  ? "rounded-t-md border-b-2 border-brand-500 px-3 pb-2 text-xs font-semibold text-ink dark:text-zinc-100"
+                  : "px-3 pb-2 text-xs font-medium text-zinc-400 dark:text-zinc-500"
+              }
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+
+        <div className="space-y-4 p-5">
+          {/* Question input line. */}
+          <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-950/40">
+            <span className="flex h-4 w-4 items-center justify-center text-zinc-400">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            </span>
+            <span className="text-sm text-zinc-600 dark:text-zinc-300">
               {t("hero.preview.question")}
+            </span>
+          </div>
+
+          {/* Grounded answer with a token-by-token feel. */}
+          <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#0f7a52] dark:text-emerald-400">
+              {t("hero.app.answered")}
             </p>
-            <p className="mt-3 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+            <p className="mt-2 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
               {t("hero.preview.answer")}
+              {/* Caret hinting at streamed tokens. */}
+              <span className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse rounded-sm bg-brand-500 align-baseline dark:bg-brand-400" />
             </p>
-            <div className="mt-4">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#e7f6ef] px-3 py-1 text-xs font-medium text-[#0f7a52] dark:bg-emerald-950/50 dark:text-emerald-300">
-                <span
-                  aria-hidden
-                  className="h-1.5 w-1.5 rounded-full bg-[#0f7a52] dark:bg-emerald-400"
-                />
+            <div className="mt-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-brand-500 dark:bg-brand-400" />
                 {t("hero.preview.citation")}
               </span>
             </div>
           </div>
 
-          {/* Second, tiny card: an honest refusal. */}
-          <div className="mt-4 rounded-xl border border-zinc-200 bg-[#f6f6f3] p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-              {t("hero.preview.refusalLabel")}
+          {/* Second state: an honest refusal. */}
+          <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 p-3.5 dark:border-amber-900/50 dark:bg-amber-950/20">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              {t("hero.app.refusalQuestion")}
             </p>
-            <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-300">
+            <p className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
               {t("hero.preview.refusal")}
             </p>
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }

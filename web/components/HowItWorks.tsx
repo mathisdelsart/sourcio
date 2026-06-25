@@ -74,7 +74,11 @@ const STEPS: Step[] = [
   { icon: <CitedIcon />, title: "how.step3.title", body: "how.step3.body" },
 ];
 
-/** Three concise, numbered steps explaining the product flow end to end. */
+/**
+ * Three concise steps as a horizontal stepper: numbered 01/02/03 nodes joined
+ * by a thin connector line, each with a brand-tinted icon square. Collapses to
+ * a vertical stack on mobile.
+ */
 export function HowItWorks() {
   const { t } = useT();
   return (
@@ -85,30 +89,32 @@ export function HowItWorks() {
         </p>
         <h2
           id="how-heading"
-          className="mt-3 text-balance text-2xl font-bold tracking-tight text-ink dark:text-zinc-50 sm:text-3xl"
+          className="mt-3 text-balance text-3xl font-bold tracking-tight text-ink dark:text-zinc-50 sm:text-4xl"
         >
           {t("how.title")}
         </h2>
       </div>
 
-      <ol className="mt-10 grid gap-6 sm:grid-cols-3">
+      <ol className="relative mt-16 grid gap-12 sm:grid-cols-3 sm:gap-8">
+        {/* Connector line behind the nodes (desktop only). */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-[16.67%] right-[16.67%] top-7 hidden h-px bg-gradient-to-r from-brand-200 via-brand-300 to-brand-200 dark:from-brand-900 dark:via-brand-800 dark:to-brand-900 sm:block"
+        />
         {STEPS.map((step, i) => (
-          <li
-            key={step.title}
-            className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
-          >
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600 dark:bg-brand-400/15 dark:text-brand-300">
+          <li key={step.title} className="relative text-center">
+            <div className="flex justify-center">
+              <span className="relative inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-200 bg-brand-500/10 text-brand-600 shadow-sm dark:border-brand-900 dark:bg-brand-400/15 dark:text-brand-300">
                 {step.icon}
-              </span>
-              <span className="text-xs font-semibold tabular-nums text-zinc-400 dark:text-zinc-500">
-                {String(i + 1).padStart(2, "0")}
+                <span className="absolute -right-2 -top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink text-[11px] font-bold tabular-nums text-white dark:bg-white dark:text-ink">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
               </span>
             </div>
-            <h3 className="mt-5 font-semibold text-ink dark:text-zinc-100">
+            <h3 className="mt-6 text-lg font-semibold text-ink dark:text-zinc-100">
               {t(step.title)}
             </h3>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+            <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
               {t(step.body)}
             </p>
           </li>

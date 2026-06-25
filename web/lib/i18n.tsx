@@ -57,6 +57,28 @@ const en = {
   "hero.preview.citation": "(Wavelet Transform, p.57)",
   "hero.preview.refusalLabel": "Off-topic question",
   "hero.preview.refusal": "Not in the course material.",
+  // App-window mockup (right of the hero).
+  "hero.app.window": "Grounded Tutor",
+  "hero.app.tab.ask": "Ask",
+  "hero.app.tab.exercise": "Exercise",
+  "hero.app.tab.grade": "Grade",
+  "hero.app.prompt": "Ask your course",
+  "hero.app.answered": "Answered from your material",
+  "hero.app.refusalQuestion": "How do I set up a Kubernetes cluster?",
+
+  // Stats band — figures are taken verbatim from the README metrics table.
+  "stats.eyebrow": "Measured, not promised",
+  "stats.title": "Numbers from a full course run",
+  "stats.hitRate.value": "82%",
+  "stats.hitRate.label": "Retrieval hit-rate with the cross-encoder reranker",
+  "stats.hybrid.value": "+9 pts",
+  "stats.hybrid.label": "Hit-rate gain from hybrid dense + BM25 retrieval",
+  "stats.separation.value": "100%",
+  "stats.separation.label": "In-course / out-of-course threshold separation",
+  "stats.faithfulness.value": "75%",
+  "stats.faithfulness.label": "Faithfulness on the offline LLM-as-a-judge harness",
+  "stats.local.value": "0 €",
+  "stats.local.label": "Fully-local option — embeddings, reranker and store run offline",
 
   // How it works
   "how.eyebrow": "How it works",
@@ -92,6 +114,9 @@ const en = {
   "features.bilingual.title": "Bilingual",
   "features.bilingual.body":
     "Works across English and French course material, with a fully bilingual interface.",
+  // Mini visual inside the highlighted bento tile.
+  "features.cited.demo.answer": "…the admissibility integral stays finite",
+  "features.cited.demo.chip": "(Wavelet Transform, p.57)",
 
   // Landing CTA / footer
   "landing.cta.title": "Ready to revise from your own course?",
@@ -375,6 +400,28 @@ const fr: Record<TranslationKey, string> = {
   "hero.preview.citation": "(Wavelet Transform, p.57)",
   "hero.preview.refusalLabel": "Question hors-sujet",
   "hero.preview.refusal": "Absent du matériel de cours.",
+  // App-window mockup (right of the hero).
+  "hero.app.window": "Grounded Tutor",
+  "hero.app.tab.ask": "Demander",
+  "hero.app.tab.exercise": "Exercice",
+  "hero.app.tab.grade": "Corriger",
+  "hero.app.prompt": "Interrogez votre cours",
+  "hero.app.answered": "Répondu à partir de votre matériel",
+  "hero.app.refusalQuestion": "Comment configurer un cluster Kubernetes ?",
+
+  // Stats band — figures are taken verbatim from the README metrics table.
+  "stats.eyebrow": "Mesuré, pas promis",
+  "stats.title": "Des chiffres issus d'un cours complet",
+  "stats.hitRate.value": "82 %",
+  "stats.hitRate.label": "Taux de réussite du retrieval avec le reranker cross-encoder",
+  "stats.hybrid.value": "+9 pts",
+  "stats.hybrid.label": "Gain de taux de réussite du retrieval hybride dense + BM25",
+  "stats.separation.value": "100 %",
+  "stats.separation.label": "Séparation du seuil entre questions du cours et hors-cours",
+  "stats.faithfulness.value": "75 %",
+  "stats.faithfulness.label": "Fidélité sur le juge LLM hors-ligne",
+  "stats.local.value": "0 €",
+  "stats.local.label": "Option entièrement locale — embeddings, reranker et store hors-ligne",
 
   // How it works
   "how.eyebrow": "Comment ça marche",
@@ -410,6 +457,9 @@ const fr: Record<TranslationKey, string> = {
   "features.bilingual.title": "Bilingue",
   "features.bilingual.body":
     "Fonctionne avec du matériel de cours en anglais et en français, avec une interface entièrement bilingue.",
+  // Mini visual inside the highlighted bento tile.
+  "features.cited.demo.answer": "…l'intégrale d'admissibilité reste finie",
+  "features.cited.demo.chip": "(Wavelet Transform, p.57)",
 
   // Landing CTA / footer
   "landing.cta.title": "Prêt à réviser à partir de votre propre cours ?",

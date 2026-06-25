@@ -67,18 +67,48 @@ interface Feature {
   icon: ReactNode;
   title: TranslationKey;
   body: TranslationKey;
+  /** Bento span — the highlighted tile is wider/taller than the rest. */
+  span: string;
 }
 
+/** Secondary tiles — the highlighted "cited" tile is rendered separately. */
 const FEATURES: Feature[] = [
-  { icon: <QuoteIcon />, title: "features.cited.title", body: "features.cited.body" },
-  { icon: <ShieldIcon />, title: "features.refusal.title", body: "features.refusal.body" },
-  { icon: <SearchIcon />, title: "features.retrieval.title", body: "features.retrieval.body" },
-  { icon: <LockIcon />, title: "features.private.title", body: "features.private.body" },
-  { icon: <RepeatIcon />, title: "features.quiz.title", body: "features.quiz.body" },
-  { icon: <GlobeIcon />, title: "features.bilingual.title", body: "features.bilingual.body" },
+  {
+    icon: <ShieldIcon />,
+    title: "features.refusal.title",
+    body: "features.refusal.body",
+    span: "lg:col-span-3",
+  },
+  {
+    icon: <SearchIcon />,
+    title: "features.retrieval.title",
+    body: "features.retrieval.body",
+    span: "lg:col-span-3",
+  },
+  {
+    icon: <LockIcon />,
+    title: "features.private.title",
+    body: "features.private.body",
+    span: "lg:col-span-2",
+  },
+  {
+    icon: <RepeatIcon />,
+    title: "features.quiz.title",
+    body: "features.quiz.body",
+    span: "lg:col-span-2",
+  },
+  {
+    icon: <GlobeIcon />,
+    title: "features.bilingual.title",
+    body: "features.bilingual.body",
+    span: "lg:col-span-2",
+  },
 ];
 
-/** A grid of the product's real differentiators. */
+const TILE =
+  "rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900";
+
+/** A bento grid of the product's real differentiators. */
 export function Features() {
   const { t } = useT();
   return (
@@ -89,27 +119,66 @@ export function Features() {
         </p>
         <h2
           id="features-heading"
-          className="mt-3 text-balance text-2xl font-bold tracking-tight text-ink dark:text-zinc-50 sm:text-3xl"
+          className="mt-3 text-balance text-3xl font-bold tracking-tight text-ink dark:text-zinc-50 sm:text-4xl"
         >
           {t("features.title")}
         </h2>
       </div>
 
-      <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="mt-12 grid auto-rows-fr gap-5 sm:grid-cols-2 lg:grid-cols-6">
+        {/* Highlighted lead tile: cited by construction, with a mini visual. */}
+        <li className="lg:col-span-3 lg:row-span-2">
+          <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 to-white p-7 shadow-sm dark:border-brand-900/60 dark:from-brand-950/40 dark:to-zinc-900">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-brand-500/10 blur-2xl dark:bg-brand-400/10"
+            />
+            <div className="relative">
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-brand-500/15 text-brand-600 dark:bg-brand-400/20 dark:text-brand-300">
+                <QuoteIcon />
+              </span>
+              <h3 className="mt-5 text-lg font-semibold text-ink dark:text-zinc-100">
+                {t("features.cited.title")}
+              </h3>
+              <p className="mt-2 max-w-md text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+                {t("features.cited.body")}
+              </p>
+            </div>
+
+            {/* Mini visual: an answer fragment carrying a periwinkle citation chip. */}
+            <div className="relative mt-auto pt-6">
+              <div className="rounded-xl border border-zinc-200 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
+                <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+                  {t("features.cited.demo.answer")}
+                </p>
+                <div className="mt-3">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300">
+                    <span
+                      aria-hidden
+                      className="h-1.5 w-1.5 rounded-full bg-brand-500 dark:bg-brand-400"
+                    />
+                    {t("features.cited.demo.chip")}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </li>
+
+        {/* Remaining tiles in varied spans. */}
         {FEATURES.map((feature) => (
-          <li
-            key={feature.title}
-            className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
-          >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600 dark:bg-brand-400/15 dark:text-brand-300">
-              {feature.icon}
-            </span>
-            <h3 className="mt-5 font-semibold text-ink dark:text-zinc-100">
-              {t(feature.title)}
-            </h3>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
-              {t(feature.body)}
-            </p>
+          <li key={feature.title} className={feature.span}>
+            <div className={`${TILE} flex h-full flex-col`}>
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600 dark:bg-brand-400/15 dark:text-brand-300">
+                {feature.icon}
+              </span>
+              <h3 className="mt-5 font-semibold text-ink dark:text-zinc-100">
+                {t(feature.title)}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+                {t(feature.body)}
+              </p>
+            </div>
           </li>
         ))}
       </ul>

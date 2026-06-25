@@ -13,6 +13,7 @@ import { scrollToId } from "@/lib/scroll";
 import { Hero } from "@/components/Hero";
 import { HowItWorks } from "@/components/HowItWorks";
 import { Features } from "@/components/Features";
+import { StatsBand } from "@/components/StatsBand";
 import { LandingCta } from "@/components/LandingCta";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { AskPanel } from "@/components/panels/AskPanel";
@@ -117,7 +118,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-sm font-bold text-white dark:bg-white dark:text-ink">
               G
@@ -148,88 +149,114 @@ export default function Home() {
       </header>
 
       <main>
-        {/* Landing — wider container, generous spacing, leads into the tool. */}
-        <div className="mx-auto max-w-5xl space-y-16 px-4 py-16 sm:px-6 sm:py-20">
+        {/* Landing — wide, confident container with generous section padding.
+            The hero leads into a full-width navy stats band, then the rest of
+            the landing resumes inside the centered column. */}
+        <div className="mx-auto max-w-6xl px-4 pt-20 sm:px-6 sm:pt-28">
           <Hero targetId="tool" />
+        </div>
+
+        <div className="mt-20 sm:mt-28">
+          <StatsBand />
+        </div>
+
+        <div className="mx-auto max-w-6xl space-y-24 px-4 py-20 sm:px-6 sm:py-28">
           <HowItWorks />
           <Features />
           <LandingCta targetId="tool" />
         </div>
 
-        {/* Tool — the existing tutor, anchored so the hero CTA scrolls here. */}
+        {/* Tool — the existing tutor, anchored so the hero CTA scrolls here.
+            Wrapped in a subtle app-window frame so it reads as "the product". */}
         <section
           id="tool"
           aria-label={t("tabs.aria")}
           className="scroll-mt-20 border-t border-zinc-200 bg-[#f6f6f3] dark:border-zinc-800 dark:bg-zinc-900"
         >
-          <div className="mx-auto max-w-3xl space-y-6 px-4 py-16 sm:px-6 sm:py-20">
+          <div className="mx-auto max-w-4xl px-4 py-20 sm:px-6 sm:py-28">
             <div className="flex justify-center sm:hidden">
               <HealthBadge config={config} />
             </div>
 
-            <SettingsPanel
-              studentId={studentId}
-              baseUrl={baseUrl}
-              apiKey={apiKey}
-              onSave={saveSettings}
-            />
+            {/* App window: faint top bar + framed body. */}
+            <div className="mt-2 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-card dark:border-zinc-800 dark:bg-zinc-950">
+              <div className="flex items-center gap-3 border-b border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+                <div className="flex items-center gap-1.5" aria-hidden>
+                  <span className="h-2.5 w-2.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+                </div>
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  {t("app.name")}
+                </span>
+              </div>
 
-            <Tabs tabs={TABS} active={active} onChange={setActive} />
+              <div className="space-y-6 p-5 sm:p-7">
+                <SettingsPanel
+                  studentId={studentId}
+                  baseUrl={baseUrl}
+                  apiKey={apiKey}
+                  onSave={saveSettings}
+                />
 
-        <div className="animate-fade-in">
-          {active === "ask" && (
-            <AskPanel
-              studentId={studentId}
-              config={config}
-              lastAnswer={lastAnswer}
-              setLastAnswer={setLastAnswer}
-              sessionId={activeSessionId}
-            />
-          )}
-          {active === "reexplain" && (
-            <ReexplainPanel studentId={studentId} config={config} lastAnswer={lastAnswer} />
-          )}
-          {active === "exercise" && (
-            <ExercisePanel
-              studentId={studentId}
-              config={config}
-              lastExercise={lastExercise}
-              setLastExercise={setLastExercise}
-            />
-          )}
-          {active === "grade" && (
-            <GradePanel studentId={studentId} config={config} lastExercise={lastExercise} />
-          )}
-          {active === "quiz" && <QuizPanel studentId={studentId} config={config} />}
-          {active === "threads" && (
-            <ThreadsPanel
-              studentId={studentId}
-              config={config}
-              active={active === "threads"}
-              activeSessionId={activeSessionId}
-              setActiveSessionId={selectSession}
-            />
-          )}
-          {active === "history" && (
-            <HistoryPanel
-              studentId={studentId}
-              config={config}
-              active={active === "history"}
-            />
-          )}
-          {active === "review" && (
-            <ReviewPanel
-              studentId={studentId}
-              config={config}
-              active={active === "review"}
-            />
-          )}
+                <Tabs tabs={TABS} active={active} onChange={setActive} />
+
+                <div className="animate-fade-in">
+                  {active === "ask" && (
+                    <AskPanel
+                      studentId={studentId}
+                      config={config}
+                      lastAnswer={lastAnswer}
+                      setLastAnswer={setLastAnswer}
+                      sessionId={activeSessionId}
+                    />
+                  )}
+                  {active === "reexplain" && (
+                    <ReexplainPanel studentId={studentId} config={config} lastAnswer={lastAnswer} />
+                  )}
+                  {active === "exercise" && (
+                    <ExercisePanel
+                      studentId={studentId}
+                      config={config}
+                      lastExercise={lastExercise}
+                      setLastExercise={setLastExercise}
+                    />
+                  )}
+                  {active === "grade" && (
+                    <GradePanel studentId={studentId} config={config} lastExercise={lastExercise} />
+                  )}
+                  {active === "quiz" && <QuizPanel studentId={studentId} config={config} />}
+                  {active === "threads" && (
+                    <ThreadsPanel
+                      studentId={studentId}
+                      config={config}
+                      active={active === "threads"}
+                      activeSessionId={activeSessionId}
+                      setActiveSessionId={selectSession}
+                    />
+                  )}
+                  {active === "history" && (
+                    <HistoryPanel
+                      studentId={studentId}
+                      config={config}
+                      active={active === "history"}
+                    />
+                  )}
+                  {active === "review" && (
+                    <ReviewPanel
+                      studentId={studentId}
+                      config={config}
+                      active={active === "review"}
+                    />
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
         <footer className="bg-navy text-zinc-300">
-          <div className="mx-auto grid max-w-5xl gap-10 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-3">
+          <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-3">
             {/* Brand mark + tagline. */}
             <div className="lg:col-span-2 lg:max-w-md">
               <div className="flex items-center gap-2">
@@ -271,7 +298,7 @@ export default function Home() {
           </div>
 
           <div className="border-t border-white/10">
-            <div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-5 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-5 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <p>{t("footer.tagline")}</p>
               <p>{t("footer.credit")}</p>
             </div>
