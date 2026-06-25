@@ -191,6 +191,7 @@ then evaluated with the offline harness (`eval/run_eval.py`) and the threshold c
 | **Retrieval hit-rate** | **73% → 82% (+9 pts)** | With the cross-encoder reranker (`cross-encoder/ms-marco-MiniLM-L-6-v2`) enabled |
 | **Faithfulness** | **75%** | Offline LLM-as-a-judge (gpt-4o-mini): every claim supported by the retrieved sources |
 | **Relevance** | **100%** | Same judge: answers actually address the question |
+| **Retrieval latency** | **p50 67 ms · p95 466 ms** | Query embedding (`bge-m3`) + Qdrant search over 36 questions; LLM-independent, so it holds across providers. End-to-end answer latency is dominated by the chosen LLM. |
 
 **Honest caveat.** This deck is *constructive* (formula slides, few prose definitions), so some
 definitional in-course questions are **refused rather than answered**: the system declines instead of
