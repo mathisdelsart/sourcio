@@ -18,6 +18,7 @@ import { GradePanel } from "@/components/panels/GradePanel";
 import { QuizPanel } from "@/components/panels/QuizPanel";
 import { ThreadsPanel } from "@/components/panels/ThreadsPanel";
 import { HistoryPanel } from "@/components/panels/HistoryPanel";
+import { ReviewPanel } from "@/components/panels/ReviewPanel";
 
 export default function Home() {
   const { t } = useT();
@@ -29,6 +30,7 @@ export default function Home() {
     { id: "quiz", label: t("tabs.quiz") },
     { id: "threads", label: t("tabs.threads") },
     { id: "history", label: t("tabs.history") },
+    { id: "review", label: t("tabs.review") },
   ];
 
   const [ready, setReady] = useState(false);
@@ -196,6 +198,13 @@ export default function Home() {
               studentId={studentId}
               config={config}
               active={active === "history"}
+            />
+          )}
+          {active === "review" && (
+            <ReviewPanel
+              studentId={studentId}
+              config={config}
+              active={active === "review"}
             />
           )}
         </div>
