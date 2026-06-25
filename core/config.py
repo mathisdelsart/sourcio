@@ -84,6 +84,19 @@ class Settings(BaseSettings):
     # mutating endpoints and `/history`. `/health` is always open.
     api_key: str = ""
 
+    # In-process rate limit (opt-in). 0 disables it (the default), so the API is
+    # unthrottled and the test suite is never tripped. A positive value caps each
+    # client (by IP) to that many requests per rolling 60-second window; once
+    # exceeded the request is rejected with 429 and a `Retry-After` header. The
+    # limiter is per-process (a single Uvicorn worker); it is not a substitute for
+    # an edge rate limiter in a multi-replica deployment.
+    rate_limit_per_minute: int = 0
+
+    # Send HTTP Strict-Transport-Security on every response. Off by default
+    # because HSTS only makes sense behind HTTPS/TLS; enabling it on a plain-HTTP
+    # local setup would be wrong. Enable it only when the API is served over TLS.
+    enable_hsts: bool = False
+
     # Secret used to sign user JWTs (HS256). The default is an insecure
     # placeholder for local development only and MUST be overridden in
     # production via `JWT_SECRET` (or `.env`); leaking it lets anyone forge a

@@ -41,6 +41,13 @@ ui = [
 migrations = [
     "alembic>=1.13",
 ]
+# PostgreSQL backend (optional). The app already speaks SQLAlchemy, so switching
+# is a matter of installing the psycopg 3 driver and pointing `DATABASE_URL` at a
+# `postgresql+psycopg://...` URL. SQLite stays the zero-setup default; this extra
+# is only needed when targeting PostgreSQL. See docs/POSTGRES.md.
+postgres = [
+    "psycopg[binary]>=3.1",
+]
 # Fully local, zero-cost LLM provider (Ollama). Optional so OpenAI users are not
 # forced to install it: `uv sync --extra local`.
 local = [

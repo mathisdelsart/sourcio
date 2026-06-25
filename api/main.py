@@ -41,6 +41,7 @@ from api.auth import (
     login_user,
     register_user,
 )
+from api.middleware import RateLimitMiddleware, SecurityHeadersMiddleware
 from core.answer import answer, stream_answer
 from core.config import get_settings
 from db.models import Student
@@ -84,6 +85,15 @@ app = FastAPI(
     description="Course tutor grounded in your own material.",
     lifespan=lifespan,
 )
+
+# Hardening middleware (both opt-in/safe). Security headers are always added and
+# never alter the body or status. Rate limiting is a no-op unless
+# `rate_limit_per_minute` is positive, so the default config is unthrottled.
+# Starlette runs the last-added middleware first, so security headers are the
+# outermost layer: they wrap every response, including the limiter's 429, while
+# the rate limiter still rejects throttled requests before they reach a route.
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
