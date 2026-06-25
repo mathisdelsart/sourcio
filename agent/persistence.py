@@ -68,18 +68,11 @@ def _resolve_session() -> Iterator[Any | None]:
         yield None
 
 
-def _get_or_create_student(session: Any, external_id: str) -> int:
+def _student_id(session: Any, external_id: str) -> int:
     """Return the internal id of the student with ``external_id``, creating it."""
-    from sqlalchemy import select
+    from db.session import get_or_create_student
 
-    from db.models import Student
-
-    student = session.scalar(select(Student).where(Student.external_id == external_id))
-    if student is None:
-        student = Student(external_id=external_id)
-        session.add(student)
-        session.flush()
-    return student.id
+    return get_or_create_student(session, external_id).id
 
 
 def persist_exercise(
@@ -103,7 +96,7 @@ def persist_exercise(
     with _resolve_session() as session:
         if session is None:
             return None
-        student_id = _get_or_create_student(session, student_external_id)
+        student_id = _student_id(session, student_external_id)
         exercise = add_exercise(
             session,
             student_id=student_id,
@@ -137,7 +130,7 @@ def persist_grade(
     with _resolve_session() as session:
         if session is None:
             return None
-        student_id = _get_or_create_student(session, student_external_id)
+        student_id = _student_id(session, student_external_id)
         grade = add_grade(
             session,
             exercise_id=exercise_id,

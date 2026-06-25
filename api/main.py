@@ -22,12 +22,11 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import Engine, select
-from sqlalchemy.orm import Session
 
 from agent.nodes.generate import generate
 from agent.nodes.grade import grade
 from agent.nodes.reexplain import reexplain
-from agent.state import Level
+from agent.state import Level, TutorState, to_history
 from answer import answer
 from config import get_settings
 from db.models import Student
@@ -35,6 +34,7 @@ from db.session import (
     add_message,
     configure_session_factory,
     create_engine_from_settings,
+    get_or_create_student,
     get_session,
     init_db,
     recent_messages,
@@ -88,16 +88,6 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key.",
         )
-
-
-def _get_or_create_student(session: Session, student_id: str) -> Student:
-    """Return the student with this external id, creating one if needed."""
-    student = session.scalar(select(Student).where(Student.external_id == student_id))
-    if student is None:
-        student = Student(external_id=student_id)
-        session.add(student)
-        session.flush()
-    return student
 
 
 class AskRequest(BaseModel):
@@ -189,7 +179,7 @@ def ask(request: AskRequest) -> dict[str, Any]:
     """
     result = answer(request.question, k=request.k, course=request.course, chapter=request.chapter)
     with get_session(_engine) as session:
-        student = _get_or_create_student(session, request.student_id)
+        student = get_or_create_student(session, request.student_id)
         add_message(session, student_id=student.id, role="user", content=request.question)
         add_message(session, student_id=student.id, role="assistant", content=result["answer"])
     return {
@@ -200,21 +190,6 @@ def ask(request: AskRequest) -> dict[str, Any]:
 
 
 NOTHING_TO_REEXPLAIN = "There is no previous answer to re-explain yet. Ask a question first."
-
-
-def _history_for_reexplain(rows: list[Any]) -> list[dict[str, str]]:
-    """Map persisted messages to the history shape the reexplain node expects.
-
-    The DB stores roles as ``user`` / ``assistant``; the reexplain node looks for
-    the last turn with role ``tutor`` (its ``content`` is the explanation to
-    rephrase). Assistant turns are relabelled to ``tutor`` accordingly while user
-    turns are passed through, preserving chronological order.
-    """
-    history: list[dict[str, str]] = []
-    for row in rows:
-        role = "tutor" if row.role == "assistant" else row.role
-        history.append({"role": role, "content": row.content})
-    return history
 
 
 def _last_tutor_answer(history: list[dict[str, str]]) -> str | None:
@@ -239,17 +214,16 @@ def reexplain_answer(request: ReexplainRequest) -> dict[str, str]:
         student = session.scalar(select(Student).where(Student.external_id == request.student_id))
         if student is None:
             return {"answer": NOTHING_TO_REEXPLAIN}
-        history = _history_for_reexplain(recent_messages(session, student.id))
+        history = to_history(recent_messages(session, student.id))
         if _last_tutor_answer(history) is None:
             return {"answer": NOTHING_TO_REEXPLAIN}
-        state = {
+        state: TutorState = {
             "student_id": request.student_id,
             "message": "Please re-explain that.",
             "level": request.level,
             "history": history,
         }
-        result = reexplain(state)
-        rephrased = result["answer"]
+        rephrased = reexplain(state).get("answer", "")
         add_message(session, student_id=student.id, role="assistant", content=rephrased)
     return {"answer": rephrased}
 
@@ -264,9 +238,11 @@ def exercise(request: ExerciseRequest) -> dict[str, Any]:
     surfaced so a later ``/grade`` call can link the grade back to it.
     """
     with get_session(_engine) as session:
-        _get_or_create_student(session, request.student_id)
+        get_or_create_student(session, request.student_id)
     state = generate({"message": request.notion, "student_id": request.student_id})
-    built = state["exercise"]
+    # generate always populates "exercise" (a built exercise or a refusal).
+    built = state.get("exercise")
+    assert built is not None
     return {"problem": built["problem"], "refused": built["refused"], "id": built.get("id")}
 
 
@@ -279,11 +255,13 @@ def grade_answer(request: GradeRequest) -> dict[str, Any]:
     grade to its exercise.
     """
     with get_session(_engine) as session:
-        _get_or_create_student(session, request.student_id)
-    state: dict[str, Any] = {"message": request.message, "student_id": request.student_id}
+        get_or_create_student(session, request.student_id)
+    state: TutorState = {"message": request.message, "student_id": request.student_id}
     if request.exercise is not None:
         state["exercise"] = request.exercise
-    verdict = grade(state)["grade"]
+    # grade always populates "grade" with the judge's verdict.
+    verdict = grade(state).get("grade")
+    assert verdict is not None
     return {"score": verdict["score"], "feedback": verdict["feedback"]}
 
 
