@@ -47,7 +47,7 @@ def test_answer_includes_retrieved_chunk_texts(monkeypatch):
     ]
     monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
     reply = SimpleNamespace(content="A wavelet is X [1].")
-    fake_llm = SimpleNamespace(invoke=lambda messages: reply)
+    fake_llm = SimpleNamespace(invoke=lambda messages, config=None: reply)
     monkeypatch.setattr(answer_mod, "get_llm", lambda role: fake_llm)
 
     out = answer_mod.answer("what is a wavelet?")
@@ -78,7 +78,7 @@ class _FakeChunk:
 
 def _fake_stream_llm(deltas):
     """Return an object whose ``.stream(messages)`` yields the given deltas."""
-    return SimpleNamespace(stream=lambda messages: (_FakeChunk(d) for d in deltas))
+    return SimpleNamespace(stream=lambda messages, config=None: (_FakeChunk(d) for d in deltas))
 
 
 def test_stream_answer_yields_tokens_then_sources(monkeypatch):

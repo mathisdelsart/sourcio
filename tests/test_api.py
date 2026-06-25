@@ -580,7 +580,7 @@ class _FakeLLM:
     def __init__(self, reply: str) -> None:
         self._reply = reply
 
-    def invoke(self, _messages):
+    def invoke(self, _messages, config=None):
         return _FakeMessage(self._reply)
 
 

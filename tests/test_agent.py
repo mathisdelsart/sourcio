@@ -52,9 +52,11 @@ class _FakeLLM:
     def __init__(self, reply: str) -> None:
         self.reply = reply
         self.calls: list = []
+        self.configs: list = []
 
-    def invoke(self, messages):
+    def invoke(self, messages, config=None):
         self.calls.append(messages)
+        self.configs.append(config)
         return _FakeMessage(self.reply)
 
 
@@ -121,7 +123,7 @@ def test_classify_falls_back_to_keywords_when_router_llm_raises(monkeypatch):
     # `except Exception` path must degrade gracefully to the keyword heuristic
     # instead of propagating, so routing never breaks on a flaky provider.
     class _RaisingLLM:
-        def invoke(self, messages):
+        def invoke(self, messages, config=None):
             raise RuntimeError("router transport down")
 
     monkeypatch.setattr(graph_mod, "get_llm", lambda role="default": _RaisingLLM())

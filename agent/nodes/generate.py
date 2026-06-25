@@ -11,6 +11,7 @@ from agent.persistence import persist_exercise
 from agent.state import TutorState
 from core.answer import REFUSAL
 from core.config import get_llm
+from core.obs import get_callbacks
 from ingestion.schema import format_numbered_sources
 
 _SYSTEM = (
@@ -53,7 +54,14 @@ def generate(state: TutorState) -> TutorState:
         }
 
     prompt = f"Sources:\n{format_numbered_sources(results)}\n\nNotion: {message}"
-    raw = get_llm("generate").invoke([("system", _SYSTEM), ("human", prompt)]).content.strip()
+    raw = (
+        get_llm("generate")
+        .invoke(
+            [("system", _SYSTEM), ("human", prompt)],
+            config={"callbacks": get_callbacks()},
+        )
+        .content.strip()
+    )
 
     problem, solution = _split(raw)
     # The notion is the request itself; the course comes from the retrieved

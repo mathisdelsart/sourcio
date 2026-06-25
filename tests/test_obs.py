@@ -92,3 +92,131 @@ def test_get_llm_attaches_callbacks_when_enabled(monkeypatch):
     result = config.get_llm()
     assert result == "configured-model"
     assert captured["callbacks"] == [fake_callback]
+
+
+# --- callbacks are threaded into every LLM call site ------------------------
+#
+# These tests assert each LLM call passes the callbacks from ``get_callbacks()``
+# in its invocation config, so a LangFuse-enabled run traces every step. They
+# also cover the disabled path: ``get_callbacks()`` returns ``[]`` and the call
+# still works, threading a harmless empty list.
+
+
+class _CapturingLLM:
+    """Chat model stand-in recording the ``config`` of each invoke/stream."""
+
+    def __init__(self, reply: str = "reply") -> None:
+        self._reply = reply
+        self.configs: list = []
+
+    def invoke(self, _messages, config=None):
+        self.configs.append(config)
+        return type("Msg", (), {"content": self._reply})()
+
+    def stream(self, _messages, config=None):
+        self.configs.append(config)
+        yield type("Chunk", (), {"content": self._reply})()
+
+
+def _patch_callbacks(monkeypatch, module, callbacks):
+    """Force ``module.get_callbacks`` to return a known callback list."""
+    monkeypatch.setattr(module, "get_callbacks", lambda: callbacks)
+
+
+@pytest.mark.parametrize("callbacks", [["cb-sentinel"], []])
+def test_answer_threads_callbacks(monkeypatch, callbacks):
+    import core.answer as answer_mod
+    from ingestion.schema import Chunk, Retrieved
+
+    results = [Retrieved(chunk=Chunk(id="1", course="C", page=1, text="t"), score=0.9)]
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
+    llm = _CapturingLLM("grounded [1].")
+    monkeypatch.setattr(answer_mod, "get_llm", lambda role: llm)
+    _patch_callbacks(monkeypatch, answer_mod, callbacks)
+
+    answer_mod.answer("q")
+    assert llm.configs == [{"callbacks": callbacks}]
+
+
+@pytest.mark.parametrize("callbacks", [["cb-sentinel"], []])
+def test_stream_answer_threads_callbacks(monkeypatch, callbacks):
+    import core.answer as answer_mod
+    from ingestion.schema import Chunk, Retrieved
+
+    results = [Retrieved(chunk=Chunk(id="1", course="C", page=1, text="t"), score=0.9)]
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
+    llm = _CapturingLLM("grounded [1].")
+    monkeypatch.setattr(answer_mod, "get_llm", lambda role: llm)
+    _patch_callbacks(monkeypatch, answer_mod, callbacks)
+
+    list(answer_mod.stream_answer("q"))
+    assert llm.configs == [{"callbacks": callbacks}]
+
+
+@pytest.mark.parametrize("callbacks", [["cb-sentinel"], []])
+def test_router_threads_callbacks(monkeypatch, callbacks):
+    import agent.graph as graph_mod
+
+    llm = _CapturingLLM("explain")
+    monkeypatch.setattr(graph_mod, "get_llm", lambda role="default": llm)
+    _patch_callbacks(monkeypatch, graph_mod, callbacks)
+
+    graph_mod.classify_intent("what is x?")
+    assert llm.configs == [{"callbacks": callbacks}]
+
+
+@pytest.mark.parametrize("callbacks", [["cb-sentinel"], []])
+def test_generate_threads_callbacks(monkeypatch, callbacks):
+    import agent.nodes.generate as gen_mod
+    import core.retrieval as retrieval_mod
+    from ingestion.schema import Chunk, Retrieved
+
+    results = [Retrieved(chunk=Chunk(id="1", course="C", page=1, text="t"), score=0.9)]
+    monkeypatch.setattr(retrieval_mod, "retrieve", lambda *a, **k: results)
+    monkeypatch.setattr(gen_mod, "persist_exercise", lambda *a, **k: None)
+    llm = _CapturingLLM("EXERCISE:\nE\n\nSOLUTION:\nS")
+    monkeypatch.setattr(gen_mod, "get_llm", lambda role="default": llm)
+    _patch_callbacks(monkeypatch, gen_mod, callbacks)
+
+    gen_mod.generate({"message": "notion"})
+    assert llm.configs == [{"callbacks": callbacks}]
+
+
+@pytest.mark.parametrize("callbacks", [["cb-sentinel"], []])
+def test_grade_threads_callbacks(monkeypatch, callbacks):
+    import agent.nodes.grade as grade_mod
+
+    monkeypatch.setattr(grade_mod, "persist_grade", lambda *a, **k: None)
+    llm = _CapturingLLM('{"score": 80, "feedback": "ok"}')
+    monkeypatch.setattr(grade_mod, "get_llm", lambda role="default": llm)
+    _patch_callbacks(monkeypatch, grade_mod, callbacks)
+
+    grade_mod.grade({"message": "ans", "exercise": {"solution": "ref"}})
+    assert llm.configs == [{"callbacks": callbacks}]
+
+
+@pytest.mark.parametrize("callbacks", [["cb-sentinel"], []])
+def test_reexplain_threads_callbacks(monkeypatch, callbacks):
+    import agent.nodes.reexplain as re_mod
+
+    llm = _CapturingLLM("simpler version")
+    monkeypatch.setattr(re_mod, "get_llm", lambda role="default": llm)
+    _patch_callbacks(monkeypatch, re_mod, callbacks)
+
+    re_mod.reexplain({"message": "again", "answer": "previous"})
+    assert llm.configs == [{"callbacks": callbacks}]
+
+
+@pytest.mark.parametrize("callbacks", [["cb-sentinel"], []])
+def test_eval_judge_threads_callbacks(monkeypatch, callbacks):
+    import core.config as cfg
+    import core.obs as obs_mod
+    from eval.run_eval import _default_judge_fn
+
+    llm = _CapturingLLM('{"faithful": true, "relevant": true}')
+    monkeypatch.setattr(cfg, "get_llm", lambda role="default": llm)
+    monkeypatch.setattr(obs_mod, "get_callbacks", lambda: callbacks)
+
+    judge = _default_judge_fn()
+    judge("q", "a", ["src"])
+    assert llm.configs == [{"callbacks": callbacks}]

@@ -15,6 +15,7 @@ from agent.nodes.grade import grade
 from agent.nodes.reexplain import reexplain
 from agent.state import Intent, TutorState
 from core.config import get_llm
+from core.obs import get_callbacks
 
 # Every valid intent label, derived from the Intent type so the two cannot drift.
 INTENTS: tuple[str, ...] = get_args(Intent)
@@ -64,7 +65,14 @@ def classify_intent(message: str) -> Intent:
     invalid route.
     """
     try:
-        raw = get_llm("router").invoke([("system", _ROUTER_SYSTEM), ("human", message)]).content
+        raw = (
+            get_llm("router")
+            .invoke(
+                [("system", _ROUTER_SYSTEM), ("human", message)],
+                config={"callbacks": get_callbacks()},
+            )
+            .content
+        )
         label = raw.strip().lower()
         if label in INTENTS:
             return label  # type: ignore[return-value]

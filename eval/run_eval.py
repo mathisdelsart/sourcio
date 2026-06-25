@@ -258,7 +258,7 @@ def _default_answer_fn() -> AnswerFn:
 def _default_judge_fn() -> JudgeFn:
     """Wire the real faithfulness judge via the model-agnostic factory."""
     from core.config import get_llm
-    from core.obs import timer
+    from core.obs import get_callbacks, timer
 
     llm = get_llm("judge")
 
@@ -268,7 +268,10 @@ def _default_judge_fn() -> JudgeFn:
             f"Question: {question}\n\nAnswer: {answer_text}\n\nSources:\n{numbered or '(none)'}"
         )
         with timer("judge"):
-            return llm.invoke([("system", _JUDGE_SYSTEM), ("human", prompt)])
+            return llm.invoke(
+                [("system", _JUDGE_SYSTEM), ("human", prompt)],
+                config={"callbacks": get_callbacks()},
+            )
 
     return judge
 

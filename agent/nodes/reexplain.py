@@ -7,6 +7,7 @@ retrieval again, so the explanation stays anchored to what was already grounded.
 
 from agent.state import Level, TutorState
 from core.config import get_llm
+from core.obs import get_callbacks
 
 _SYSTEM = (
     "You are a course tutor re-explaining a point the student did not grasp.\n"
@@ -55,7 +56,14 @@ def reexplain(state: TutorState) -> TutorState:
         f"Student says: {state.get('message', '')}\n\n"
         f"Re-explain it. {guidance}"
     )
-    raw = get_llm("reexplain").invoke([("system", _SYSTEM), ("human", human)]).content.strip()
+    raw = (
+        get_llm("reexplain")
+        .invoke(
+            [("system", _SYSTEM), ("human", human)],
+            config={"callbacks": get_callbacks()},
+        )
+        .content.strip()
+    )
 
     history = list(state.get("history", []))
     history.append({"role": "tutor", "intent": "reexplain", "content": raw})

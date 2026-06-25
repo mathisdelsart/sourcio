@@ -10,7 +10,7 @@ import re
 from collections.abc import Iterator
 
 from core.config import get_llm
-from core.obs import timer
+from core.obs import get_callbacks, timer
 from core.retrieval import retrieve
 from ingestion.schema import Retrieved, format_numbered_sources
 
@@ -74,7 +74,14 @@ def answer(
 
     prompt = f"Sources:\n{format_numbered_sources(results)}\n\nQuestion: {question}"
     with timer("llm"):
-        raw = get_llm("explain").invoke([("system", _SYSTEM), ("human", prompt)]).content.strip()
+        raw = (
+            get_llm("explain")
+            .invoke(
+                [("system", _SYSTEM), ("human", prompt)],
+                config={"callbacks": get_callbacks()},
+            )
+            .content.strip()
+        )
 
     if raw.strip() == REFUSAL:
         return {"answer": REFUSAL, "refused": True, "sources": [], "raw": raw, "retrieved": []}
@@ -126,7 +133,10 @@ def stream_answer(
     prompt = f"Sources:\n{format_numbered_sources(results)}\n\nQuestion: {question}"
     parts: list[str] = []
     with timer("llm"):
-        for piece in get_llm("explain").stream([("system", _SYSTEM), ("human", prompt)]):
+        for piece in get_llm("explain").stream(
+            [("system", _SYSTEM), ("human", prompt)],
+            config={"callbacks": get_callbacks()},
+        ):
             delta = piece.content
             if not delta:
                 continue

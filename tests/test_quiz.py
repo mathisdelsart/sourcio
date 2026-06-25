@@ -41,7 +41,7 @@ class _FakeLLM:
     def __init__(self, reply: str) -> None:
         self._reply = reply
 
-    def invoke(self, _messages):
+    def invoke(self, _messages, config=None):
         return _FakeMessage(self._reply)
 
 
@@ -201,7 +201,7 @@ def test_grade_quiz_answer_uses_stored_reference(engine, monkeypatch):
     captured = {}
 
     class _CaptureLLM:
-        def invoke(self, messages):
+        def invoke(self, messages, config=None):
             captured["human"] = messages[-1][1]
             return _FakeMessage('{"score": 50, "feedback": "ok"}')
 

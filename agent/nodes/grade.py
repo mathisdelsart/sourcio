@@ -14,6 +14,7 @@ import re
 from agent.persistence import persist_grade
 from agent.state import TutorState
 from core.config import get_llm
+from core.obs import get_callbacks
 
 _SYSTEM = (
     "You are a strict but fair grader for a course tutor.\n"
@@ -54,7 +55,14 @@ def grade(state: TutorState) -> TutorState:
     message = state.get("message", "")
 
     human = f"Reference solution:\n{reference}\n\nStudent answer:\n{message}"
-    raw = get_llm("grade").invoke([("system", _SYSTEM), ("human", human)]).content.strip()
+    raw = (
+        get_llm("grade")
+        .invoke(
+            [("system", _SYSTEM), ("human", human)],
+            config={"callbacks": get_callbacks()},
+        )
+        .content.strip()
+    )
 
     # Keep raw parsing internal; the node returns only the clean verdict.
     verdict = _parse(raw)
