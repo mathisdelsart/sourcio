@@ -26,6 +26,8 @@ class _FakeQdrantClient:
 
     last_kwargs: dict | None = None
     points: list = [_point("p1", 0.91, "the chunk text")]
+    # Whether get_collection reports a named sparse vector (hybrid availability).
+    has_sparse: bool = False
 
     def __init__(self, *args, **kwargs):
         pass
@@ -34,13 +36,24 @@ class _FakeQdrantClient:
         _FakeQdrantClient.last_kwargs = kwargs
         return SimpleNamespace(points=list(_FakeQdrantClient.points))
 
+    def get_collection(self, name):
+        sparse = {"sparse": object()} if _FakeQdrantClient.has_sparse else {}
+        return SimpleNamespace(
+            config=SimpleNamespace(params=SimpleNamespace(sparse_vectors=sparse))
+        )
+
 
 @pytest.fixture(autouse=True)
 def _no_model_no_network(monkeypatch):
     _FakeQdrantClient.last_kwargs = None
     _FakeQdrantClient.points = [_point("p1", 0.91, "the chunk text")]
-    # Never load the real embedding model.
+    _FakeQdrantClient.has_sparse = False
+    # Never load the real embedding model (dense or sparse).
     monkeypatch.setattr(retrieval, "embed_query", lambda text: [0.1, 0.2, 0.3])
+    monkeypatch.setattr(
+        "ingestion.embed.embed_sparse_query",
+        lambda text: retrieval.SparseVector(indices=[1, 2], values=[0.5, 0.7]),
+    )
     # Never reach a real Qdrant server.
     monkeypatch.setattr(retrieval, "QdrantClient", _FakeQdrantClient)
 
@@ -53,6 +66,9 @@ def _set_settings(monkeypatch, **overrides):
         "similarity_threshold": 0.5,
         "reranker_model": "",
         "rerank_candidates": 20,
+        "hybrid_retrieval": False,
+        "sparse_vector_name": "sparse",
+        "hybrid_prefetch": 50,
     }
     base.update(overrides)
     settings = SimpleNamespace(**base)
@@ -221,3 +237,95 @@ def test_reranker_keeps_course_chapter_filter(monkeypatch):
     assert isinstance(flt, Filter)
     keys = {(c.key, c.match.value) for c in flt.must}
     assert keys == {("course", "Wavelet Transform"), ("chapter", "Intro")}
+
+
+# --- Hybrid dense + sparse (RRF) -------------------------------------------
+
+
+def test_hybrid_disabled_uses_dense_query(monkeypatch):
+    # With hybrid off, retrieve issues the plain dense query (no prefetch),
+    # byte-identically to before.
+    _set_settings(monkeypatch, hybrid_retrieval=False)
+    _FakeQdrantClient.has_sparse = True  # availability is irrelevant when off
+    retrieval.retrieve("q")
+    kwargs = _FakeQdrantClient.last_kwargs
+    assert "prefetch" not in kwargs
+    assert kwargs["score_threshold"] == 0.5
+    assert kwargs["limit"] == 5
+
+
+def test_hybrid_falls_back_to_dense_when_no_sparse_vector(monkeypatch):
+    # Hybrid requested but the collection is dense-only (the live demo index):
+    # fall back gracefully to the dense query instead of crashing.
+    _set_settings(monkeypatch, hybrid_retrieval=True)
+    _FakeQdrantClient.has_sparse = False
+    results = retrieval.retrieve("q")
+    kwargs = _FakeQdrantClient.last_kwargs
+    assert "prefetch" not in kwargs
+    assert kwargs["score_threshold"] == 0.5
+    assert [r.chunk.id for r in results] == ["p1"]
+
+
+def test_hybrid_issues_fused_rrf_query_when_available(monkeypatch):
+    _set_settings(monkeypatch, hybrid_retrieval=True, hybrid_prefetch=50)
+    _FakeQdrantClient.has_sparse = True
+    results = retrieval.retrieve("q", k=5)
+    kwargs = _FakeQdrantClient.last_kwargs
+    # The outer query is an RRF fusion over two prefetch branches.
+    assert isinstance(kwargs["query"], retrieval.FusionQuery)
+    assert kwargs["query"].fusion == retrieval.Fusion.RRF
+    prefetch = kwargs["prefetch"]
+    assert len(prefetch) == 2
+    dense_branch, sparse_branch = prefetch
+    # Dense branch: named dense vector, keeps the similarity threshold (refusal).
+    assert dense_branch.using == "dense"
+    assert dense_branch.score_threshold == 0.5
+    assert dense_branch.limit == 50
+    # Sparse branch: named sparse vector, sparse query, no dense threshold.
+    assert sparse_branch.using == "sparse"
+    assert isinstance(sparse_branch.query, retrieval.SparseVector)
+    assert sparse_branch.query.indices == [1, 2]
+    assert [r.chunk.id for r in results] == ["p1"]
+
+
+def test_hybrid_refuses_when_nothing_clears_threshold(monkeypatch):
+    # The dense branch keeps the similarity threshold, so an out-of-course
+    # question yields no fused candidates -> the answer layer refuses.
+    _set_settings(monkeypatch, hybrid_retrieval=True)
+    _FakeQdrantClient.has_sparse = True
+    _FakeQdrantClient.points = []
+    results = retrieval.retrieve("q")
+    assert results == []
+
+
+def test_hybrid_keeps_course_chapter_filter(monkeypatch):
+    _set_settings(monkeypatch, hybrid_retrieval=True)
+    _FakeQdrantClient.has_sparse = True
+    retrieval.retrieve("q", course="Wavelet Transform", chapter="Intro")
+    kwargs = _FakeQdrantClient.last_kwargs
+    # The filter is applied both on the outer query and on each prefetch branch.
+    outer = kwargs["query_filter"]
+    assert isinstance(outer, Filter)
+    for branch in kwargs["prefetch"]:
+        keys = {(c.key, c.match.value) for c in branch.filter.must}
+        assert keys == {("course", "Wavelet Transform"), ("chapter", "Intro")}
+
+
+def test_hybrid_composes_with_reranker(monkeypatch):
+    # Hybrid base path + reranker on top: fused query issued, then rerank.
+    _set_settings(
+        monkeypatch, hybrid_retrieval=True, reranker_model="fake-model", rerank_candidates=20
+    )
+    _FakeQdrantClient.has_sparse = True
+    _FakeQdrantClient.points = [
+        _point("p1", 0.91, "alpha"),
+        _point("p2", 0.80, "bravo"),
+    ]
+    fake_scores = {"alpha": 0.1, "bravo": 0.9}
+    results = retrieval.retrieve(
+        "q", k=1, scorer=lambda question, texts: [fake_scores[t] for t in texts]
+    )
+    kwargs = _FakeQdrantClient.last_kwargs
+    assert isinstance(kwargs["query"], retrieval.FusionQuery)
+    # Reranker widened the prefetch/limit and reordered: bravo wins.
+    assert [r.chunk.id for r in results] == ["p2"]

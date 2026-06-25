@@ -81,6 +81,13 @@ def main() -> None:
         help="Maximum number of vision transcriptions running at once.",
     )
     parser.add_argument(
+        "--sparse",
+        action="store_true",
+        help="Also index bge-m3 lexical (sparse) vectors as Qdrant named vectors, "
+        "enabling opt-in hybrid dense+sparse retrieval (HYBRID_RETRIEVAL=1). "
+        "Creates a named-vector collection; choose one mode per collection.",
+    )
+    parser.add_argument(
         "--batch-size",
         type=int,
         default=10,
@@ -114,7 +121,7 @@ def main() -> None:
             concurrency=args.concurrency,
         )
         chunks = chunk_pages(pages)
-        index_chunks(chunks)
+        index_chunks(chunks, sparse=args.sparse)
         total_chunks += len(chunks)
         logger.info(
             "batch %d/%d indexed: %d chunks (%d total so far)",

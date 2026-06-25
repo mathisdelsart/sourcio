@@ -49,6 +49,22 @@ class Settings(BaseSettings):
     # before reranking and truncating back to k. Ignored when disabled.
     rerank_candidates: int = 20
 
+    # Name of the named sparse vector in Qdrant (bge-m3 lexical weights). Used by
+    # both sparse indexing (--sparse) and the hybrid query path.
+    sparse_vector_name: str = "sparse"
+
+    # Opt-in hybrid dense + sparse (BM25-style) retrieval with RRF fusion. False
+    # keeps the dense-only path unchanged. When True, hybrid is used only if the
+    # collection actually carries the sparse vector; otherwise retrieval falls
+    # back to dense gracefully (no crash). Requires a collection ingested with
+    # the `--sparse` flag.
+    hybrid_retrieval: bool = False
+
+    # When hybrid is active, how many candidates each branch (dense kNN and
+    # sparse) prefetches before RRF fusion truncates back to the requested k
+    # (or to rerank_candidates when the reranker is also enabled).
+    hybrid_prefetch: int = 50
+
     # Relational store (SQLite in development, PostgreSQL later).
     database_url: str = "sqlite:///./app.db"
 

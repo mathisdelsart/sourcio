@@ -10,16 +10,34 @@ precision: it fetches more candidates above the similarity threshold, rescores
 each (question, chunk) pair locally, and keeps the best k. The dense threshold
 still pre-filters, so an out-of-course question yields no candidates and is
 refused. When disabled (the default) the dense path above is used unchanged.
+
+An optional hybrid dense + sparse (BM25-style) path (opt-in via
+``hybrid_retrieval``) fuses a dense kNN branch and a bge-m3 lexical (sparse)
+branch with Reciprocal Rank Fusion (RRF) using the Qdrant Query API. It engages
+only when the collection actually carries the named sparse vector; otherwise it
+falls back to the dense path gracefully. The dense branch keeps the similarity
+threshold, so refusal semantics are preserved, and the optional reranker is
+applied on top exactly as in the dense path.
 """
 
 from collections.abc import Callable
 from functools import lru_cache
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Condition, FieldCondition, Filter, MatchValue
+from qdrant_client.models import (
+    Condition,
+    FieldCondition,
+    Filter,
+    Fusion,
+    FusionQuery,
+    MatchValue,
+    Prefetch,
+    SparseVector,
+)
 
 from core.config import get_settings
 from ingestion.embed import embed_query
+from ingestion.index import DENSE_VECTOR_NAME
 from ingestion.schema import Chunk, Retrieved
 
 # A scorer maps (question, candidate texts) to one relevance score per text.
@@ -99,6 +117,88 @@ def _point_to_retrieved(point) -> Retrieved:
     return Retrieved(chunk=chunk, score=point.score)
 
 
+def _collection_has_sparse(client: QdrantClient, collection: str, sparse_name: str) -> bool:
+    """Return True when ``collection`` carries the named sparse vector.
+
+    Lets the hybrid path fall back to dense gracefully against a dense-only
+    collection (e.g. the live demo index) instead of crashing. Any error while
+    inspecting the collection is treated as "no sparse vector".
+    """
+    try:
+        info = client.get_collection(collection)
+        sparse_config = info.config.params.sparse_vectors
+    except Exception:
+        return False
+    return bool(sparse_config) and sparse_name in sparse_config
+
+
+def _dense_points(
+    client: QdrantClient,
+    *,
+    collection: str,
+    question: str,
+    limit: int,
+    score_threshold: float,
+    query_filter: Filter | None,
+):
+    """Run the dense-only query against the (unnamed-vector) collection."""
+    response = client.query_points(
+        collection_name=collection,
+        query=embed_query(question),
+        limit=limit,
+        score_threshold=score_threshold,
+        query_filter=query_filter,
+        with_payload=True,
+    )
+    return response.points
+
+
+def _hybrid_points(
+    client: QdrantClient,
+    *,
+    collection: str,
+    question: str,
+    limit: int,
+    score_threshold: float,
+    query_filter: Filter | None,
+):
+    """Run a dense+sparse query fused with RRF via the Qdrant Query API.
+
+    Two prefetch branches feed the fusion: a dense kNN branch (named dense
+    vector, keeping the similarity threshold so refusal is preserved) and a
+    sparse lexical branch (bge-m3 weights). RRF merges their ranks; the outer
+    query truncates to ``limit``. The reranker, when enabled, runs on top.
+    """
+    from ingestion.embed import embed_sparse_query
+
+    settings = get_settings()
+    sparse = embed_sparse_query(question)
+    prefetch = [
+        Prefetch(
+            query=embed_query(question),
+            using=DENSE_VECTOR_NAME,
+            limit=settings.hybrid_prefetch,
+            score_threshold=score_threshold,
+            filter=query_filter,
+        ),
+        Prefetch(
+            query=SparseVector(indices=sparse.indices, values=sparse.values),
+            using=settings.sparse_vector_name,
+            limit=settings.hybrid_prefetch,
+            filter=query_filter,
+        ),
+    ]
+    response = client.query_points(
+        collection_name=collection,
+        prefetch=prefetch,
+        query=FusionQuery(fusion=Fusion.RRF),
+        limit=limit,
+        query_filter=query_filter,
+        with_payload=True,
+    )
+    return response.points
+
+
 def retrieve(
     question: str,
     *,
@@ -112,14 +212,19 @@ def retrieve(
     Default (dense) path: returns up to k chunks above the similarity threshold,
     ordered by similarity.
 
-    Reranking path (when ``reranker_model`` is set): fetches up to
-    ``rerank_candidates`` chunks *above* the similarity threshold, rescores
-    them with a local cross-encoder, and returns the top k. The returned
-    ``.score`` is then the cross-encoder relevance, not the dense similarity.
-    Keeping the threshold preserves refusal: an out-of-course question yields
-    no candidates, so the answer layer refuses instead of guessing.
+    Hybrid path (when ``hybrid_retrieval`` is set *and* the collection carries
+    the named sparse vector): fuses a dense kNN branch and a bge-m3 lexical
+    (sparse) branch with RRF. The dense branch keeps the similarity threshold so
+    an out-of-course question still yields nothing (refusal). If hybrid is
+    requested but the collection has no sparse vector, retrieval falls back to
+    the dense path gracefully.
 
-    In both paths, when ``course`` and/or ``chapter`` are given retrieval is
+    Reranking path (when ``reranker_model`` is set): fetches up to
+    ``rerank_candidates`` candidates, rescores them with a local cross-encoder,
+    and returns the top k. The returned ``.score`` is then the cross-encoder
+    relevance. Reranking composes with either base path (dense or hybrid).
+
+    In all paths, when ``course`` and/or ``chapter`` are given retrieval is
     restricted to chunks whose payload matches them; when both are None the
     whole collection is searched. ``scorer`` is injectable for testing; when
     None the configured cross-encoder model is used.
@@ -138,16 +243,29 @@ def retrieve(
     else:
         limit = k
 
-    response = client.query_points(
-        collection_name=settings.qdrant_collection,
-        query=embed_query(question),
-        limit=limit,
-        score_threshold=score_threshold,
-        query_filter=query_filter,
-        with_payload=True,
+    use_hybrid = settings.hybrid_retrieval and _collection_has_sparse(
+        client, settings.qdrant_collection, settings.sparse_vector_name
     )
+    if use_hybrid:
+        points = _hybrid_points(
+            client,
+            collection=settings.qdrant_collection,
+            question=question,
+            limit=limit,
+            score_threshold=score_threshold,
+            query_filter=query_filter,
+        )
+    else:
+        points = _dense_points(
+            client,
+            collection=settings.qdrant_collection,
+            question=question,
+            limit=limit,
+            score_threshold=score_threshold,
+            query_filter=query_filter,
+        )
 
-    candidates = [_point_to_retrieved(point) for point in response.points]
+    candidates = [_point_to_retrieved(point) for point in points]
     if reranking:
         return rerank(question, candidates, k=k, scorer=scorer or _default_scorer)
     return candidates
