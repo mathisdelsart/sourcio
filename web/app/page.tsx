@@ -10,6 +10,9 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useT } from "@/lib/i18n";
 import { Hero } from "@/components/Hero";
+import { HowItWorks } from "@/components/HowItWorks";
+import { Features } from "@/components/Features";
+import { LandingCta } from "@/components/LandingCta";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { AskPanel } from "@/components/panels/AskPanel";
 import { ReexplainPanel } from "@/components/panels/ReexplainPanel";
@@ -143,21 +146,34 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:px-6">
-        <Hero />
-
-        <div className="flex justify-center sm:hidden">
-          <HealthBadge config={config} />
+      <main>
+        {/* Landing — wider container, generous spacing, leads into the tool. */}
+        <div className="mx-auto max-w-5xl space-y-12 px-4 py-10 sm:px-6 sm:py-14">
+          <Hero targetId="tool" />
+          <HowItWorks />
+          <Features />
+          <LandingCta targetId="tool" />
         </div>
 
-        <SettingsPanel
-          studentId={studentId}
-          baseUrl={baseUrl}
-          apiKey={apiKey}
-          onSave={saveSettings}
-        />
+        {/* Tool — the existing tutor, anchored so the hero CTA scrolls here. */}
+        <section
+          id="tool"
+          aria-label={t("tabs.aria")}
+          className="scroll-mt-20 border-t border-zinc-200 bg-white/40 dark:border-zinc-800 dark:bg-zinc-950"
+        >
+          <div className="mx-auto max-w-3xl space-y-5 px-4 py-8 sm:px-6 sm:py-10">
+            <div className="flex justify-center sm:hidden">
+              <HealthBadge config={config} />
+            </div>
 
-        <Tabs tabs={TABS} active={active} onChange={setActive} />
+            <SettingsPanel
+              studentId={studentId}
+              baseUrl={baseUrl}
+              apiKey={apiKey}
+              onSave={saveSettings}
+            />
+
+            <Tabs tabs={TABS} active={active} onChange={setActive} />
 
         <div className="animate-fade-in">
           {active === "ask" && (
@@ -207,10 +223,26 @@ export default function Home() {
               active={active === "review"}
             />
           )}
-        </div>
+            </div>
+          </div>
+        </section>
 
-        <footer className="pt-2 text-center text-xs text-zinc-400 dark:text-zinc-500">
-          {t("footer.tagline")}
+        <footer className="border-t border-zinc-200 dark:border-zinc-800">
+          <div className="mx-auto flex max-w-5xl flex-col items-center gap-2 px-4 py-8 text-center sm:px-6">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600 text-xs font-bold text-white">
+                G
+              </span>
+              <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                {t("app.name")}
+              </span>
+              <span className="text-xs text-zinc-400 dark:text-zinc-500">grounded-rag</span>
+            </div>
+            <p className="max-w-md text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+              {t("landing.footer.tagline")}
+            </p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">{t("footer.tagline")}</p>
+          </div>
         </footer>
       </main>
     </div>

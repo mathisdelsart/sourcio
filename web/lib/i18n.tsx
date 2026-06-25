@@ -33,12 +33,58 @@ const en = {
 
   // Hero
   "hero.title": "Grounded Tutor",
+  "hero.valueProp":
+    "An AI tutor grounded strictly in your own course material — always cited, never makes things up.",
   "hero.description":
-    "An AI tutor grounded strictly in your own course material — always cited, refuses what it can't support.",
+    "Index your slides and notes once, then ask in plain language. Every answer is backed by a citation, or honestly refused when the course doesn't cover it.",
+  "hero.cta": "Try it",
+  "hero.ctaAria": "Scroll to the tutor",
   "hero.principles": "Key principles",
   "hero.chip.grounded": "Grounded",
   "hero.chip.cited": "Cited",
   "hero.chip.refuses": "Refuses to hallucinate",
+
+  // How it works
+  "how.eyebrow": "How it works",
+  "how.title": "From your course to a cited answer",
+  "how.step1.title": "Index your course once",
+  "how.step1.body":
+    "Add your slides, exercises and notes. They're parsed math-aware and stored as a private, searchable knowledge base.",
+  "how.step2.title": "Ask in natural language",
+  "how.step2.body":
+    "Question it the way you'd ask a tutor. Retrieval finds the most relevant passages from your own material.",
+  "how.step3.title": "Get a cited answer — or a refusal",
+  "how.step3.body":
+    "Answers carry the exact source (course, page). If the course doesn't cover it, the tutor says so instead of guessing.",
+
+  // Features
+  "features.eyebrow": "Why it's different",
+  "features.title": "Built to be trusted, not just helpful",
+  "features.cited.title": "Cited by construction",
+  "features.cited.body":
+    "Sources are mapped in code, not written by the model — so a citation can never point to a page it invented.",
+  "features.refusal.title": "Refusal guard",
+  "features.refusal.body":
+    "A similarity threshold and a faithfulness check make the tutor refuse anything the course doesn't support.",
+  "features.retrieval.title": "Advanced retrieval",
+  "features.retrieval.body":
+    "Threshold-based search with an optional cross-encoder reranker surfaces the right passage before answering.",
+  "features.private.title": "Private by default",
+  "features.private.body":
+    "Local multilingual embeddings and a self-hosted vector store keep your course material on your own infrastructure.",
+  "features.quiz.title": "Quiz & spaced repetition",
+  "features.quiz.body":
+    "Generate grounded exercises and quizzes, then schedule notions for review at the right moment.",
+  "features.bilingual.title": "Bilingual",
+  "features.bilingual.body":
+    "Works across English and French course material, with a fully bilingual interface.",
+
+  // Landing CTA / footer
+  "landing.cta.title": "Ready to revise from your own course?",
+  "landing.cta.body":
+    "No setup to read this far. Open the tutor below, point it at your material, and ask your first question.",
+  "landing.cta.button": "Start now",
+  "landing.footer.tagline": "An AI tutor grounded strictly in your course — cited, or honest about what it can't answer.",
 
   // Tabs
   "tabs.aria": "Tutor sections",
@@ -286,12 +332,58 @@ const fr: Record<TranslationKey, string> = {
 
   // Hero
   "hero.title": "Grounded Tutor",
+  "hero.valueProp":
+    "Un tuteur IA strictement ancré dans votre propre matériel de cours — toujours cité, n'invente jamais rien.",
   "hero.description":
-    "Un tuteur IA strictement ancré dans votre propre matériel de cours — toujours cité, refuse ce qu'il ne peut pas étayer.",
+    "Indexez vos slides et vos notes une seule fois, puis posez vos questions en langage naturel. Chaque réponse est étayée par une citation, ou honnêtement refusée si le cours ne la couvre pas.",
+  "hero.cta": "Essayer",
+  "hero.ctaAria": "Faire défiler jusqu'au tuteur",
   "hero.principles": "Principes clés",
   "hero.chip.grounded": "Ancré",
   "hero.chip.cited": "Cité",
   "hero.chip.refuses": "Refuse d'halluciner",
+
+  // How it works
+  "how.eyebrow": "Comment ça marche",
+  "how.title": "De votre cours à une réponse citée",
+  "how.step1.title": "Indexez votre cours une fois",
+  "how.step1.body":
+    "Ajoutez vos slides, exercices et notes. Ils sont analysés en tenant compte des maths et stockés dans une base de connaissances privée et interrogeable.",
+  "how.step2.title": "Posez vos questions en langage naturel",
+  "how.step2.body":
+    "Interrogez-le comme vous le feriez avec un tuteur. La récupération trouve les passages les plus pertinents de votre propre matériel.",
+  "how.step3.title": "Obtenez une réponse citée — ou un refus",
+  "how.step3.body":
+    "Les réponses indiquent la source exacte (cours, page). Si le cours ne le couvre pas, le tuteur le dit au lieu de deviner.",
+
+  // Features
+  "features.eyebrow": "Ce qui le distingue",
+  "features.title": "Conçu pour la confiance, pas seulement l'aide",
+  "features.cited.title": "Citations par construction",
+  "features.cited.body":
+    "Les sources sont mappées dans le code, pas écrites par le modèle — une citation ne peut donc jamais pointer vers une page inventée.",
+  "features.refusal.title": "Garde-fou anti-hallucination",
+  "features.refusal.body":
+    "Un seuil de similarité et une vérification de fidélité font refuser au tuteur tout ce que le cours n'étaye pas.",
+  "features.retrieval.title": "Récupération avancée",
+  "features.retrieval.body":
+    "Une recherche basée sur un seuil avec un reranker cross-encoder optionnel fait remonter le bon passage avant de répondre.",
+  "features.private.title": "Privé par défaut",
+  "features.private.body":
+    "Des embeddings multilingues locaux et un vector store auto-hébergé gardent votre matériel de cours sur votre propre infrastructure.",
+  "features.quiz.title": "Quiz et répétition espacée",
+  "features.quiz.body":
+    "Générez des exercices et des quiz ancrés, puis planifiez la révision des notions au bon moment.",
+  "features.bilingual.title": "Bilingue",
+  "features.bilingual.body":
+    "Fonctionne avec du matériel de cours en anglais et en français, avec une interface entièrement bilingue.",
+
+  // Landing CTA / footer
+  "landing.cta.title": "Prêt à réviser à partir de votre propre cours ?",
+  "landing.cta.body":
+    "Aucune configuration nécessaire pour en arriver là. Ouvrez le tuteur ci-dessous, pointez-le vers votre matériel et posez votre première question.",
+  "landing.cta.button": "Commencer",
+  "landing.footer.tagline": "Un tuteur IA strictement ancré dans votre cours — cité, ou honnête sur ce qu'il ne peut pas répondre.",
 
   // Tabs
   "tabs.aria": "Sections du tuteur",
