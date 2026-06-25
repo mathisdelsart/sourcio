@@ -347,6 +347,127 @@ def test_missing_required_field_is_422(client, path, body):
     assert response.status_code == 422
 
 
+# --- /ask/stream (SSE) -------------------------------------------------------
+
+
+def _parse_sse(text):
+    """Parse an SSE body into a list of decoded JSON ``data:`` payloads."""
+    import json
+
+    events = []
+    for block in text.strip().split("\n\n"):
+        data = "".join(
+            line[len("data:") :].strip() for line in block.splitlines() if line.startswith("data:")
+        )
+        if data:
+            events.append(json.loads(data))
+    return events
+
+
+def test_ask_stream_streams_tokens_then_sources(client, monkeypatch):
+    captured = {}
+
+    def fake_stream_answer(question, *, k=5, course=None, chapter=None):
+        captured["question"] = question
+        captured["k"] = k
+        yield {"type": "token", "text": "A wavelet "}
+        yield {"type": "token", "text": "is X [1]."}
+        yield {
+            "type": "sources",
+            "sources": ["(Course, p.11)"],
+            "refused": False,
+            "answer": "A wavelet is X (Course, p.11).",
+        }
+
+    monkeypatch.setattr(api_main, "stream_answer", fake_stream_answer)
+
+    response = client.post(
+        "/ask/stream", json={"student_id": "s1", "question": "What is a wavelet?", "k": 3}
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+
+    events = _parse_sse(response.text)
+    assert events[0] == {"type": "token", "text": "A wavelet "}
+    assert events[1] == {"type": "token", "text": "is X [1]."}
+    # The final sources event omits the internal assembled "answer" field.
+    assert events[-1] == {
+        "type": "sources",
+        "sources": ["(Course, p.11)"],
+        "refused": False,
+    }
+    assert captured == {"question": "What is a wavelet?", "k": 3}
+
+
+def test_ask_stream_persists_history_after_completion(client, monkeypatch):
+    def fake_stream_answer(question, *, k=5, course=None, chapter=None):
+        yield {"type": "token", "text": "Grounded reply "}
+        yield {"type": "token", "text": "[1]"}
+        yield {
+            "type": "sources",
+            "sources": ["(Course, p.3)"],
+            "refused": False,
+            "answer": "Grounded reply (Course, p.3)",
+        }
+
+    monkeypatch.setattr(api_main, "stream_answer", fake_stream_answer)
+
+    response = client.post("/ask/stream", json={"student_id": "alice", "question": "Define X?"})
+    assert response.status_code == 200
+    # Drain the stream so the generator's completion (and persistence) runs.
+    _ = response.text
+
+    history = client.get("/history/alice").json()
+    assert [(t["role"], t["content"]) for t in history] == [
+        ("user", "Define X?"),
+        ("assistant", "Grounded reply (Course, p.3)"),
+    ]
+
+
+def test_ask_stream_surfaces_refusal(client, monkeypatch):
+    refusal = "This is not covered in the course material."
+
+    def fake_stream_answer(question, *, k=5, course=None, chapter=None):
+        yield {"type": "token", "text": refusal}
+        yield {"type": "sources", "sources": [], "refused": True, "answer": refusal}
+
+    monkeypatch.setattr(api_main, "stream_answer", fake_stream_answer)
+
+    response = client.post("/ask/stream", json={"student_id": "s1", "question": "off-topic"})
+    assert response.status_code == 200
+    events = _parse_sse(response.text)
+    assert events[0] == {"type": "token", "text": refusal}
+    assert events[-1] == {"type": "sources", "sources": [], "refused": True}
+
+    # The refusal text is persisted as the assistant turn.
+    history = client.get("/history/s1").json()
+    assert history[-1]["content"] == refusal
+
+
+def test_ask_stream_threads_course_and_chapter(client, monkeypatch):
+    captured = {}
+
+    def fake_stream_answer(question, *, k=5, course=None, chapter=None):
+        captured["course"] = course
+        captured["chapter"] = chapter
+        yield {"type": "sources", "sources": [], "refused": False, "answer": "ok"}
+
+    monkeypatch.setattr(api_main, "stream_answer", fake_stream_answer)
+
+    response = client.post(
+        "/ask/stream",
+        json={
+            "student_id": "s1",
+            "question": "What is X?",
+            "course": "Algebra",
+            "chapter": "Ch.2",
+        },
+    )
+    assert response.status_code == 200
+    _ = response.text
+    assert captured == {"course": "Algebra", "chapter": "Ch.2"}
+
+
 # --- /reexplain --------------------------------------------------------------
 
 
@@ -573,6 +694,11 @@ def _stub_nodes(monkeypatch):
             "raw": "ok",
         },
     )
+
+    def _fake_stream_answer(question, *, k=5, course=None, chapter=None):
+        yield {"type": "sources", "sources": [], "refused": False, "answer": "ok"}
+
+    monkeypatch.setattr(api_main, "stream_answer", _fake_stream_answer)
     monkeypatch.setattr(
         api_main,
         "generate",
@@ -605,6 +731,7 @@ def test_health_open_without_api_key(client, monkeypatch):
     ("method", "path", "body"),
     [
         ("post", "/ask", {"student_id": "s1", "question": "q"}),
+        ("post", "/ask/stream", {"student_id": "s1", "question": "q"}),
         ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),
@@ -622,6 +749,7 @@ def test_protected_endpoint_rejects_missing_key(client, monkeypatch, method, pat
     ("method", "path", "body"),
     [
         ("post", "/ask", {"student_id": "s1", "question": "q"}),
+        ("post", "/ask/stream", {"student_id": "s1", "question": "q"}),
         ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),
@@ -639,6 +767,7 @@ def test_protected_endpoint_rejects_wrong_key(client, monkeypatch, method, path,
     ("method", "path", "body"),
     [
         ("post", "/ask", {"student_id": "s1", "question": "q"}),
+        ("post", "/ask/stream", {"student_id": "s1", "question": "q"}),
         ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),
@@ -656,6 +785,7 @@ def test_protected_endpoint_accepts_correct_key(client, monkeypatch, method, pat
     ("method", "path", "body"),
     [
         ("post", "/ask", {"student_id": "s1", "question": "q"}),
+        ("post", "/ask/stream", {"student_id": "s1", "question": "q"}),
         ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),

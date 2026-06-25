@@ -15,11 +15,13 @@ are persisted as conversation history, and ``/history`` replays them.
 """
 
 import hmac
-from collections.abc import AsyncIterator
+import json
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import Engine, select
 
@@ -27,7 +29,7 @@ from agent.nodes.generate import generate
 from agent.nodes.grade import grade
 from agent.nodes.reexplain import reexplain
 from agent.state import Level, TutorState, to_history
-from core.answer import answer
+from core.answer import answer, stream_answer
 from core.config import get_settings
 from db.models import Student
 from db.session import (
@@ -187,6 +189,55 @@ def ask(request: AskRequest) -> dict[str, Any]:
         "refused": result["refused"],
         "sources": result["sources"],
     }
+
+
+def _stream_ask_events(request: AskRequest) -> Iterator[str]:
+    """Serialize ``stream_answer`` as Server-Sent Events and persist on completion.
+
+    Each item from the generator is emitted as one SSE ``data:`` line carrying a
+    JSON object: ``{"type": "token", "text": ...}`` for each delta, then a final
+    ``{"type": "sources", "sources": [...], "refused": ...}`` event. Once the
+    stream ends, the question and the fully assembled assistant answer are
+    persisted as conversation history, exactly like ``/ask``.
+    """
+    final_answer = REFUSAL_FALLBACK
+    for event in stream_answer(
+        request.question, k=request.k, course=request.course, chapter=request.chapter
+    ):
+        if event.get("type") == "sources":
+            final_answer = event.get("answer", final_answer)
+            payload = {
+                "type": "sources",
+                "sources": event.get("sources", []),
+                "refused": event.get("refused", False),
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+        else:
+            yield f"data: {json.dumps(event)}\n\n"
+
+    with get_session(_engine) as session:
+        student = get_or_create_student(session, request.student_id)
+        add_message(session, student_id=student.id, role="user", content=request.question)
+        add_message(session, student_id=student.id, role="assistant", content=final_answer)
+
+
+REFUSAL_FALLBACK = "This is not covered in the course material."
+
+
+@app.post("/ask/stream", dependencies=[Depends(require_api_key)])
+def ask_stream(request: AskRequest) -> StreamingResponse:
+    """Stream a grounded answer token by token as Server-Sent Events.
+
+    Mirrors ``/ask`` (same request model, auth and history persistence) but
+    returns a ``text/event-stream`` response: token deltas arrive first, then a
+    final sources/refusal event. ``/ask`` stays available for non-streaming
+    clients.
+    """
+    return StreamingResponse(
+        _stream_ask_events(request),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 NOTHING_TO_REEXPLAIN = "There is no previous answer to re-explain yet. Ask a question first."

@@ -1,7 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { ask, reexplain, type AskResponse, type ConnectionConfig, type Level } from "@/lib/api";
+import {
+  ask,
+  askStream,
+  reexplain,
+  type AskResponse,
+  type ConnectionConfig,
+  type Level,
+} from "@/lib/api";
 import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { TextField, TextArea } from "@/components/TextField";
@@ -28,6 +35,8 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
   const [chapter, setChapter] = useState("");
   const [k, setK] = useState(5);
   const [loading, setLoading] = useState(false);
+  /** Text accumulated from the live token stream, before the final event lands. */
+  const [streaming, setStreaming] = useState<string | null>(null);
 
   const [reexplained, setReexplained] = useState<string | null>(null);
   const [level, setLevel] = useState<Level>("beginner");
@@ -39,21 +48,39 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
     if (!canAsk) return;
     setLoading(true);
     setReexplained(null);
+    setLastAnswer(null);
+    setStreaming("");
+    const req = {
+      student_id: studentId,
+      question: question.trim(),
+      k,
+      course: course.trim() || null,
+      chapter: chapter.trim() || null,
+    };
     try {
-      const result = await ask(
-        {
-          student_id: studentId,
-          question: question.trim(),
-          k,
-          course: course.trim() || null,
-          chapter: chapter.trim() || null,
+      let buffer = "";
+      await askStream(
+        req,
+        (text) => {
+          buffer += text;
+          setStreaming(buffer);
+        },
+        (done) => {
+          setLastAnswer({ answer: buffer, refused: done.refused, sources: done.sources });
         },
         config,
       );
-      setLastAnswer(result);
-    } catch (err) {
-      toast.push(err instanceof Error ? err.message : "Request failed.", "error");
+    } catch {
+      // Streaming failed (e.g. proxy buffering, older backend): fall back to the
+      // non-streaming endpoint so the user still gets a complete answer.
+      try {
+        const result = await ask(req, config);
+        setLastAnswer(result);
+      } catch (err) {
+        toast.push(err instanceof Error ? err.message : "Request failed.", "error");
+      }
     } finally {
+      setStreaming(null);
       setLoading(false);
     }
   }
@@ -128,7 +155,16 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
       <Card>
         <CardHeader title="Answer" />
         <CardBody>
-          {loading ? (
+          {streaming != null ? (
+            streaming.length === 0 ? (
+              <Skeleton lines={4} />
+            ) : (
+              <div className="space-y-2" aria-live="polite" aria-busy="true">
+                <Markdown>{streaming}</Markdown>
+                <span className="inline-block h-4 w-2 animate-pulse bg-indigo-400 align-middle" />
+              </div>
+            )
+          ) : loading ? (
             <Skeleton lines={4} />
           ) : lastAnswer == null ? (
             <EmptyState

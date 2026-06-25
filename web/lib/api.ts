@@ -162,6 +162,95 @@ export async function ask(
   );
 }
 
+/** The final event of a streamed answer: resolved citations and refusal flag. */
+export interface AskStreamDone {
+  sources: string[];
+  refused: boolean;
+}
+
+/**
+ * Ask a grounded question and stream the answer token by token over SSE.
+ *
+ * `onToken` is called with each text delta as it arrives (for a typing effect);
+ * `onDone` is called once with the resolved sources and refusal flag. Throws an
+ * `ApiError` if the request cannot be reached or returns a non-2xx status, so
+ * callers can fall back to the non-streaming `ask`.
+ */
+export async function askStream(
+  body: AskRequest,
+  onToken: (text: string) => void,
+  onDone: (done: AskStreamDone) => void,
+  config?: ConnectionConfig,
+): Promise<void> {
+  const payload: AskRequest = {
+    student_id: body.student_id,
+    question: body.question,
+    k: body.k ?? 5,
+  };
+  if (body.course) payload.course = body.course;
+  if (body.chapter) payload.chapter = body.chapter;
+
+  const url = `${resolveBaseUrl(config)}/ask/stream`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: buildHeaders(config, true),
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new ApiError(
+      "Could not reach the backend. Check that it is running and the base URL is correct.",
+    );
+  }
+  if (!response.ok) {
+    throw new ApiError(await readError(response), response.status);
+  }
+  if (!response.body) {
+    throw new ApiError("Streaming is not supported by this response.", response.status);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const handleEvent = (raw: string) => {
+    // Each SSE event is a block of lines; collect the `data:` payload(s).
+    const data = raw
+      .split("\n")
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trim())
+      .join("");
+    if (!data) return;
+    let event: { type?: string; text?: string; sources?: string[]; refused?: boolean };
+    try {
+      event = JSON.parse(data);
+    } catch {
+      return; // ignore malformed frames rather than crashing the stream
+    }
+    if (event.type === "token" && typeof event.text === "string") {
+      onToken(event.text);
+    } else if (event.type === "sources") {
+      onDone({ sources: event.sources ?? [], refused: event.refused ?? false });
+    }
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sep: number;
+    // Events are separated by a blank line ("\n\n").
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      const chunk = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      handleEvent(chunk);
+    }
+  }
+  // Flush any trailing event that arrived without a terminating blank line.
+  if (buffer.trim()) handleEvent(buffer);
+}
+
 /** Re-explain the student's last tutor answer at the requested level. */
 export async function reexplain(
   studentId: string,
