@@ -13,12 +13,17 @@ import json
 import pytest
 
 from ui.metrics import (
+    DEFAULT_LATENCY_PATH,
     DEFAULT_RESULTS_PATH,
+    LatencyRow,
     MetricCard,
+    format_latency_rows,
     format_metric_cards,
     format_stats,
     gather_db_stats,
+    load_default_latency,
     load_default_metrics,
+    load_latency_file,
     load_metrics_file,
 )
 
@@ -144,6 +149,88 @@ def test_load_default_metrics_reads_default_results_file(tmp_path, monkeypatch):
 def test_load_default_metrics_missing_default_returns_empty(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert load_default_metrics() == {}
+
+
+# --- format_latency_rows ----------------------------------------------------
+
+
+def test_format_latency_rows_renders_known_stages_in_order():
+    latency = {
+        "retrieval": {"count": 3, "p50_ms": 12.0, "p95_ms": 40.0},
+        "llm": {"count": 3, "p50_ms": 800.0, "p95_ms": 1500.0},
+        "judge": {"count": 2, "p50_ms": 600.0, "p95_ms": 900.0},
+    }
+    rows = format_latency_rows(latency)
+    assert [r.stage for r in rows] == ["retrieval", "llm", "judge"]
+    by_stage = {r.stage: r for r in rows}
+    assert by_stage["llm"].p95_ms == 1500.0
+    assert by_stage["retrieval"].count == 3
+    assert all(isinstance(r, LatencyRow) for r in rows)
+
+
+def test_format_latency_rows_handles_missing_stage():
+    rows = format_latency_rows({"retrieval": {"count": 1, "p50_ms": 5.0, "p95_ms": 5.0}})
+    by_stage = {r.stage: r for r in rows}
+    assert by_stage["retrieval"].p50_ms == 5.0
+    # Stages absent from the source render with zero count and None figures.
+    assert by_stage["llm"].count == 0
+    assert by_stage["llm"].p50_ms is None
+    assert by_stage["judge"].p95_ms is None
+
+
+def test_format_latency_rows_empty_source():
+    rows = format_latency_rows({})
+    assert len(rows) == 3
+    assert all(r.count == 0 and r.p50_ms is None and r.p95_ms is None for r in rows)
+
+
+def test_format_latency_rows_none_source():
+    rows = format_latency_rows(None)
+    assert all(r.p50_ms is None for r in rows)
+
+
+def test_format_latency_rows_ignores_non_numeric_and_bool():
+    rows = format_latency_rows({"retrieval": {"count": True, "p50_ms": "fast", "p95_ms": None}})
+    by_stage = {r.stage: r for r in rows}
+    # A stray bool count is not coerced to 1; non-numeric figures stay None.
+    assert by_stage["retrieval"].count == 0
+    assert by_stage["retrieval"].p50_ms is None
+
+
+# --- load_latency_file / load_default_latency -------------------------------
+
+
+def test_load_latency_file_reads_json(tmp_path):
+    path = tmp_path / "latency.json"
+    payload = {"retrieval": {"count": 1, "p50_ms": 1.0, "p95_ms": 1.0}}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    assert load_latency_file(path) == payload
+
+
+def test_load_latency_file_missing_returns_empty(tmp_path):
+    assert load_latency_file(tmp_path / "missing.json") == {}
+
+
+def test_load_latency_file_non_object_returns_empty(tmp_path):
+    path = tmp_path / "list.json"
+    path.write_text("[1, 2]", encoding="utf-8")
+    assert load_latency_file(path) == {}
+
+
+def test_default_latency_path_points_at_eval_latency():
+    assert DEFAULT_LATENCY_PATH == "eval/latency.json"
+
+
+def test_load_default_latency_uses_explicit_path(tmp_path):
+    path = tmp_path / "latency.json"
+    payload = {"llm": {"count": 1, "p50_ms": 2.0, "p95_ms": 2.0}}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    assert load_default_latency(path) == payload
+
+
+def test_load_default_latency_missing_default_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert load_default_latency() == {}
 
 
 # --- format_stats -----------------------------------------------------------

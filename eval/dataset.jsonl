@@ -16,3 +16,21 @@
 {"question": "What were the main causes of the French Revolution?", "expect_refusal": true, "note": "History, clearly outside the wavelet course."}
 {"question": "How do I configure a VPN on my laptop?", "expect_refusal": true, "note": "IT how-to, unrelated to the course material."}
 {"question": "What is the best way to invest in the stock market?", "expect_refusal": true, "note": "Personal finance, out of scope."}
+{"question": "How does the Fourier transform relate to the wavelet transform?", "expect_refusal": false, "note": "Fourier analysis is the classical baseline contrasted with wavelets in the deck.", "expect_keywords": ["fourier", "transform"]}
+{"question": "What is the role of a filter bank in the discrete wavelet transform?", "expect_refusal": false, "note": "Filter banks implement the fast wavelet transform.", "expect_keywords": ["filter bank", "filter"]}
+{"question": "How does downsampling work in the wavelet decomposition?", "expect_refusal": false, "note": "Decimation by two is part of the filter-bank recursion.", "expect_keywords": ["downsampling", "downsample"]}
+{"question": "What is the synthesis step in the inverse wavelet transform?", "expect_refusal": false, "note": "Reconstruction (synthesis) is the inverse of the analysis filter bank.", "expect_keywords": ["synthesis", "reconstruction"]}
+{"question": "What does orthogonality of a wavelet basis imply?", "expect_refusal": false, "note": "Orthogonal wavelet bases are introduced alongside the scaling function.", "expect_keywords": ["orthogonal", "basis"]}
+{"question": "How are approximation and detail coefficients combined to reconstruct a signal?", "expect_refusal": false, "note": "Perfect reconstruction combines approximation and detail coefficients.", "expect_keywords": ["approximation", "detail"]}
+{"question": "What is the dilation equation for the scaling function?", "expect_refusal": false, "note": "The two-scale (dilation) relation defines the scaling function.", "expect_keywords": ["scaling function", "dilation"]}
+{"question": "Why is a wavelet localized in both time and frequency?", "expect_refusal": false, "note": "Time-frequency localization is a defining property of wavelets.", "expect_keywords": ["frequency", "wavelet"]}
+{"question": "What is the continuous wavelet transform?", "expect_refusal": false, "note": "The continuous wavelet transform is contrasted with the discrete one.", "expect_keywords": ["continuous wavelet transform", "transform"]}
+{"question": "How does scale relate to frequency in a wavelet analysis?", "expect_refusal": false, "note": "Scale-frequency correspondence is part of the multiresolution view.", "expect_keywords": ["scale", "frequency"]}
+{"question": "What is a quadrature mirror filter?", "expect_refusal": false, "note": "Quadrature mirror filters underpin the two-channel filter bank.", "expect_keywords": ["filter"]}
+{"question": "How do you train a convolutional neural network for image classification?", "expect_refusal": true, "note": "Deep learning, plausibly adjacent to signal processing but not in the wavelet deck."}
+{"question": "What is the time complexity of the quicksort algorithm?", "expect_refusal": true, "note": "Algorithms / computer science, outside the course."}
+{"question": "How does mitochondrial DNA replication work?", "expect_refusal": true, "note": "Biology, clearly outside the wavelet course."}
+{"question": "What are the assumptions of ordinary least squares regression?", "expect_refusal": true, "note": "Statistics / ML, adjacent but not covered by the wavelet deck."}
+{"question": "How do I deploy a Kubernetes cluster on a cloud provider?", "expect_refusal": true, "note": "DevOps how-to, unrelated to the course material."}
+{"question": "What is the chemical formula of table salt?", "expect_refusal": true, "note": "Chemistry, clearly outside the wavelet course."}
+{"question": "Who painted the Mona Lisa and in which century?", "expect_refusal": true, "note": "Art history, clearly outside the wavelet course."}

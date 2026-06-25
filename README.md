@@ -26,6 +26,36 @@ source label. The model never handles page numbers, so it cannot invent one.
 The system splits into an **offline** ingestion pass (run once per course) and an **online** agent
 that serves requests, plus an offline **quality / evaluation** layer.
 
+```mermaid
+flowchart TD
+    subgraph OFFLINE["OFFLINE — ingestion (once per course)"]
+        PDF[course.pdf] --> EX["math-aware extraction<br/>slides → Markdown + LaTeX"]
+        EX --> CH["adaptive chunking<br/>1 slide ≈ 1 chunk"]
+        CH --> EMB["multilingual embeddings<br/>BAAI/bge-m3, local"]
+        EMB --> QD[(Qdrant<br/>vector + payload)]
+    end
+
+    subgraph ONLINE["ONLINE — LangGraph agent (per request)"]
+        Q[student message] --> ROUTER{router<br/>intent}
+        ROUTER -->|explain| EXPL["RAG → grounded, cited answer<br/>or refusal"]
+        ROUTER -->|generate| GEN["grounded exercise<br/>+ reference solution"]
+        ROUTER -->|grade| GRD["LLM-as-a-judge<br/>on student answer"]
+        ROUTER -->|reexplain| REX["rephrase, keep<br/>conversation memory"]
+        EXPL -.retrieve.-> QD
+        GEN -.retrieve.-> QD
+    end
+
+    subgraph QUALITY["QUALITY — offline / CI"]
+        REF[reference questions] --> JUDGE["faithfulness + relevance judge"]
+        JUDGE --> GATE{pass / fail gate}
+    end
+
+    QD -.indexed corpus.-> Q
+```
+
+<details>
+<summary>Text version of the diagram</summary>
+
 ```
 OFFLINE — ingestion (once per course)
   PDF
@@ -43,6 +73,10 @@ ONLINE — agent (per request)
 QUALITY — offline / CI
   reference questions -> answer -> faithfulness + relevance judge -> pass/fail gate
 ```
+
+</details>
+
+A deeper, module-level walkthrough lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 **Math-aware extraction.** Pages are rasterized and transcribed by a vision model into Markdown with
 LaTeX kept inline, so formulas survive ingestion. A `--hybrid` flag routes plain-text pages to fast,
@@ -164,10 +198,19 @@ hallucinating. That is the North-Star guard working as intended — it lowers th
 number on borderline definitional questions, but the alternative (inventing a definition the slides
 never state) is exactly what `grounded-rag` is built to avoid.
 
-## Demo / Try it
+## Demo
+
+![grounded-rag demo](docs/demo.gif)
+
+*Asking an in-course question (grounded, cited answer) then an out-of-course one (honest refusal),
+generating an exercise, and grading a student answer — all from the Streamlit tutor UI.*
+
+The full click-by-click recording script is in [`docs/DEMO.md`](docs/DEMO.md).
+
+### Try it locally
 
 Docker runs only the vector store; the API and UI run on the host (this keeps the image free of the
-heavy ML runtime).
+heavy ML runtime — `torch` / CUDA wheels are multi-gigabyte).
 
 ```bash
 docker compose up -d qdrant   # 1. start the vector store (course already indexed)
@@ -175,7 +218,8 @@ make api                      # 2. FastAPI on http://localhost:8000
 make ui                       # 3. Streamlit UI on http://localhost:8501
 ```
 
-- **Streamlit UI** — <http://localhost:8501> (Ask · Re-explain by level · Exercise · Grade · History)
+- **Streamlit UI** — <http://localhost:8501> (tabs: Ask · Exercise · Grade · History; *re-explain by
+  level* is a control under the Ask tab)
 - **API docs** — <http://localhost:8000/docs>
 
 Do **not** run `docker compose down` while demoing — it stops Qdrant.
