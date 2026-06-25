@@ -92,6 +92,38 @@ def test_load_dataset_defaults_keywords_to_empty(tmp_path):
     assert cases[0].expect_keywords == ()
 
 
+def test_bundled_dataset_every_line_matches_schema():
+    """Each bundled JSONL line is a valid object with only known fields.
+
+    Cheap offline guard (no API): validates the shipped reference dataset parses
+    and respects the schema invariants the harness relies on, so a malformed
+    edit fails fast in CI instead of at eval time.
+    """
+    import json
+
+    from eval.run_eval import DATASET_PATH
+
+    allowed = {"question", "expect_refusal", "note", "expect_keywords"}
+    seen = 0
+    for raw in DATASET_PATH.read_text(encoding="utf-8").splitlines():
+        raw = raw.strip()
+        if not raw:
+            continue
+        seen += 1
+        obj = json.loads(raw)
+        assert set(obj) <= allowed, f"unexpected fields: {set(obj) - allowed}"
+        assert isinstance(obj["question"], str) and obj["question"].strip()
+        assert isinstance(obj["expect_refusal"], bool)
+        if "note" in obj:
+            assert isinstance(obj["note"], str)
+        if "expect_keywords" in obj:
+            assert isinstance(obj["expect_keywords"], list)
+            assert all(isinstance(k, str) for k in obj["expect_keywords"])
+            # Keywords only carry meaning for in-course (answerable) cases.
+            assert not obj["expect_refusal"]
+    assert seen >= 30, "expanded dataset should carry at least thirty cases"
+
+
 # --- retrieval-hit metric -------------------------------------------------
 
 

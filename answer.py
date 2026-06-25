@@ -10,6 +10,7 @@ import re
 
 from config import get_llm
 from ingestion.schema import Retrieved
+from obs import timer
 from retrieval import retrieve
 
 REFUSAL = "This is not covered in the course material."
@@ -69,12 +70,14 @@ def answer(
     ``course`` and ``chapter`` optionally restrict retrieval to a single course
     (and chapter); when both are None the whole collection is searched.
     """
-    results = retrieve(question, k=k, course=course, chapter=chapter)
+    with timer("retrieval"):
+        results = retrieve(question, k=k, course=course, chapter=chapter)
     if not results:
         return {"answer": REFUSAL, "refused": True, "sources": [], "raw": REFUSAL, "retrieved": []}
 
     prompt = f"Sources:\n{_format_sources(results)}\n\nQuestion: {question}"
-    raw = get_llm("explain").invoke([("system", _SYSTEM), ("human", prompt)]).content.strip()
+    with timer("llm"):
+        raw = get_llm("explain").invoke([("system", _SYSTEM), ("human", prompt)]).content.strip()
 
     if raw.strip() == REFUSAL:
         return {"answer": REFUSAL, "refused": True, "sources": [], "raw": raw, "retrieved": []}

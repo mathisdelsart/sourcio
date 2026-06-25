@@ -49,6 +49,20 @@ _STAT_LABELS: tuple[tuple[str, str], ...] = (
     ("messages", "Messages"),
 )
 
+# Default location of the per-stage latency stats produced by an instrumented
+# run (``obs.write_latency`` / ``run_eval.py --latency-out``). Resolved lazily,
+# mirroring ``DEFAULT_RESULTS_PATH``.
+DEFAULT_LATENCY_PATH = "eval/latency.json"
+
+# Stage keys we know how to render in the latency panel, in display order, with
+# a human label. Mirrors the stages timed in ``obs.timer`` (retrieval, LLM,
+# judge). Stages absent from the source are simply skipped.
+_LATENCY_SPECS: tuple[tuple[str, str], ...] = (
+    ("retrieval", "Retrieval"),
+    ("llm", "LLM"),
+    ("judge", "Judge"),
+)
+
 
 @dataclass(frozen=True)
 class MetricCard:
@@ -177,6 +191,79 @@ def format_stats(stats: dict[str, int]) -> str:
     return "\n".join(lines)
 
 
+@dataclass(frozen=True)
+class LatencyRow:
+    """One pipeline stage rendered as a latency row in the dashboard.
+
+    ``count`` is the number of timed samples behind the figures; ``p50_ms`` and
+    ``p95_ms`` are the percentiles in milliseconds, or ``None`` when the stage is
+    absent from the source.
+    """
+
+    stage: str
+    label: str
+    count: int
+    p50_ms: float | None
+    p95_ms: float | None
+
+
+def _as_float(value: Any) -> float | None:
+    """Coerce a numeric (non-bool) value to float, else None."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return None
+
+
+def format_latency_rows(latency: Any) -> list[LatencyRow]:
+    """Build the ordered latency rows from a per-stage stats source.
+
+    ``latency`` is the ``{stage: {count, p50_ms, p95_ms, ...}}`` mapping written
+    by :func:`obs.write_latency`. Only the known stages are shown, in display
+    order; a stage missing from the source yields a row with ``None`` figures so
+    the panel renders even with partial data. A non-mapping source (or None)
+    yields all-empty rows.
+    """
+    data = latency if isinstance(latency, dict) else {}
+    rows: list[LatencyRow] = []
+    for stage, label in _LATENCY_SPECS:
+        entry = data.get(stage)
+        entry = entry if isinstance(entry, dict) else {}
+        count = _as_float(entry.get("count"))
+        rows.append(
+            LatencyRow(
+                stage=stage,
+                label=label,
+                count=int(count) if count is not None else 0,
+                p50_ms=_as_float(entry.get("p50_ms")),
+                p95_ms=_as_float(entry.get("p95_ms")),
+            )
+        )
+    return rows
+
+
+def load_latency_file(path: str | Path) -> dict[str, Any]:
+    """Load per-stage latency stats from a JSON file.
+
+    Returns an empty dict when the file is missing, unreadable or not a JSON
+    object, so the dashboard degrades gracefully to a "no samples yet" state.
+    """
+    file_path = Path(path)
+    try:
+        raw = file_path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    try:
+        obj = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return {}
+    return obj if isinstance(obj, dict) else {}
+
+
+def load_default_latency(path: str | Path | None = None) -> dict[str, Any]:
+    """Load latency stats from the default file unless an explicit path is given."""
+    return load_latency_file(path if path is not None else DEFAULT_LATENCY_PATH)
+
+
 def _open_session_stats(database_url: str | None = None) -> dict[str, int]:
     """Open a short-lived DB session and gather stats, or zeros on failure.
 
@@ -214,6 +301,7 @@ def main() -> None:  # pragma: no cover - thin UI wiring, not unit-tested
     with st.sidebar:
         st.header("Sources")
         results_path = st.text_input("Eval results JSON", value=DEFAULT_RESULTS_PATH)
+        latency_path = st.text_input("Latency JSON", value=DEFAULT_LATENCY_PATH)
         database_url = st.text_input("Database URL (optional)", value="")
 
     st.subheader("Quality metrics")
@@ -224,6 +312,24 @@ def main() -> None:  # pragma: no cover - thin UI wiring, not unit-tested
     columns = st.columns(len(cards))
     for column, card in zip(columns, cards, strict=True):
         column.metric(card.label, card.display)
+
+    st.subheader("Latency (per stage)")
+    latency = load_default_latency(latency_path or None)
+    rows = format_latency_rows(latency)
+    if not any(row.count for row in rows):
+        st.info("No latency samples yet. Run with LATENCY_ENABLED=1 to populate them.")
+    else:
+        st.table(
+            [
+                {
+                    "Stage": row.label,
+                    "Samples": row.count,
+                    "p50 (ms)": "n/a" if row.p50_ms is None else f"{row.p50_ms:.0f}",
+                    "p95 (ms)": "n/a" if row.p95_ms is None else f"{row.p95_ms:.0f}",
+                }
+                for row in rows
+            ]
+        )
 
     st.subheader("Usage")
     stats = _open_session_stats(database_url or None)

@@ -258,6 +258,7 @@ def _default_answer_fn() -> AnswerFn:
 def _default_judge_fn() -> JudgeFn:
     """Wire the real faithfulness judge via the model-agnostic factory."""
     from config import get_llm
+    from obs import timer
 
     llm = get_llm("judge")
 
@@ -266,7 +267,8 @@ def _default_judge_fn() -> JudgeFn:
         prompt = (
             f"Question: {question}\n\nAnswer: {answer_text}\n\nSources:\n{numbered or '(none)'}"
         )
-        return llm.invoke([("system", _JUDGE_SYSTEM), ("human", prompt)])
+        with timer("judge"):
+            return llm.invoke([("system", _JUDGE_SYSTEM), ("human", prompt)])
 
     return judge
 
@@ -426,6 +428,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="Write the computed metrics to this JSON file (e.g. eval/results.json).",
     )
+    parser.add_argument(
+        "--latency-out",
+        type=Path,
+        default=None,
+        help=(
+            "Write per-stage latency p50/p95 to this JSON file (e.g. eval/latency.json). "
+            "Only meaningful when LATENCY_ENABLED is set during the run."
+        ),
+    )
     args = parser.parse_args(argv)
 
     thresholds = Metrics(
@@ -439,6 +450,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.out is not None:
         write_results(metrics, args.out)
         print(f"  wrote results: {args.out}")
+    if args.latency_out is not None:
+        # Flush any per-stage timings collected during the run (only present
+        # when LATENCY_ENABLED is set) so the dashboard can render p50/p95.
+        from obs import get_samples, write_latency
+
+        write_latency(get_samples(), args.latency_out)
+        print(f"  wrote latency: {args.latency_out}")
     return 0 if ok else 1
 
 
