@@ -7,6 +7,7 @@ import { Button } from "@/components/Button";
 import { TextField, TextArea } from "@/components/TextField";
 import { Markdown } from "@/components/Markdown";
 import { CitationChip } from "@/components/CitationChip";
+import { ExportActions } from "@/components/ExportActions";
 import { EmptyState, RefusalBanner, Skeleton } from "@/components/States";
 import { LevelSelector } from "@/components/LevelSelector";
 import { useToast } from "@/components/Toast";
@@ -152,6 +153,14 @@ export function AskPanel({ studentId, config, lastAnswer, setLastAnswer }: AskPa
                 ) : (
                   <p className="text-sm text-zinc-400">No sources cited.</p>
                 )}
+              </div>
+
+              <div className="border-t border-zinc-100 pt-4">
+                <ExportActions
+                  question={question}
+                  answer={lastAnswer.answer}
+                  sources={lastAnswer.sources}
+                />
               </div>
 
               <div className="border-t border-zinc-100 pt-4">
