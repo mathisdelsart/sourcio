@@ -92,6 +92,19 @@ chunk (so unrelated slides are not glued together), while prose is split into ov
 top-k chunks are fetched from Qdrant with a `score_threshold`. If nothing clears the threshold, the
 answer layer returns an explicit refusal rather than answering from the model's own knowledge. The
 threshold is calibrated empirically (in-course questions accepted, out-of-course questions rejected).
+An **opt-in hybrid dense + sparse (BM25-style) path** (`HYBRID_RETRIEVAL=1`, with a `--sparse` re-ingest)
+fuses a dense kNN branch and a `bge-m3` lexical branch with Reciprocal Rank Fusion via Qdrant's Query API;
+the dense branch keeps the same threshold, so grounding and refusal are preserved. It engages only when
+the collection actually carries the sparse vector, and otherwise falls back to dense retrieval.
+
+**Streaming.** Alongside `POST /ask`, `POST /ask/stream` returns a `text/event-stream`: token deltas
+arrive first and the explanation renders as it is produced, followed by a single final event carrying
+the remapped sources and the refusal flag. Citation remapping is applied once, to the fully assembled
+text, so streamed `[n]` markers can never leak an invented page.
+
+**Quiz mode.** `POST /quiz` generates a grounded multi-question quiz on a notion (reference solutions
+stay server-side, never returned), and `POST /quiz/{quiz_id}/grade` marks one answer against its stored
+reference solution. Both are grounded in retrieval, so a notion the course does not cover yields a refusal.
 
 **Agent.** A LangGraph router classifies the intent (`explain` / `generate` / `grade` / `reexplain`)
 and dispatches to the matching node, with a deterministic keyword fallback if the model output is
@@ -102,6 +115,10 @@ notation.
 **faithfulness** (every claim supported by the retrieved sources, no outside knowledge) and
 **relevance**, plus **refusal accuracy** on questions that should be rejected. It runs from a
 reference dataset and exits non-zero on regression, so it can gate CI.
+
+**Observability.** Every LLM call goes through one factory, so **LangFuse tracing** (per-step latency,
+tokens, cost) is a drop-in: it activates only when LangFuse credentials are present and is zero-cost
+when off — see [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md).
 
 ## Tech stack
 
@@ -147,9 +164,14 @@ The same capabilities are exposed as an HTTP service (FastAPI):
 
 | Endpoint | Role |
 | --- | --- |
-| `POST /ask` | ask a question / re-explain |
+| `POST /ask` | ask a question, grounded and cited |
+| `POST /ask/stream` | same answer, streamed token by token as Server-Sent Events |
+| `POST /reexplain` | rephrase the last answer at a chosen level (beginner / intermediate / advanced) |
 | `POST /exercise` | generate an exercise (never returns the reference solution) |
 | `POST /grade` | grade a student's answer |
+| `POST /quiz` | generate a grounded multi-question quiz on a notion |
+| `POST /quiz/{quiz_id}/grade` | grade one quiz answer against its stored reference solution |
+| `GET /history/{student_id}` | recent conversation turns, chronological |
 | `GET /health` | health check |
 
 Run it with:
@@ -230,6 +252,17 @@ Do **not** run `docker compose down` while demoing — it stops Qdrant.
 A known-good in-course question, *"What is the piecewise constant approximation?"*, returns a cited
 answer with LaTeX preserved. An out-of-course question is refused with
 `This is not covered in the course material.` rather than answered.
+
+## Documentation
+
+| Guide | Topic |
+| --- | --- |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | module-level walkthrough of the whole system |
+| [docs/LOCAL.md](docs/LOCAL.md) | run fully local / zero-cost with Ollama |
+| [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) | opt-in LangFuse tracing |
+| [docs/DEPLOY-API.md](docs/DEPLOY-API.md) | the CPU-only Docker image for the API service |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | free-tier live deployment (Vercel + Hugging Face Spaces + Qdrant Cloud) |
+| [docs/DEMO.md](docs/DEMO.md) | demo recording script for the GIF above |
 
 ## Notes
 

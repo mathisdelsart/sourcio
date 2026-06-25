@@ -46,12 +46,12 @@ offline / in CI.
       v                         |
   api/main.py  (FastAPI)        |
       |   \                     |
-      |    \---------> core/retrieval.py --> [ Qdrant ]  top-k + similarity threshold
+      |    \---------> core/retrieval.py --> [ Qdrant ]  top-k + threshold (+ opt-in hybrid RRF)
       |   /                          \
       v  v                            +--> core/answer.py  citation-by-construction
-  agent/graph.py (LangGraph)               (used by /ask and the explain node)
+  agent/graph.py (LangGraph)               (answer + stream_answer; used by /ask, /ask/stream, explain)
       |
-   router --> explain | generate | grade | reexplain   (agent/nodes/*)
+   router --> explain | generate | grade | reexplain | quiz   (agent/nodes/*)
       |              |        |        |
       |              v        v        v
       |          [ SQL store: students, exercises, grades, messages ]
@@ -68,8 +68,9 @@ offline / in CI.
 ## Offline ingestion pipeline
 
 Run once per course: `python -m ingestion.run path/to/course.pdf --course "..."`
-(`ingestion/run.py`). The shared data contract for the whole pipeline lives in
-`ingestion/schema.py` (`Page`, `Chunk`, `Retrieved`).
+(`ingestion/run.py`); add `--sparse` to also index bge-m3 lexical vectors and
+enable opt-in hybrid retrieval. The shared data contract for the whole pipeline
+lives in `ingestion/schema.py` (`Page`, `Chunk`, `Retrieved`).
 
 ### 1. Math-aware extraction (`ingestion/extract.py`)
 
@@ -113,13 +114,21 @@ overlap) is reserved for when a prose document is first ingested.
 Documents and queries are embedded by the **same** local multilingual model
 (`BAAI/bge-m3`, configurable via `Settings.embedding_model`) so both sides share
 one vector space. Vectors are L2-normalized, making cosine similarity equal to
-the dot product. The model is loaded once and cached.
+the dot product. The model is loaded once and cached. bge-m3 also exposes
+**lexical (sparse) weights** (`embed_sparse_texts` / `embed_sparse_query`), used
+by the opt-in hybrid retrieval path.
 
 ### 4. Indexing (`ingestion/index.py`)
 
 Each chunk is embedded and upserted into the Qdrant collection (`courses`, cosine
 distance, created on first use). The payload stores the chunk text plus its
 citation metadata, so retrieval can both rank and cite without a second lookup.
+
+Sparse indexing is **opt-in** (`--sparse`): when enabled, the collection uses
+named vectors — a dense cosine vector plus a named sparse vector holding the
+bge-m3 lexical weights — which is what the hybrid retrieval path fuses at query
+time. Dense-only ingestion (the default) leaves the collection sparse-free, and
+hybrid retrieval falls back to dense against it.
 
 `ingestion/run.py` processes pages in **batches** (extract → chunk → index per
 batch): a crash mid-run keeps the progress of earlier batches, and the stable
@@ -139,6 +148,18 @@ an explicit refusal rather than a guess.
 The threshold is not a magic number: it depends on the embedding model and is
 calibrated empirically (see `eval/calibrate.py`).
 
+An **opt-in hybrid dense + sparse path** (`Settings.hybrid_retrieval`, set via
+`HYBRID_RETRIEVAL=1`) fuses two branches with **Reciprocal Rank Fusion (RRF)**
+through Qdrant's Query API: a dense kNN branch (bge-m3 dense vectors, still
+filtered by the similarity threshold so grounding is preserved) and a lexical
+**sparse** branch (bge-m3 lexical weights, a BM25-style signal). It engages only
+when the collection actually carries the named sparse vector
+(`_collection_has_sparse`); if hybrid is requested but the collection has no
+sparse vector, retrieval transparently **falls back to dense**. Sparse vectors
+are produced at ingest time when the course is indexed with `--sparse`
+(`ingestion/embed.py:embed_sparse_texts`, `ingestion/index.py`), so hybrid
+retrieval needs a one-off `--sparse` re-ingest of the course.
+
 ### Citation-by-construction (`core/answer.py`)
 
 This is the single place where retrieval, the threshold, refusal, and citation
@@ -156,6 +177,15 @@ page numbers impossible:
 
 If retrieval finds nothing, `answer` returns the refusal directly without calling
 the model. The CLI entry point is `core/ask.py` (`python -m core.ask "..."`).
+
+**Streaming** (`stream_answer`) mirrors `answer` step for step — same retrieval,
+threshold/refusal and citation-by-construction — but yields incrementally. It
+emits `{"type": "token", "text": ...}` deltas as the model produces them, then a
+single `{"type": "sources", ...}` final event with the fully remapped answer,
+the cited source labels, and the `refused` flag. Citation remapping runs **once,
+on the assembled text**, so streamed `[n]` markers can never leak an invented
+page. `POST /ask/stream` serializes these events as Server-Sent Events and
+persists the question and assembled answer when the stream completes.
 
 ### Agent graph (`agent/`)
 
@@ -189,6 +219,14 @@ output key.
   and re-pitches it at the requested `Level` (beginner / intermediate /
   advanced).
 
+The `generate` route also backs **quiz mode** (`agent/nodes/quiz.py`):
+`generate_quiz(notion, n, student_id)` builds a multi-question quiz grounded
+strictly in retrieval (refusing when nothing is retrieved), persists the quiz and
+its questions with their reference solutions server-side, and surfaces only
+`{id, problem}` per question. `grade_quiz_answer` loads the stored reference
+solution server-side and grades one answer with the same product-side judge as
+`grade`. Both are exposed by `POST /quiz` and `POST /quiz/{quiz_id}/grade`.
+
 `langgraph` is imported lazily inside `build_graph`, so the router and nodes stay
 importable and unit-testable without the optional `agent` extra installed.
 
@@ -209,8 +247,12 @@ nodes — no retrieval or prompting is reimplemented.
 | --- | --- |
 | `GET /health` | liveness probe (always open) |
 | `POST /ask` | answer a question, grounded; persists the turn as history |
+| `POST /ask/stream` | same answer as Server-Sent Events: token deltas, then a final sources/refusal event; persists on completion |
+| `POST /reexplain` | rephrase the last answer at a chosen level (beginner / intermediate / advanced) |
 | `POST /exercise` | generate an exercise; never returns the reference solution |
 | `POST /grade` | grade a student's answer |
+| `POST /quiz` | generate a grounded multi-question quiz; reference solutions stay server-side |
+| `POST /quiz/{quiz_id}/grade` | grade one quiz answer against its stored reference solution (404 on unknown question) |
 | `GET /history/{student_id}` | recent conversation turns, chronological |
 
 The API is **stateful**: a `student_id` identifies the user (get-or-create),
@@ -258,7 +300,7 @@ product-side grading of a student's answer.
 | **LangFuse** (optional) | traces and per-step evaluation signals |
 
 The relational layer uses SQLAlchemy 2.0 declarative models (`db/models.py`):
-`Student`, `Exercise`, `Grade`, `Message`. The engine is created lazily from
+`Student`, `Exercise`, `Grade`, `Quiz`, `QuizQuestion`, `Message`. The engine is created lazily from
 `Settings.database_url` (`db/session.py`), so swapping SQLite for PostgreSQL is
 just a URL change. Schema migrations are managed by Alembic (`alembic/`), which
 resolves the same URL at runtime and diffs against the declarative `Base`.
@@ -272,11 +314,25 @@ env change — no code edit. Distinct roles exist for `extract`, `router`,
 `explain`, `generate`, `grade`, and `judge`, so a small router and a larger
 grader can coexist.
 
+The same switch enables a **fully-local, zero-cost** run: `LLM_PROVIDER=ollama`
+(or a per-role `LLM_<ROLE>=ollama:<model>`) routes every LLM to a local
+[Ollama](https://ollama.com) server (`Settings.ollama_base_url`). Embeddings, the
+reranker, and Qdrant are already local, so the whole pipeline then runs offline
+and free — see [LOCAL.md](LOCAL.md). For serving, the API ships as a **CPU-only
+Docker image** that installs a CPU-only `torch` to avoid multi-gigabyte CUDA
+wheels; build and run details are in [DEPLOY-API.md](DEPLOY-API.md), and a
+free-tier hosted path in [DEPLOY.md](DEPLOY.md).
+
 The factory also composes two opt-in, zero-cost-when-disabled cross-cutting
 concerns:
 
-- **LangFuse tracing** (`core/obs.py`): activates only when LangFuse credentials are
-  present; the package is imported lazily.
+- **LangFuse tracing + latency instrumentation** (`core/obs.py`): tracing
+  activates only when LangFuse credentials are present (the package is imported
+  lazily), staying zero-cost when off — see [OBSERVABILITY.md](OBSERVABILITY.md).
+  The same module owns a lightweight per-stage timer (`timer`, `record_sample`,
+  `latency_stats`) that feeds the retrieval-latency percentiles reported in the
+  README; it is what the streaming and answer paths wrap their `retrieval` and
+  `llm` stages with.
 - **Token budget guard** (`core/budget.py`): a callback that accumulates reported
   token usage and raises `BudgetExceeded` once a configured cap is reached. Off
   by default (`llm_budget_tokens=0`); it reads token counts straight from the
@@ -325,17 +381,18 @@ guard apply transparently when enabled.
 | Indexing into Qdrant | `ingestion/index.py` |
 | Ingestion entry point | `ingestion/run.py` |
 | Data contract | `ingestion/schema.py` |
-| Retrieval + threshold + filter | `core/retrieval.py` |
-| Grounded answer + citations | `core/answer.py` |
+| Retrieval + threshold + filter + hybrid RRF | `core/retrieval.py` |
+| Grounded answer + citations + streaming | `core/answer.py` |
 | CLI ask | `core/ask.py` |
 | Agent graph + router | `agent/graph.py`, `agent/state.py` |
-| Agent nodes | `agent/nodes/*.py` |
+| Agent nodes (explain / generate / grade / reexplain / quiz) | `agent/nodes/*.py` |
 | Node persistence | `agent/persistence.py` |
 | HTTP API | `api/main.py` |
 | Streamlit UI + metrics dashboard | `ui/app.py`, `ui/metrics.py` |
 | Relational store | `db/models.py`, `db/session.py`, `alembic/` |
 | LLM factory, settings, cache | `core/config.py` |
-| Tracing / budget | `core/obs.py`, `core/budget.py` |
+| Tracing (LangFuse) / latency / budget | `core/obs.py`, `core/budget.py` |
+| Deployment guides | `docs/DEPLOY-API.md` (Docker image), `docs/DEPLOY.md` (free-tier), `docs/LOCAL.md` (Ollama), `docs/OBSERVABILITY.md` |
 | Faithfulness eval / calibration | `eval/run_eval.py`, `eval/calibrate.py` |
 | Containerization | `docker-compose.yml`, `Dockerfile` |
 | CI | `.github/workflows/ci.yml` |
