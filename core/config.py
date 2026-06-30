@@ -45,8 +45,14 @@ class Settings(BaseSettings):
     # Multilingual embeddings (documents and questions are in French).
     embedding_model: str = "BAAI/bge-m3"
 
-    # Retrieval threshold, calibrated empirically. Below it, the answer is refused.
-    similarity_threshold: float = 0.5
+    # Retrieval threshold — a coarse floor only: it drops near-zero, clearly
+    # unrelated matches, but the authoritative "is the answer actually in the
+    # course?" decision is made by the grounded LLM, which refuses when the
+    # retrieved passages do not contain the answer. A high absolute threshold
+    # wrongly refused relevant-but-low-scoring content (e.g. a short, vaguely
+    # phrased question against a one-page document), so the floor is kept low and
+    # the LLM judges. Override with SIMILARITY_THRESHOLD to tighten/loosen.
+    similarity_threshold: float = 0.25
 
     # Cross-encoder reranker (opt-in precision boost, no re-ingestion needed).
     # "" disables it (dense path unchanged); a model name (e.g.
