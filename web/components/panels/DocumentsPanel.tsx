@@ -189,7 +189,7 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
             <div className="flex flex-col gap-3 sm:flex-row">
               <div className="flex-1">
                 <TextField
-                  label={t("doc.upload.course")}
+                  label={`${t("doc.upload.course")} *`}
                   placeholder={t("doc.upload.coursePlaceholder")}
                   value={course}
                   disabled={uploading}
@@ -258,7 +258,10 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
               </div>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {!!file && !course.trim() && !uploading && (
+                <p className="text-xs text-amber-600">{t("doc.upload.courseRequired")}</p>
+              )}
               <Button onClick={upload} loading={uploading} disabled={!canUpload}>
                 {t("doc.upload.button")}
               </Button>
