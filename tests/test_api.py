@@ -984,3 +984,43 @@ def test_endpoints_open_when_no_key_configured(client, monkeypatch, method, path
     _stub_nodes(monkeypatch)
     response = client.request(method, path, json=body)
     assert response.status_code == 200
+
+
+def test_enqueue_review_makes_notion_due_immediately(client):
+    """A notion added via /reviews/enqueue appears at once in /reviews/due."""
+    enqueue = client.post(
+        "/reviews/enqueue", json={"student_id": "s1", "notion": "wavelets"}
+    )
+    assert enqueue.status_code == 200
+    payload = enqueue.json()
+    assert payload["notion"] == "wavelets"
+    # No SM-2 step is applied, so the notion is seeded at the defaults.
+    assert payload["interval_days"] == 0
+    assert payload["ease"] == 2.5
+
+    due = client.get("/reviews/due", params={"student_id": "s1"})
+    assert due.status_code == 200
+    notions = [item["notion"] for item in due.json()]
+    assert "wavelets" in notions
+
+
+def test_enqueue_review_resets_existing_notion_to_due(client):
+    """Enqueuing a previously rated notion resets it so it is due again now."""
+    # Rate it well first: this schedules it into the future, off the due list.
+    rated = client.post(
+        "/reviews", json={"student_id": "s1", "notion": "wavelets", "quality": 5}
+    )
+    assert rated.status_code == 200
+    assert rated.json()["interval_days"] == 1
+    before = client.get("/reviews/due", params={"student_id": "s1"})
+    assert "wavelets" not in [item["notion"] for item in before.json()]
+
+    # Enqueue resets it back to due-now without duplicating the row.
+    enqueue = client.post(
+        "/reviews/enqueue", json={"student_id": "s1", "notion": "wavelets"}
+    )
+    assert enqueue.status_code == 200
+    assert enqueue.json()["interval_days"] == 0
+
+    after = client.get("/reviews/due", params={"student_id": "s1"})
+    assert "wavelets" in [item["notion"] for item in after.json()]

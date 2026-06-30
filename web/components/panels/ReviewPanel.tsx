@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  enqueueReview,
   getDueReviews,
   recordReview,
   type ConnectionConfig,
@@ -132,8 +133,9 @@ export function ReviewPanel({ studentId, config, active }: ReviewPanelProps) {
     if (!notion || adding) return;
     setAdding(true);
     try {
-      // Seed the notion with a neutral first rating so it enters the queue.
-      await recordReview(studentId, notion, 3, config);
+      // Enqueue the notion due immediately so it shows up right away, ready for
+      // its first rating (a neutral rating would push it out by a day).
+      await enqueueReview(studentId, notion, config);
       setNewNotion("");
       toast.push(t("review.added", { notion }), "success");
       // Reload so the new notion shows up (it is due immediately).
@@ -167,6 +169,9 @@ export function ReviewPanel({ studentId, config, active }: ReviewPanelProps) {
               {t("review.add.button")}
             </Button>
           </div>
+          <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+            {t("review.helper")}
+          </p>
         </CardBody>
       </Card>
 

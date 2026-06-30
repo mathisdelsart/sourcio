@@ -585,6 +585,27 @@ export async function recordReview(
   );
 }
 
+/**
+ * Add a notion to the spaced-repetition queue, due immediately. Unlike
+ * {@link recordReview} this applies no SM-2 step: the notion is seeded at the
+ * defaults with `due_at` set to now, so it appears in the due queue right away.
+ */
+export async function enqueueReview(
+  studentId: string,
+  notion: string,
+  config?: ConnectionConfig,
+): Promise<ReviewItem> {
+  return request<ReviewItem>(
+    "/reviews/enqueue",
+    {
+      method: "POST",
+      headers: buildHeaders(config, true),
+      body: JSON.stringify({ student_id: studentId, notion }),
+    },
+    config,
+  );
+}
+
 /** Return the student's most recent turns, chronological. */
 export async function history(
   studentId: string,

@@ -17,6 +17,7 @@ Endpoints:
     POST /feedback          record a thumbs up/down on a tutor answer
     GET  /feedback/summary  thumbs up/down counts for a student
     POST /reviews           record a recall rating and reschedule a notion (SM-2)
+    POST /reviews/enqueue   add a notion to the review queue, due immediately
     GET  /reviews/due       notions due for spaced-repetition review
 
 The layer stays thin: each route delegates to the existing grounded functions
@@ -462,6 +463,18 @@ class ReviewRequest(BaseModel):
         if not (MIN_QUALITY <= value <= MAX_QUALITY):
             raise ValueError(f"quality must be in {MIN_QUALITY}..{MAX_QUALITY}.")
         return value
+
+
+class EnqueueReviewRequest(BaseModel):
+    """A request to add a notion to the spaced-repetition queue, due immediately.
+
+    Unlike :class:`ReviewRequest` this carries no recall rating: the notion is
+    seeded at the SM-2 defaults with ``due_at`` set to "now" so it surfaces in
+    the due queue straight away, ready for its first rating.
+    """
+
+    student_id: str
+    notion: str
 
 
 class ReviewSchedule(BaseModel):
@@ -1047,6 +1060,48 @@ def record_review(request: ReviewRequest, user: UserOut | None = OptionalUser) -
             "ease": row.ease,
             "interval_days": row.interval_days,
             "due_at": due_at.isoformat(),
+        }
+
+
+@app.post(
+    "/reviews/enqueue",
+    response_model=ReviewSchedule,
+    dependencies=[Depends(require_api_key)],
+)
+def enqueue_review(
+    request: EnqueueReviewRequest, user: UserOut | None = OptionalUser
+) -> dict[str, Any]:
+    """Add a notion to the spaced-repetition queue, due immediately.
+
+    The student is ensured to exist (and linked to the caller when
+    authenticated). At most one review row exists per ``(student, notion)``: an
+    existing row is reset to the SM-2 defaults rather than duplicated. No SM-2
+    step is applied; ``due_at`` is set to "now" so the notion is due right away
+    and appears in ``GET /reviews/due``, ready for its first rating. This route
+    reaches no LLM and runs no retrieval.
+    """
+    now = datetime.now(UTC)
+    with get_session(_engine) as session:
+        student = _resolve_student(session, request.student_id, user)
+        row = session.scalar(
+            select(Review).where(Review.student_id == student.id, Review.notion == request.notion)
+        )
+        if row is None:
+            row = Review(student_id=student.id, notion=request.notion)
+            session.add(row)
+        # Seed (or reset) the SM-2 state so the notion is due immediately.
+        row.ease = 2.5
+        row.interval_days = 0
+        row.repetitions = 0
+        row.last_reviewed = None
+        row.due_at = now
+        session.flush()
+
+        return {
+            "notion": row.notion,
+            "ease": row.ease,
+            "interval_days": row.interval_days,
+            "due_at": now.isoformat(),
         }
 
 

@@ -338,6 +338,8 @@ const en = {
   "review.empty.title": "Nothing due — well done.",
   "review.empty.description":
     "You're all caught up. Add a notion above to start tracking it.",
+  "review.helper":
+    "Spaced repetition shows each notion just before you would forget it. Rate your recall (Again, Hard, Good, Easy) and it is rescheduled for the optimal time.",
 
   // Export actions
   "export.copy": "Copy as Markdown",
@@ -689,6 +691,8 @@ const fr: Record<TranslationKey, string> = {
   "review.empty.title": "Rien à réviser — bravo.",
   "review.empty.description":
     "Vous êtes à jour. Ajoutez une notion ci-dessus pour commencer à la suivre.",
+  "review.helper":
+    "La répétition espacée présente chaque notion juste avant que vous l'oubliiez. Notez votre mémorisation (À revoir, Difficile, Bien, Facile) et elle est replanifiée au moment optimal.",
 
   // Export actions
   "export.copy": "Copier en Markdown",
@@ -1023,6 +1027,8 @@ const nl: Record<TranslationKey, string> = {
   "review.days": "{days} dagen",
   "review.empty.title": "Niets te doen — goed gedaan.",
   "review.empty.description": "Je bent helemaal bij. Voeg hierboven een begrip toe om het te volgen.",
+  "review.helper":
+    "Gespreide herhaling toont elk begrip net voordat je het zou vergeten. Beoordeel je herinnering (Opnieuw, Moeilijk, Goed, Makkelijk) en het wordt op het optimale moment opnieuw ingepland.",
 
   // Export actions
   "export.copy": "Kopiëren als Markdown",
