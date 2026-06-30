@@ -24,6 +24,7 @@ import { QuizPanel } from "@/components/panels/QuizPanel";
 import { ThreadsPanel } from "@/components/panels/ThreadsPanel";
 import { HistoryPanel } from "@/components/panels/HistoryPanel";
 import { ReviewPanel } from "@/components/panels/ReviewPanel";
+import { DocumentsPanel } from "@/components/panels/DocumentsPanel";
 
 export default function Home() {
   const { t } = useT();
@@ -35,6 +36,7 @@ export default function Home() {
     { id: "threads", label: t("tabs.threads") },
     { id: "history", label: t("tabs.history") },
     { id: "review", label: t("tabs.review") },
+    { id: "documents", label: t("tabs.documents") },
   ];
 
   const [ready, setReady] = useState(false);
@@ -282,6 +284,9 @@ export default function Home() {
                       config={config}
                       active={active === "review"}
                     />
+                  )}
+                  {active === "documents" && (
+                    <DocumentsPanel studentId={studentId} config={config} />
                   )}
                 </div>
               </div>

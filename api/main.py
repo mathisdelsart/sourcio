@@ -9,6 +9,9 @@ Endpoints:
     POST /quiz              generate a grounded multi-question quiz (no solutions)
     POST /quiz/{id}/grade   grade one quiz answer against its stored reference
     GET  /courses           list the distinct courses indexed in Qdrant
+    GET  /documents         inventory of indexed material by course and chapter
+    POST /documents/upload  ingest an uploaded file under a course/chapter
+    DELETE /documents       delete a course's (or one chapter's) indexed points
     GET  /source/{chunk_id} fetch a cited source chunk's text and metadata
     GET  /history/{id}      recent conversation turns for a student
     POST /sessions          open a named conversation thread for a student
@@ -28,12 +31,24 @@ are persisted as conversation history, and ``/history`` replays them.
 import hmac
 import json
 import logging
+import os
+import tempfile
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
@@ -64,6 +79,7 @@ from api.middleware import (
 from core.answer import answer, stream_answer
 from core.config import get_settings
 from core.courses import list_courses
+from core.documents import delete_documents, ingest_document, list_documents
 from core.scheduling import MAX_QUALITY, MIN_QUALITY, schedule
 from core.sources import get_source
 from db.models import Feedback, Review, Student
@@ -367,6 +383,39 @@ class CoursesResponse(BaseModel):
     """The distinct courses currently indexed in Qdrant, sorted."""
 
     courses: list[str]
+
+
+class DocumentChapter(BaseModel):
+    """One chapter of a course and how many distinct pages it carries.
+
+    ``chapter`` is ``None`` for material indexed without one (a UI groups it as
+    "Uncategorized").
+    """
+
+    chapter: str | None = None
+    pages: int
+
+
+class DocumentCourse(BaseModel):
+    """A course's indexed inventory: its chapters and total page count."""
+
+    course: str
+    total_pages: int
+    chapters: list[DocumentChapter]
+
+
+class DocumentUploadResponse(BaseModel):
+    """The outcome of ingesting an uploaded file under a course/chapter."""
+
+    course: str
+    chapter: str | None = None
+    pages_indexed: int
+
+
+class DocumentDeleteResponse(BaseModel):
+    """How many indexed points were removed by a delete request."""
+
+    deleted: int
 
 
 class SourceResponse(BaseModel):
@@ -788,6 +837,78 @@ def courses() -> dict[str, list[str]]:
     indexed yet; it never reaches the LLM and runs no retrieval.
     """
     return {"courses": list_courses()}
+
+
+@app.get(
+    "/documents",
+    response_model=list[DocumentCourse],
+    dependencies=[Depends(require_api_key)],
+)
+def documents() -> list[dict[str, Any]]:
+    """Return the indexed material organized by course and chapter.
+
+    Lets a client show what is indexed (and how much) so a user can manage it.
+    The shape is ``[{course, total_pages, chapters: [{chapter, pages}]}]`` with a
+    ``null`` chapter for material indexed without one. Returns an empty list when
+    nothing is indexed yet; it never reaches the LLM and runs no retrieval.
+    """
+    return list_documents()
+
+
+@app.post(
+    "/documents/upload",
+    response_model=DocumentUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_api_key)],
+)
+async def upload_document(
+    file: Annotated[UploadFile, File()],
+    course: Annotated[str, Form()],
+    chapter: Annotated[str | None, Form()] = None,
+) -> dict[str, Any]:
+    """Ingest an uploaded file into Qdrant under the given course/chapter.
+
+    The file is buffered to a temporary path (its extension preserved so routing
+    works) and handed to the existing ingestion pipeline: ``.md``/``.txt`` go
+    through the prose loader, anything else through the math-aware PDF path. The
+    temp file is always removed afterwards. Returns the resolved course/chapter
+    and how many chunks were indexed. A file with no extractable content yields
+    ``pages_indexed = 0``.
+    """
+    normalized_chapter = chapter.strip() if chapter and chapter.strip() else None
+    suffix = os.path.splitext(file.filename or "")[1]
+    contents = await file.read()
+    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(contents)
+        pages_indexed = ingest_document(tmp_path, course, normalized_chapter)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+    return {
+        "course": course,
+        "chapter": normalized_chapter,
+        "pages_indexed": pages_indexed,
+    }
+
+
+@app.delete(
+    "/documents",
+    response_model=DocumentDeleteResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def remove_documents(course: str, chapter: str | None = None) -> dict[str, int]:
+    """Delete a course's indexed points, optionally narrowed to one chapter.
+
+    ``course`` is required; ``chapter`` (a query parameter) restricts the deletion
+    to a single chapter when given. Returns how many points were removed. A
+    missing collection or an unknown course yields ``{"deleted": 0}`` rather than
+    an error; it never reaches the LLM and runs no retrieval.
+    """
+    return {"deleted": delete_documents(course, chapter)}
 
 
 @app.get(

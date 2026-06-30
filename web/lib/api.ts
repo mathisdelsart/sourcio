@@ -597,3 +597,77 @@ export async function history(
     config,
   );
 }
+
+// --- Documents ---------------------------------------------------------------
+
+/** One chapter of an indexed course and its page count. `chapter` may be null. */
+export interface DocumentChapter {
+  chapter: string | null;
+  pages: number;
+}
+
+/** A course's indexed inventory: its chapters and total page count. */
+export interface DocumentCourse {
+  course: string;
+  total_pages: number;
+  chapters: DocumentChapter[];
+}
+
+/** The result of ingesting an uploaded file under a course/chapter. */
+export interface DocumentUploadResult {
+  course: string;
+  chapter: string | null;
+  pages_indexed: number;
+}
+
+/** How many indexed points a delete request removed. */
+export interface DocumentDeleteResult {
+  deleted: number;
+}
+
+/** List the indexed material organized by course and chapter. Empty when none. */
+export async function listDocuments(config?: ConnectionConfig): Promise<DocumentCourse[]> {
+  return request<DocumentCourse[]>(
+    "/documents",
+    { method: "GET", headers: buildHeaders(config) },
+    config,
+  );
+}
+
+/**
+ * Upload a file and ingest it under `course`/`chapter`.
+ *
+ * The body is `multipart/form-data`, so the Content-Type is left unset (the
+ * browser adds the boundary). `chapter` is only sent when non-empty.
+ */
+export async function uploadDocument(
+  file: File,
+  course: string,
+  chapter: string | null,
+  config?: ConnectionConfig,
+): Promise<DocumentUploadResult> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("course", course);
+  if (chapter && chapter.trim()) form.append("chapter", chapter.trim());
+  return request<DocumentUploadResult>(
+    "/documents/upload",
+    { method: "POST", headers: buildHeaders(config), body: form },
+    config,
+  );
+}
+
+/** Delete a course's indexed points, optionally narrowed to one chapter. */
+export async function deleteDocument(
+  course: string,
+  chapter: string | null,
+  config?: ConnectionConfig,
+): Promise<DocumentDeleteResult> {
+  const params = new URLSearchParams({ course });
+  if (chapter) params.set("chapter", chapter);
+  return request<DocumentDeleteResult>(
+    `/documents?${params.toString()}`,
+    { method: "DELETE", headers: buildHeaders(config) },
+    config,
+  );
+}

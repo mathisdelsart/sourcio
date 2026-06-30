@@ -30,6 +30,8 @@ api = [
     # User authentication: bcrypt password hashing + JWT (HS256) access tokens.
     "bcrypt>=4.0",
     "pyjwt>=2.8",
+    # Multipart form parsing for file uploads (POST /documents/upload).
+    "python-multipart>=0.0.9",
 ]
 obs = [
     "langfuse>=2.0",

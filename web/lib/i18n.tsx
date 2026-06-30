@@ -129,6 +129,8 @@ const en = {
   "tabs.threads": "Threads",
   "tabs.history": "History",
   "tabs.review": "Review",
+  // Documents
+  "tabs.documents": "Documents",
 
   // Health badge
   "health.online": "Backend online",
@@ -349,6 +351,31 @@ const en = {
   "export.downloadStarted": "Download started.",
   "export.downloadFailed": "Could not prepare the download.",
 
+  // Documents
+  "doc.upload.title": "Add course material",
+  "doc.upload.description":
+    "Upload a PDF, Markdown or text file. It is indexed and becomes searchable in the tutor.",
+  "doc.upload.file": "File",
+  "doc.upload.fileHint": "PDF, Markdown (.md) or text (.txt).",
+  "doc.upload.course": "Course",
+  "doc.upload.coursePlaceholder": "e.g. Wavelet Transform",
+  "doc.upload.chapter": "Chapter (optional)",
+  "doc.upload.chapterHint": "Groups the material; leave empty for none.",
+  "doc.upload.chapterPlaceholder": "e.g. Chapter 1",
+  "doc.upload.button": "Upload & index",
+  "doc.upload.success": "Indexed {pages} page(s) into “{course}”.",
+  "doc.library.title": "Indexed material",
+  "doc.library.description": "Everything currently searchable, by course and chapter.",
+  "doc.refresh": "Refresh",
+  "doc.empty.title": "Nothing indexed yet.",
+  "doc.empty.description": "Upload a file above to make it searchable in the tutor.",
+  "doc.pageCount": "{count} page(s)",
+  "doc.uncategorized": "Uncategorized",
+  "doc.delete.course": "Delete course",
+  "doc.delete.chapter": "Delete",
+  "doc.delete.confirm": "Delete “{target}” from the index? This cannot be undone.",
+  "doc.delete.success": "Removed {count} item(s) from “{target}”.",
+
   // Misc
   "common.loading": "Loading",
 } as const;
@@ -472,6 +499,8 @@ const fr: Record<TranslationKey, string> = {
   "tabs.threads": "Fils",
   "tabs.history": "Historique",
   "tabs.review": "Révision",
+  // Documents
+  "tabs.documents": "Documents",
 
   // Health badge
   "health.online": "Backend en ligne",
@@ -701,6 +730,31 @@ const fr: Record<TranslationKey, string> = {
   "export.downloadStarted": "Téléchargement démarré.",
   "export.downloadFailed": "Impossible de préparer le téléchargement.",
 
+  // Documents
+  "doc.upload.title": "Ajouter du contenu de cours",
+  "doc.upload.description":
+    "Importez un PDF, du Markdown ou un fichier texte. Il est indexé et devient consultable dans le tuteur.",
+  "doc.upload.file": "Fichier",
+  "doc.upload.fileHint": "PDF, Markdown (.md) ou texte (.txt).",
+  "doc.upload.course": "Cours",
+  "doc.upload.coursePlaceholder": "ex. Transformée en ondelettes",
+  "doc.upload.chapter": "Chapitre (optionnel)",
+  "doc.upload.chapterHint": "Regroupe le contenu ; laissez vide si aucun.",
+  "doc.upload.chapterPlaceholder": "ex. Chapitre 1",
+  "doc.upload.button": "Importer et indexer",
+  "doc.upload.success": "{pages} page(s) indexée(s) dans « {course} ».",
+  "doc.library.title": "Contenu indexé",
+  "doc.library.description": "Tout ce qui est consultable, par cours et chapitre.",
+  "doc.refresh": "Actualiser",
+  "doc.empty.title": "Rien d’indexé pour l’instant.",
+  "doc.empty.description": "Importez un fichier ci-dessus pour le rendre consultable dans le tuteur.",
+  "doc.pageCount": "{count} page(s)",
+  "doc.uncategorized": "Sans catégorie",
+  "doc.delete.course": "Supprimer le cours",
+  "doc.delete.chapter": "Supprimer",
+  "doc.delete.confirm": "Supprimer « {target} » de l’index ? Cette action est irréversible.",
+  "doc.delete.success": "{count} élément(s) retiré(s) de « {target} ».",
+
   // Misc
   "common.loading": "Chargement",
 };
@@ -816,6 +870,8 @@ const nl: Record<TranslationKey, string> = {
   "tabs.threads": "Gesprekken",
   "tabs.history": "Geschiedenis",
   "tabs.review": "Herhaling",
+  // Documents
+  "tabs.documents": "Documenten",
 
   // Health badge
   "health.online": "Backend online",
@@ -1033,6 +1089,31 @@ const nl: Record<TranslationKey, string> = {
   "export.copyFailed": "Kon niet naar klembord kopiëren.",
   "export.downloadStarted": "Download gestart.",
   "export.downloadFailed": "Kon de download niet voorbereiden.",
+
+  // Documents
+  "doc.upload.title": "Cursusmateriaal toevoegen",
+  "doc.upload.description":
+    "Upload een PDF-, Markdown- of tekstbestand. Het wordt geïndexeerd en doorzoekbaar in de tutor.",
+  "doc.upload.file": "Bestand",
+  "doc.upload.fileHint": "PDF, Markdown (.md) of tekst (.txt).",
+  "doc.upload.course": "Vak",
+  "doc.upload.coursePlaceholder": "bijv. Wavelet-transformatie",
+  "doc.upload.chapter": "Hoofdstuk (optioneel)",
+  "doc.upload.chapterHint": "Groepeert het materiaal; laat leeg voor geen.",
+  "doc.upload.chapterPlaceholder": "bijv. Hoofdstuk 1",
+  "doc.upload.button": "Uploaden en indexeren",
+  "doc.upload.success": "{pages} pagina('s) geïndexeerd in “{course}”.",
+  "doc.library.title": "Geïndexeerd materiaal",
+  "doc.library.description": "Alles wat nu doorzoekbaar is, per vak en hoofdstuk.",
+  "doc.refresh": "Vernieuwen",
+  "doc.empty.title": "Nog niets geïndexeerd.",
+  "doc.empty.description": "Upload hierboven een bestand om het doorzoekbaar te maken in de tutor.",
+  "doc.pageCount": "{count} pagina('s)",
+  "doc.uncategorized": "Niet-gecategoriseerd",
+  "doc.delete.course": "Vak verwijderen",
+  "doc.delete.chapter": "Verwijderen",
+  "doc.delete.confirm": "“{target}” uit de index verwijderen? Dit kan niet ongedaan worden gemaakt.",
+  "doc.delete.success": "{count} item(s) verwijderd uit “{target}”.",
 
   // Misc
   "common.loading": "Laden",

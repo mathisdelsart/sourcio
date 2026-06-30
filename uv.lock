@@ -588,6 +588,7 @@ api = [
     { name = "fastapi" },
     { name = "pydantic" },
     { name = "pyjwt" },
+    { name = "python-multipart" },
     { name = "sqlalchemy" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -638,6 +639,7 @@ requires-dist = [
     { name = "pyjwt", marker = "extra == 'api'", specifier = ">=2.8" },
     { name = "pymupdf", marker = "extra == 'ingestion'", specifier = ">=1.24" },
     { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "python-multipart", marker = "extra == 'api'", specifier = ">=0.0.9" },
     { name = "qdrant-client", specifier = ">=1.12" },
     { name = "sentence-transformers", marker = "extra == 'ingestion'", specifier = ">=3.0" },
     { name = "sqlalchemy", marker = "extra == 'api'", specifier = ">=2.0" },
