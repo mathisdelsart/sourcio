@@ -193,7 +193,7 @@ def stream_answer(
         }
         return
 
-    yield {"type": "stage", "stage": "generating", "sources": len(results)}
+    yield {"type": "stage", "stage": "reading", "sources": len(results)}
     prompt = f"Sources:\n{format_numbered_sources(results)}\n\nQuestion: {question}"
     parts: list[str] = []
     with timer("llm"):

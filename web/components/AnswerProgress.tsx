@@ -5,28 +5,31 @@ import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 
 /**
- * Real, event-driven progress for a streamed answer. The two steps reflect
- * actual backend stages emitted over SSE — "retrieving" (embedding + vector
- * search) then "generating" (sources found, the model is writing) — not a timer.
- * Once tokens start streaming the answer text itself takes over as the progress.
+ * Real, event-driven progress for a streamed answer. The stages reflect actual
+ * backend work emitted over SSE — "retrieving" (embedding + vector search) then
+ * "reading" (the model ingests the retrieved sources before its first word) —
+ * not a timer. The third step, "writing", is where tokens stream: once that
+ * begins the live answer text itself takes over from this component, so here it
+ * is shown as the upcoming step.
  */
 export function AnswerProgress({
   stage,
   sources,
 }: {
-  stage: "retrieving" | "generating" | null;
+  stage: "retrieving" | "reading" | null;
   sources: number | null;
 }) {
   const { t } = useT();
-  const activeIndex = stage === "generating" ? 1 : 0;
-  const pct = stage === "generating" ? 70 : 30;
+  const activeIndex = stage === "reading" ? 1 : 0;
+  const pct = stage === "reading" ? 62 : 28;
 
   const steps = [
     { label: t("answerProgress.search"), hint: null as string | null },
     {
-      label: t("answerProgress.write"),
+      label: t("answerProgress.read"),
       hint: sources != null ? t("answerProgress.sourcesFound", { count: sources }) : null,
     },
+    { label: t("answerProgress.write"), hint: null as string | null },
   ];
 
   return (

@@ -52,12 +52,14 @@ export function AskPanel({
   // Lazy-init from localStorage so the last chosen course survives a reload.
   const [course, setCourse] = useState(() => readLocal(KEYS.course));
   const [chapter, setChapter] = useState("");
-  const [k, setK] = useState(5);
+  // Always retrieve the maximum: more candidate sources means more links to
+  // ground the answer in. The threshold still filters out irrelevant ones.
+  const MAX_SOURCES = 10;
   const [loading, setLoading] = useState(false);
   /** Text accumulated from the live token stream, before the final event lands. */
   const [streaming, setStreaming] = useState<string | null>(null);
   // Real progress stage from the stream, with the source count once retrieved.
-  const [stage, setStage] = useState<"retrieving" | "generating" | null>(null);
+  const [stage, setStage] = useState<"retrieving" | "reading" | null>(null);
   const [sourceCount, setSourceCount] = useState<number | null>(null);
 
   const [reexplained, setReexplained] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export function AskPanel({
     const req = {
       student_id: studentId,
       question: question.trim(),
-      k,
+      k: MAX_SOURCES,
       course: course.trim() || null,
       chapter: chapter.trim() || null,
       session_id: sessionId,
@@ -105,7 +107,7 @@ export function AskPanel({
         },
         config,
         (s, n) => {
-          setStage(s === "generating" ? "generating" : "retrieving");
+          setStage(s === "reading" ? "reading" : "retrieving");
           if (typeof n === "number") setSourceCount(n);
         },
       );
@@ -163,25 +165,7 @@ export function AskPanel({
               onChange={(e) => setChapter(e.target.value)}
             />
           </div>
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div className="w-full max-w-xs space-y-1.5">
-              <label
-                htmlFor="ask-k"
-                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-              >
-                {t("ask.kLabel")}{" "}
-                <span className="tabular-nums text-zinc-500 dark:text-zinc-400">{k}</span>
-              </label>
-              <input
-                id="ask-k"
-                type="range"
-                min={1}
-                max={10}
-                value={k}
-                onChange={(e) => setK(Number(e.target.value))}
-                className="w-full accent-brand-600 dark:accent-brand-400"
-              />
-            </div>
+          <div className="flex justify-end">
             <Button onClick={runAsk} loading={loading} disabled={!canAsk}>
               {t("ask.submit")}
             </Button>
