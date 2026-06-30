@@ -7,6 +7,9 @@ data/
 # Qdrant (local storage)
 qdrant_storage/
 
+# Uploaded course documents (originals kept for re-viewing)
+uploads/
+
 # Eval run artifacts (build output, not committed)
 eval/results.json
 

@@ -33,7 +33,6 @@ import hmac
 import json
 import logging
 import os
-import tempfile
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
@@ -51,7 +50,7 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import Engine, func, select
 
@@ -80,7 +79,13 @@ from api.middleware import (
 from core.answer import answer, stream_answer
 from core.config import get_settings
 from core.courses import list_courses
-from core.documents import delete_documents, ingest_document, list_documents
+from core.documents import (
+    delete_documents,
+    list_documents,
+    save_upload,
+    stored_file_path,
+    stream_ingest,
+)
 from core.scheduling import MAX_QUALITY, MIN_QUALITY, schedule
 from core.sources import get_source
 from db.models import Feedback, Review, Student
@@ -428,19 +433,14 @@ class DocumentChapter(BaseModel):
 
 
 class DocumentCourse(BaseModel):
-    """A course's indexed inventory: its chapters and total page count."""
+    """A course's indexed inventory: its chapters, page count and stored files."""
 
     course: str
     total_pages: int
     chapters: list[DocumentChapter]
-
-
-class DocumentUploadResponse(BaseModel):
-    """The outcome of ingesting an uploaded file under a course/chapter."""
-
-    course: str
-    chapter: str | None = None
-    pages_indexed: int
+    # Names of original uploaded files kept for this course (viewable via
+    # GET /documents/file). Empty for material indexed outside the upload UI.
+    files: list[str] = []
 
 
 class DocumentDeleteResponse(BaseModel):
@@ -922,44 +922,49 @@ def documents() -> list[dict[str, Any]]:
     return list_documents()
 
 
-@app.post(
-    "/documents/upload",
-    response_model=DocumentUploadResponse,
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_api_key)],
-)
+@app.post("/documents/upload", dependencies=[Depends(require_api_key)])
 async def upload_document(
     file: Annotated[UploadFile, File()],
     course: Annotated[str, Form()],
     chapter: Annotated[str | None, Form()] = None,
-) -> dict[str, Any]:
-    """Ingest an uploaded file into Qdrant under the given course/chapter.
+) -> StreamingResponse:
+    """Ingest an uploaded file, streaming ingestion progress as Server-Sent Events.
 
-    The file is buffered to a temporary path (its extension preserved so routing
-    works) and handed to the existing ingestion pipeline: ``.md``/``.txt`` go
-    through the prose loader, anything else through the math-aware PDF path. The
-    temp file is always removed afterwards. Returns the resolved course/chapter
-    and how many chunks were indexed. A file with no extractable content yields
-    ``pages_indexed = 0``.
+    The original file is stored under ``uploads/<course>/`` so it can be re-opened
+    later, then ingested incrementally: ``.md``/``.txt`` via the prose loader,
+    anything else via the math-aware PDF vision path. Each SSE ``data:`` line is a
+    JSON event from ``core.documents.stream_ingest`` — ``start`` (with the total
+    page count and how many were already indexed and thus skipped), one
+    ``progress`` per batch (pages done, indexed count, elapsed seconds), then a
+    final ``done`` or ``error``. Pages already indexed for the course are skipped,
+    so re-running an interrupted upload never re-pays the vision model, and each
+    batch is indexed as it is extracted, so a failure keeps the pages done so far.
     """
     normalized_chapter = chapter.strip() if chapter and chapter.strip() else None
-    suffix = os.path.splitext(file.filename or "")[1]
     contents = await file.read()
-    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
-    try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(contents)
-        pages_indexed = ingest_document(tmp_path, course, normalized_chapter)
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-    return {
-        "course": course,
-        "chapter": normalized_chapter,
-        "pages_indexed": pages_indexed,
-    }
+    # Persist the original so the user can re-open the intact file later; ingest
+    # from that stored path (its extension drives prose/PDF routing).
+    stored_path = save_upload(contents, course, file.filename or "document")
+
+    def event_stream() -> Iterator[str]:
+        for event in stream_ingest(stored_path, course, normalized_chapter):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.get("/documents/file", dependencies=[Depends(require_api_key)])
+def document_file(course: str, name: str) -> FileResponse:
+    """Serve a stored original file so the user can re-open it intact.
+
+    ``course`` and ``name`` identify a file previously saved by an upload. The
+    path is resolved inside the course's upload directory with a traversal guard;
+    an unknown file yields 404.
+    """
+    path = stored_file_path(course, name)
+    if path is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found.")
+    return FileResponse(path, filename=os.path.basename(path))
 
 
 @app.delete(

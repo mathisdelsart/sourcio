@@ -19,6 +19,10 @@ The Qdrant client is built from settings, matching ``core.courses`` and
 ``core.sources``.
 """
 
+import os
+import re
+import time
+from collections.abc import Iterator
 from typing import Any
 
 from core.config import get_settings
@@ -31,6 +35,60 @@ from ingestion.schema import Page
 # large collection can never make the enumeration unbounded.
 _SCROLL_PAGE = 256
 _SCROLL_MAX_POINTS = 100_000
+
+# Where uploaded originals are kept so a user can re-open the intact file later.
+# Overridable for tests/deploys; gitignored.
+UPLOADS_DIR = os.environ.get("DOCUMENTS_DIR", "uploads")
+
+
+def _slug(value: str) -> str:
+    """Filesystem-safe slug for a course directory name."""
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip("-")
+    return cleaned or "course"
+
+
+def _safe_filename(name: str) -> str:
+    """Keep only the basename and strip anything path-like, to prevent traversal."""
+    base = os.path.basename(name).strip()
+    base = re.sub(r"[^A-Za-z0-9._ -]+", "_", base)
+    return base or "document"
+
+
+def _course_dir(course: str) -> str:
+    return os.path.join(UPLOADS_DIR, _slug(course))
+
+
+def save_upload(data: bytes, course: str, filename: str) -> str:
+    """Persist an uploaded file under ``uploads/<course>/<filename>`` and return its path."""
+    directory = _course_dir(course)
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, _safe_filename(filename))
+    with open(path, "wb") as handle:
+        handle.write(data)
+    return path
+
+
+def stored_file_path(course: str, name: str) -> str | None:
+    """Resolve a previously stored original by course + filename, or None.
+
+    Guards against path traversal: the resolved path must stay inside the
+    course's upload directory.
+    """
+    directory = os.path.abspath(_course_dir(course))
+    path = os.path.abspath(os.path.join(directory, _safe_filename(name)))
+    if os.path.commonpath([directory, path]) != directory:
+        return None
+    return path if os.path.isfile(path) else None
+
+
+def list_course_files(course: str) -> list[str]:
+    """Names of the original files stored for a course (newest first)."""
+    directory = _course_dir(course)
+    if not os.path.isdir(directory):
+        return []
+    names = [n for n in os.listdir(directory) if os.path.isfile(os.path.join(directory, n))]
+    names.sort(key=lambda n: os.path.getmtime(os.path.join(directory, n)), reverse=True)
+    return names
 
 
 def _client():
@@ -104,8 +162,49 @@ def list_documents() -> list[dict[str, Any]]:
     except Exception:
         # Treat any scroll/collection error as "nothing indexed" rather than
         # failing the request, matching core.courses' graceful degradation.
-        return _format_inventory(index)
-    return _format_inventory(index)
+        pass
+    result = _format_inventory(index)
+    # Attach the stored original files (if any) so the UI can offer "view".
+    for course in result:
+        course["files"] = list_course_files(str(course["course"]))
+    return result
+
+
+def _indexed_pages(course: str) -> set[int]:
+    """Page numbers already indexed for a course, so re-ingestion can skip them.
+
+    This is what makes a retry free: a page already in Qdrant is never sent to
+    the (paid) vision model again. Any error degrades to an empty set (nothing
+    skipped) rather than failing the ingest.
+    """
+    settings = get_settings()
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+    pages: set[int] = set()
+    offset = None
+    scanned = 0
+    try:
+        client = _client()
+        course_filter = Filter(must=[FieldCondition(key="course", match=MatchValue(value=course))])
+        while scanned < _SCROLL_MAX_POINTS:
+            points, offset = client.scroll(
+                collection_name=settings.qdrant_collection,
+                scroll_filter=course_filter,
+                limit=_SCROLL_PAGE,
+                with_payload=["page"],
+                with_vectors=False,
+                offset=offset,
+            )
+            for point in points:
+                page = (point.payload or {}).get("page")
+                if page is not None:
+                    pages.add(int(page))
+            scanned += len(points)
+            if offset is None or not points:
+                break
+    except Exception:
+        return set()
+    return pages
 
 
 def _load_pages(path: str, course: str) -> list[Page]:
@@ -145,6 +244,96 @@ def ingest_document(
         return 0
     index_chunks(chunks, sparse=sparse)
     return len(chunks)
+
+
+def stream_ingest(
+    path: str,
+    course: str,
+    chapter: str | None = None,
+    *,
+    batch_size: int = 3,
+    sparse: bool = False,
+) -> Iterator[dict[str, Any]]:
+    """Ingest a file incrementally, yielding progress events.
+
+    Yields, in order:
+    - ``{"type": "start", "total": N, "skipped": K}`` once,
+    - ``{"type": "progress", "done", "total", "indexed", "elapsed"}`` per batch,
+    - ``{"type": "done", "indexed", "total", "elapsed"}`` on success, or
+    - ``{"type": "error", "message", ...}`` if a batch fails (earlier batches stay
+      indexed — work is never lost).
+
+    For a PDF, pages already indexed for this course are skipped, so re-running an
+    interrupted ingest never re-pays the vision model. Each batch is indexed as
+    soon as it is extracted, so a mid-way failure keeps the pages done so far.
+    Prose (``.md``/``.txt``) is loaded and indexed in one step (no model cost).
+    """
+    started = time.time()
+
+    if is_text_file(path):
+        pages = load_text_file(path, course)
+        if chapter is not None:
+            for page in pages:
+                page.chapter = chapter
+        total = len(pages)
+        yield {"type": "start", "total": total, "skipped": 0}
+        chunks = chunk_pages(pages) if pages else []
+        if chunks:
+            index_chunks(chunks, sparse=sparse)
+        yield {
+            "type": "done",
+            "indexed": len(chunks),
+            "total": total,
+            "elapsed": round(time.time() - started, 1),
+        }
+        return
+
+    from ingestion.extract import extract_pdf
+    from ingestion.run import _pdf_page_count
+
+    total = _pdf_page_count(path)
+    already = _indexed_pages(course)
+    todo = [p for p in range(1, total + 1) if p not in already]
+    done = total - len(todo)  # count already-indexed pages as done for the bar
+    indexed = 0
+    yield {"type": "start", "total": total, "skipped": done}
+
+    try:
+        for start in range(0, len(todo), batch_size):
+            batch = todo[start : start + batch_size]
+            pages = extract_pdf(path, course, pages=batch)
+            if chapter is not None:
+                for page in pages:
+                    page.chapter = chapter
+            chunks = chunk_pages(pages)
+            if chunks:
+                index_chunks(chunks, sparse=sparse)
+                indexed += len(chunks)
+            done += len(batch)
+            yield {
+                "type": "progress",
+                "done": done,
+                "total": total,
+                "indexed": indexed,
+                "elapsed": round(time.time() - started, 1),
+            }
+    except Exception as exc:
+        yield {
+            "type": "error",
+            "message": str(exc),
+            "done": done,
+            "total": total,
+            "indexed": indexed,
+            "elapsed": round(time.time() - started, 1),
+        }
+        return
+
+    yield {
+        "type": "done",
+        "indexed": indexed,
+        "total": total,
+        "elapsed": round(time.time() - started, 1),
+    }
 
 
 def delete_documents(course: str, chapter: str | None = None) -> int:

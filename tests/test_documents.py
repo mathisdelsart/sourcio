@@ -250,6 +250,7 @@ def test_documents_route_returns_inventory(client, monkeypatch):
             "course": "Wavelets",
             "total_pages": 3,
             "chapters": [{"chapter": "Intro", "pages": 2}, {"chapter": None, "pages": 1}],
+            "files": ["notes.pdf"],
         }
     ]
     monkeypatch.setattr(api_main, "list_documents", lambda: inventory)
@@ -266,41 +267,84 @@ def test_documents_route_empty(client, monkeypatch):
     assert response.json() == []
 
 
+def _sse_events(text: str) -> list[dict]:
+    """Parse the JSON payloads from an SSE response body."""
+    import json
+
+    out = []
+    for line in text.splitlines():
+        if line.startswith("data:"):
+            out.append(json.loads(line[5:].strip()))
+    return out
+
+
 @requires_api
-def test_upload_route_ingests_file(client, monkeypatch):
+def test_upload_route_streams_progress(client, monkeypatch):
     seen: dict = {}
 
-    def fake_ingest(path, course, chapter=None, **kwargs):  # noqa: ARG001
+    def fake_save(data, course, filename):
+        seen["bytes"] = data
         seen["course"] = course
-        seen["chapter"] = chapter
-        with open(path, "rb") as handle:
-            seen["bytes"] = handle.read()
-        return 7
+        return f"/tmp/{filename}"
 
-    monkeypatch.setattr(api_main, "ingest_document", fake_ingest)
+    def fake_stream(path, course, chapter=None, **kwargs):  # noqa: ARG001
+        seen["chapter"] = chapter
+        yield {"type": "start", "total": 2, "skipped": 0}
+        yield {"type": "progress", "done": 2, "total": 2, "indexed": 2, "elapsed": 0.1}
+        yield {"type": "done", "indexed": 2, "total": 2, "elapsed": 0.1}
+
+    monkeypatch.setattr(api_main, "save_upload", fake_save)
+    monkeypatch.setattr(api_main, "stream_ingest", fake_stream)
 
     response = client.post(
         "/documents/upload",
         files={"file": ("notes.md", b"hello world", "text/markdown")},
         data={"course": "Wavelets", "chapter": "Intro"},
     )
-    assert response.status_code == 201
-    assert response.json() == {"course": "Wavelets", "chapter": "Intro", "pages_indexed": 7}
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = _sse_events(response.text)
+    assert events[0]["type"] == "start"
+    assert events[-1] == {"type": "done", "indexed": 2, "total": 2, "elapsed": 0.1}
+    assert seen["bytes"] == b"hello world"
     assert seen["course"] == "Wavelets"
     assert seen["chapter"] == "Intro"
-    assert seen["bytes"] == b"hello world"
 
 
 @requires_api
 def test_upload_route_blank_chapter_becomes_null(client, monkeypatch):
-    monkeypatch.setattr(api_main, "ingest_document", lambda *a, **k: 2)
+    seen: dict = {}
+
+    def fake_stream(path, course, chapter=None, **kwargs):  # noqa: ARG001
+        seen["chapter"] = chapter
+        yield {"type": "done", "indexed": 0, "total": 0, "elapsed": 0.0}
+
+    monkeypatch.setattr(api_main, "save_upload", lambda *a, **k: "/tmp/x.txt")
+    monkeypatch.setattr(api_main, "stream_ingest", fake_stream)
     response = client.post(
         "/documents/upload",
         files={"file": ("notes.txt", b"content", "text/plain")},
         data={"course": "Wavelets", "chapter": "   "},
     )
-    assert response.status_code == 201
-    assert response.json()["chapter"] is None
+    assert response.status_code == 200
+    assert seen["chapter"] is None
+
+
+@requires_api
+def test_document_file_route_serves_stored_file(client, monkeypatch, tmp_path):
+    stored = tmp_path / "notes.pdf"
+    stored.write_bytes(b"%PDF-1.4 fake")
+    monkeypatch.setattr(api_main, "stored_file_path", lambda course, name: str(stored))
+    response = client.get("/documents/file", params={"course": "Wavelets", "name": "notes.pdf"})
+    assert response.status_code == 200
+    assert response.content == b"%PDF-1.4 fake"
+
+
+@requires_api
+def test_document_file_route_404_when_missing(client, monkeypatch):
+    monkeypatch.setattr(api_main, "stored_file_path", lambda course, name: None)
+    response = client.get("/documents/file", params={"course": "X", "name": "y.pdf"})
+    assert response.status_code == 404
 
 
 @requires_api

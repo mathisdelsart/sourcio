@@ -383,6 +383,15 @@ const en = {
   "doc.delete.chapter": "Delete",
   "doc.delete.confirm": "Delete “{target}” from the index? This cannot be undone.",
   "doc.delete.success": "Removed {count} item(s) from “{target}”.",
+  "doc.progress.starting": "Preparing…",
+  "doc.progress.pages": "{done} / {total} pages",
+  "doc.progress.elapsed": "Elapsed {time}",
+  "doc.progress.eta": "~{time} left",
+  "doc.progress.skipped": "{count} already indexed",
+  "doc.progress.done": "Done — {indexed} pages indexed.",
+  "doc.progress.error": "Import failed: {message}",
+  "doc.upToDate": "Up to date",
+  "doc.viewFailed": "Could not open the file.",
 
   // Misc
   "common.loading": "Loading",
@@ -770,6 +779,15 @@ const fr: Record<TranslationKey, string> = {
   "doc.delete.chapter": "Supprimer",
   "doc.delete.confirm": "Supprimer « {target} » de l’index ? Cette action est irréversible.",
   "doc.delete.success": "{count} élément(s) retiré(s) de « {target} ».",
+  "doc.progress.starting": "Préparation…",
+  "doc.progress.pages": "{done} / {total} pages",
+  "doc.progress.elapsed": "Écoulé {time}",
+  "doc.progress.eta": "~{time} restant",
+  "doc.progress.skipped": "{count} déjà indexées",
+  "doc.progress.done": "Terminé — {indexed} pages indexées.",
+  "doc.progress.error": "Échec de l'import : {message}",
+  "doc.upToDate": "À jour",
+  "doc.viewFailed": "Impossible d'ouvrir le fichier.",
 
   // Misc
   "common.loading": "Chargement",
@@ -1138,6 +1156,15 @@ const nl: Record<TranslationKey, string> = {
   "doc.delete.chapter": "Verwijderen",
   "doc.delete.confirm": "“{target}” uit de index verwijderen? Dit kan niet ongedaan worden gemaakt.",
   "doc.delete.success": "{count} item(s) verwijderd uit “{target}”.",
+  "doc.progress.starting": "Voorbereiden…",
+  "doc.progress.pages": "{done} / {total} pagina's",
+  "doc.progress.elapsed": "Verstreken {time}",
+  "doc.progress.eta": "~{time} resterend",
+  "doc.progress.skipped": "{count} al geïndexeerd",
+  "doc.progress.done": "Klaar — {indexed} pagina's geïndexeerd.",
+  "doc.progress.error": "Import mislukt: {message}",
+  "doc.upToDate": "Bijgewerkt",
+  "doc.viewFailed": "Kon het bestand niet openen.",
 
   // Misc
   "common.loading": "Laden",

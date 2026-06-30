@@ -24,6 +24,8 @@ _SYSTEM = (
     "- After each claim, cite the source index it comes from, like [1] or [2].\n"
     "- If the sources do not answer the question, reply with exactly this "
     f"sentence and nothing else: {REFUSAL}\n"
+    "- Give the answer once: do not repeat it or append a restatement such as "
+    "'The complete answer is…'.\n"
     "- Keep the course's own notation and definitions."
 )
 

@@ -662,18 +662,24 @@ export interface DocumentChapter {
   pages: number;
 }
 
-/** A course's indexed inventory: its chapters and total page count. */
+/** A course's indexed inventory: its chapters, page count and stored files. */
 export interface DocumentCourse {
   course: string;
   total_pages: number;
   chapters: DocumentChapter[];
+  /** Names of original uploaded files kept for this course (viewable). */
+  files: string[];
 }
 
-/** The result of ingesting an uploaded file under a course/chapter. */
-export interface DocumentUploadResult {
-  course: string;
-  chapter: string | null;
-  pages_indexed: number;
+/** A progress event streamed while a document is ingested. */
+export interface DocumentProgress {
+  type: "start" | "progress" | "done" | "error";
+  total?: number;
+  skipped?: number;
+  done?: number;
+  indexed?: number;
+  elapsed?: number;
+  message?: string;
 }
 
 /** How many indexed points a delete request removed. */
@@ -691,26 +697,76 @@ export async function listDocuments(config?: ConnectionConfig): Promise<Document
 }
 
 /**
- * Upload a file and ingest it under `course`/`chapter`.
+ * Upload a file and ingest it under `course`/`chapter`, streaming progress.
  *
- * The body is `multipart/form-data`, so the Content-Type is left unset (the
- * browser adds the boundary). `chapter` is only sent when non-empty.
+ * The body is `multipart/form-data` (Content-Type left unset so the browser adds
+ * the boundary). `onEvent` is called for each ingestion event (`start`,
+ * `progress`, `done`, `error`) so the UI can show a live progress bar. Throws an
+ * `ApiError` if the request cannot be reached or returns a non-2xx status.
  */
 export async function uploadDocument(
   file: File,
   course: string,
   chapter: string | null,
+  onEvent: (event: DocumentProgress) => void,
   config?: ConnectionConfig,
-): Promise<DocumentUploadResult> {
+): Promise<void> {
   const form = new FormData();
   form.append("file", file);
   form.append("course", course);
   if (chapter && chapter.trim()) form.append("chapter", chapter.trim());
-  return request<DocumentUploadResult>(
-    "/documents/upload",
-    { method: "POST", headers: buildHeaders(config), body: form },
-    config,
-  );
+
+  const url = `${resolveBaseUrl(config)}/documents/upload`;
+  let response: Response;
+  try {
+    response = await fetch(url, { method: "POST", headers: buildHeaders(config), body: form });
+  } catch {
+    throw new ApiError(
+      "Could not reach the backend. Check that it is running and the base URL is correct.",
+    );
+  }
+  if (!response.ok) throw new ApiError(await readError(response), response.status);
+  if (!response.body) throw new ApiError("Streaming is not supported by this response.", response.status);
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const handle = (raw: string) => {
+    const data = raw
+      .split("\n")
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trim())
+      .join("");
+    if (!data) return;
+    try {
+      onEvent(JSON.parse(data) as DocumentProgress);
+    } catch {
+      // ignore malformed frames
+    }
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      handle(buffer.slice(0, sep));
+      buffer = buffer.slice(sep + 2);
+    }
+  }
+}
+
+/** Fetch a stored original file as a Blob (sends auth headers, unlike a plain link). */
+export async function fetchDocumentFile(
+  course: string,
+  name: string,
+  config?: ConnectionConfig,
+): Promise<Blob> {
+  const params = new URLSearchParams({ course, name });
+  const url = `${resolveBaseUrl(config)}/documents/file?${params.toString()}`;
+  const response = await fetch(url, { method: "GET", headers: buildHeaders(config) });
+  if (!response.ok) throw new ApiError(await readError(response), response.status);
+  return response.blob();
 }
 
 /** Delete a course's indexed points, optionally narrowed to one chapter. */
