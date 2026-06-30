@@ -14,7 +14,8 @@ import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { TextField, TextArea } from "@/components/TextField";
 import { Markdown } from "@/components/Markdown";
-import { EmptyState, RefusalBanner, Skeleton } from "@/components/States";
+import { EmptyState, RefusalBanner } from "@/components/States";
+import { ThinkingIndicator } from "@/components/ThinkingIndicator";
 import { useToast } from "@/components/Toast";
 import { useT } from "@/lib/i18n";
 import { submitOnCmdEnter } from "@/lib/keys";
@@ -206,7 +207,7 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
         />
         <CardBody>
           {loading ? (
-            <Skeleton lines={5} />
+            <ThinkingIndicator variant="quiz" />
           ) : result == null ? (
             <EmptyState
               title={t("quiz.empty.title")}
@@ -256,6 +257,11 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
                           {t("quiz.gradeAnswer")}
                         </Button>
                       </div>
+                      {isGrading && !verdict && (
+                        <div className="mt-3">
+                          <ThinkingIndicator variant="grade" />
+                        </div>
+                      )}
                       {verdict && (
                         <div className="mt-3 space-y-3 rounded-lg border border-zinc-100 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
                           <div className="space-y-1.5">

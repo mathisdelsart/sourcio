@@ -17,7 +17,8 @@ import { Markdown } from "@/components/Markdown";
 import { CitationChip } from "@/components/CitationChip";
 import { ExportActions } from "@/components/ExportActions";
 import { AnswerFeedback } from "@/components/AnswerFeedback";
-import { EmptyState, RefusalBanner, Skeleton } from "@/components/States";
+import { EmptyState, RefusalBanner } from "@/components/States";
+import { ThinkingIndicator } from "@/components/ThinkingIndicator";
 import { LevelSelector } from "@/components/LevelSelector";
 import { useToast } from "@/components/Toast";
 import { useT } from "@/lib/i18n";
@@ -186,14 +187,14 @@ export function AskPanel({
         <CardBody>
           {streaming != null ? (
             streaming.length === 0 ? (
-              <Skeleton lines={4} />
+              <ThinkingIndicator variant="answer" />
             ) : (
               <div className="streaming-answer" aria-live="polite" aria-busy="true">
                 <Markdown>{streaming}</Markdown>
               </div>
             )
           ) : loading ? (
-            <Skeleton lines={4} />
+            <ThinkingIndicator variant="answer" />
           ) : lastAnswer == null ? (
             <EmptyState
               title={t("ask.empty.title")}
