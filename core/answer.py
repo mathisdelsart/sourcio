@@ -176,6 +176,10 @@ def stream_answer(
     string) the refusal text is streamed as one token, then the final event is
     emitted with ``refused=True`` and no sources.
     """
+    # Real progress stages (consumed by the UI): retrieving runs the embedding +
+    # vector search; generating starts once sources are found and the model is
+    # about to write. These reflect actual work, not a timer.
+    yield {"type": "stage", "stage": "retrieving"}
     with timer("retrieval"):
         results = _retrieve(question, k=k, course=course, chapter=chapter)
     if not results:
@@ -189,6 +193,7 @@ def stream_answer(
         }
         return
 
+    yield {"type": "stage", "stage": "generating", "sources": len(results)}
     prompt = f"Sources:\n{format_numbered_sources(results)}\n\nQuestion: {question}"
     parts: list[str] = []
     with timer("llm"):

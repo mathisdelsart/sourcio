@@ -106,7 +106,9 @@ def test_stream_answer_refuses_when_no_retrieval(monkeypatch):
     monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: [])
     events = list(answer_mod.stream_answer("off-topic"))
 
-    assert events[0] == {"type": "token", "text": answer_mod.REFUSAL}
+    # The first event is the (real) retrieving stage, then the refusal token.
+    assert events[0] == {"type": "stage", "stage": "retrieving"}
+    assert events[1] == {"type": "token", "text": answer_mod.REFUSAL}
     final = events[-1]
     assert final["type"] == "sources"
     assert final["refused"] is True

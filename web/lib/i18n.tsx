@@ -167,6 +167,9 @@ const en = {
   // Shared
   "common.requestFailed": "Request failed.",
   "common.upToDate": "Up to date",
+  "answerProgress.search": "Searching your courses",
+  "answerProgress.write": "Writing the answer",
+  "answerProgress.sourcesFound": "{count} sources found",
   "common.submitHint": "Press ⌘/Ctrl + Enter to submit.",
   "common.sources": "Sources",
   "common.noSources": "No sources cited.",
@@ -582,6 +585,9 @@ const fr: Record<TranslationKey, string> = {
   // Shared
   "common.requestFailed": "La requête a échoué.",
   "common.upToDate": "À jour",
+  "answerProgress.search": "Recherche dans vos cours",
+  "answerProgress.write": "Rédaction de la réponse",
+  "answerProgress.sourcesFound": "{count} sources trouvées",
   "common.submitHint": "Appuyez sur ⌘/Ctrl + Entrée pour envoyer.",
   "common.sources": "Sources",
   "common.noSources": "Aucune source citée.",
@@ -994,6 +1000,9 @@ const nl: Record<TranslationKey, string> = {
   // Shared
   "common.requestFailed": "Verzoek mislukt.",
   "common.upToDate": "Bijgewerkt",
+  "answerProgress.search": "Zoeken in je cursussen",
+  "answerProgress.write": "Het antwoord schrijven",
+  "answerProgress.sourcesFound": "{count} bronnen gevonden",
   "common.submitHint": "Druk op ⌘/Ctrl + Enter om te verzenden.",
   "common.sources": "Bronnen",
   "common.noSources": "Geen bronnen geciteerd.",

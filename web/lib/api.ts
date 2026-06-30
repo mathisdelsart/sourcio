@@ -292,6 +292,7 @@ export async function askStream(
   onToken: (text: string) => void,
   onDone: (done: AskStreamDone) => void,
   config?: ConnectionConfig,
+  onStage?: (stage: string, sources?: number) => void,
 ): Promise<void> {
   const payload: AskRequest = {
     student_id: body.student_id,
@@ -337,7 +338,8 @@ export async function askStream(
     let event: {
       type?: string;
       text?: string;
-      sources?: string[];
+      stage?: string;
+      sources?: number | string[];
       citations?: Citation[];
       refused?: boolean;
     };
@@ -348,9 +350,11 @@ export async function askStream(
     }
     if (event.type === "token" && typeof event.text === "string") {
       onToken(event.text);
+    } else if (event.type === "stage" && typeof event.stage === "string") {
+      onStage?.(event.stage, typeof event.sources === "number" ? event.sources : undefined);
     } else if (event.type === "sources") {
       onDone({
-        sources: event.sources ?? [],
+        sources: Array.isArray(event.sources) ? event.sources : [],
         citations: event.citations ?? [],
         refused: event.refused ?? false,
       });

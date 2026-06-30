@@ -18,7 +18,7 @@ import { CitationChip } from "@/components/CitationChip";
 import { ExportActions } from "@/components/ExportActions";
 import { AnswerFeedback } from "@/components/AnswerFeedback";
 import { EmptyState, RefusalBanner } from "@/components/States";
-import { ThinkingIndicator } from "@/components/ThinkingIndicator";
+import { AnswerProgress } from "@/components/AnswerProgress";
 import { LevelSelector } from "@/components/LevelSelector";
 import { useToast } from "@/components/Toast";
 import { useT } from "@/lib/i18n";
@@ -56,6 +56,9 @@ export function AskPanel({
   const [loading, setLoading] = useState(false);
   /** Text accumulated from the live token stream, before the final event lands. */
   const [streaming, setStreaming] = useState<string | null>(null);
+  // Real progress stage from the stream, with the source count once retrieved.
+  const [stage, setStage] = useState<"retrieving" | "generating" | null>(null);
+  const [sourceCount, setSourceCount] = useState<number | null>(null);
 
   const [reexplained, setReexplained] = useState<string | null>(null);
   const [level, setLevel] = useState<Level>("beginner");
@@ -74,6 +77,8 @@ export function AskPanel({
     setReexplained(null);
     setLastAnswer(null);
     setStreaming("");
+    setStage("retrieving");
+    setSourceCount(null);
     const req = {
       student_id: studentId,
       question: question.trim(),
@@ -99,6 +104,10 @@ export function AskPanel({
           });
         },
         config,
+        (s, n) => {
+          setStage(s === "generating" ? "generating" : "retrieving");
+          if (typeof n === "number") setSourceCount(n);
+        },
       );
     } catch {
       // Streaming failed (e.g. proxy buffering, older backend): fall back to the
@@ -111,6 +120,7 @@ export function AskPanel({
       }
     } finally {
       setStreaming(null);
+      setStage(null);
       setLoading(false);
     }
   }
@@ -187,14 +197,14 @@ export function AskPanel({
         <CardBody>
           {streaming != null ? (
             streaming.length === 0 ? (
-              <ThinkingIndicator variant="answer" />
+              <AnswerProgress stage={stage} sources={sourceCount} />
             ) : (
               <div className="streaming-answer" aria-live="polite" aria-busy="true">
                 <Markdown>{streaming}</Markdown>
               </div>
             )
           ) : loading ? (
-            <ThinkingIndicator variant="answer" />
+            <AnswerProgress stage={stage} sources={sourceCount} />
           ) : lastAnswer == null ? (
             <EmptyState
               title={t("ask.empty.title")}
