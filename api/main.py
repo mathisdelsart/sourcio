@@ -52,7 +52,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import Engine, func, select
+from sqlalchemy import Engine, func, select, update
 
 from agent.nodes.generate import generate
 from agent.nodes.grade import grade
@@ -245,9 +245,11 @@ def _resolve_session_id(session: Any, student_id: int, session_id: int | None) -
     """Validate that ``session_id`` is a thread owned by ``student_id``.
 
     Returns the id unchanged when it names one of the student's threads. When it
-    is ``None`` (the default), the turn stays unthreaded and ``None`` is
-    returned, so existing behaviour is preserved. An id that does not belong to
-    the student yields 404 rather than silently mis-attaching the message.
+    is ``None`` (the default), the turn stays unthreaded. A stale or unknown id
+    (for example a thread id persisted in the browser after a database reset, or
+    one belonging to another student) is treated as "no thread" — it returns
+    ``None`` rather than failing the request, since the query already filters by
+    ``student_id`` so the message can never be mis-attached.
     """
     if session_id is None:
         return None
@@ -256,12 +258,7 @@ def _resolve_session_id(session: Any, student_id: int, session_id: int | None) -
             SessionModel.id == session_id, SessionModel.student_id == student_id
         )
     )
-    if thread is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found for this student.",
-        )
-    return session_id
+    return session_id if thread is not None else None
 
 
 class AskRequest(BaseModel):
@@ -1125,6 +1122,40 @@ def session_messages(student_id: str, session_id: int) -> list[dict[str, str]]:
             }
             for row in rows
         ]
+
+
+@app.delete(
+    "/sessions/{student_id}/{session_id}",
+    dependencies=[Depends(require_api_key)],
+)
+def delete_session_route(student_id: str, session_id: int) -> dict[str, bool]:
+    """Delete a conversation thread, keeping its messages as unthreaded history.
+
+    The thread's messages are unlinked (``session_id`` set to NULL) so they
+    remain in the flat history rather than being lost, then the thread row is
+    removed. Yields 404 when the thread does not exist or is not owned by the
+    student.
+    """
+    with get_session(_engine) as session:
+        student = session.scalar(select(Student).where(Student.external_id == student_id))
+        thread = None
+        if student is not None:
+            thread = session.scalar(
+                select(SessionModel).where(
+                    SessionModel.id == session_id, SessionModel.student_id == student.id
+                )
+            )
+        if thread is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session not found for this student.",
+            )
+        # Keep the conversation: unlink the messages so they stay in flat history.
+        session.execute(
+            update(MessageModel).where(MessageModel.session_id == thread.id).values(session_id=None)
+        )
+        session.delete(thread)
+    return {"deleted": True}
 
 
 @app.post(

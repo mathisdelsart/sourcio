@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   createSession,
+  deleteSession,
   getSessionMessages,
   listSessions,
   type ConnectionConfig,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/api";
 import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { RefreshButton } from "@/components/RefreshButton";
 import { TextField } from "@/components/TextField";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, Skeleton } from "@/components/States";
@@ -63,6 +65,10 @@ export function ThreadsPanel({
 
   const [messages, setMessages] = useState<HistoryItem[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
+
+  // Thread deletion: the id awaiting red confirmation, and the one in flight.
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const loadSessions = useCallback(async () => {
     setLoading(true);
@@ -129,6 +135,25 @@ export function ThreadsPanel({
     }
   }
 
+  async function removeThread(id: number) {
+    setConfirmDelete(null);
+    setDeletingId(id);
+    try {
+      await deleteSession(studentId, id, config);
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      // Deleting the active thread falls back to "all history".
+      if (id === activeSessionId) {
+        setActiveSessionId(null);
+        setMessages([]);
+      }
+      toast.push(t("threads.deleted"), "success");
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : t("threads.deleteFailed"), "error");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   const selectRow =
     "w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors focus:outline-none " +
     "focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950";
@@ -143,11 +168,7 @@ export function ThreadsPanel({
         <CardHeader
           title={t("threads.title")}
           description={t("threads.description")}
-          action={
-            <Button variant="secondary" onClick={loadSessions} loading={loading}>
-              {t("threads.refresh")}
-            </Button>
-          }
+          action={<RefreshButton onRefresh={loadSessions} label={t("threads.refresh")} />}
         />
         <CardBody className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -205,13 +226,13 @@ export function ThreadsPanel({
                   const selected = s.id === activeSessionId;
                   const title = s.title?.trim() || t("threads.untitled");
                   return (
-                    <li key={s.id}>
+                    <li key={s.id} className="flex items-stretch gap-2">
                       <button
                         type="button"
                         onClick={() => setActiveSessionId(s.id)}
                         aria-pressed={selected}
                         aria-label={t("threads.select", { title })}
-                        className={cn(selectRow, selected ? selectedRow : idleRow)}
+                        className={cn(selectRow, "flex-1", selected ? selectedRow : idleRow)}
                       >
                         <span className="flex items-center justify-between gap-3">
                           <span className="truncate font-medium text-zinc-800 dark:text-zinc-100">
@@ -229,6 +250,39 @@ export function ThreadsPanel({
                           </span>
                         )}
                       </button>
+
+                      {confirmDelete === s.id ? (
+                        <span className="flex shrink-0 flex-col items-stretch justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => removeThread(s.id)}
+                            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                          >
+                            {t("threads.delete.yes")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDelete(null)}
+                            className="text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-800"
+                          >
+                            {t("common.cancel")}
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDelete(s.id)}
+                          disabled={deletingId === s.id}
+                          aria-label={t("threads.delete")}
+                          title={t("threads.delete")}
+                          className="flex shrink-0 items-center rounded-lg border border-zinc-200 px-3 text-zinc-400 transition-colors hover:border-red-300 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50 dark:border-zinc-700"
+                        >
+                          <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6" />
+                            <path d="M10 11v6M14 11v6" />
+                          </svg>
+                        </button>
+                      )}
                     </li>
                   );
                 })}

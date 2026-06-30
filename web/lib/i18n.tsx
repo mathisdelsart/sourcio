@@ -166,6 +166,7 @@ const en = {
 
   // Shared
   "common.requestFailed": "Request failed.",
+  "common.upToDate": "Up to date",
   "common.submitHint": "Press ⌘/Ctrl + Enter to submit.",
   "common.sources": "Sources",
   "common.noSources": "No sources cited.",
@@ -302,6 +303,11 @@ const en = {
   "threads.create": "Create",
   "threads.created": "Thread created.",
   "threads.createFailed": "Could not create the thread.",
+  "threads.delete": "Delete",
+  "threads.delete.confirm": "Delete this thread?",
+  "threads.delete.yes": "Yes, delete",
+  "threads.deleted": "Thread deleted — its messages stay in your history.",
+  "threads.deleteFailed": "Could not delete the thread.",
   "threads.none": "All history (unthreaded)",
   "threads.noneHint": "New questions are not attached to any thread.",
   "threads.untitled": "Untitled thread",
@@ -317,6 +323,12 @@ const en = {
     "Select this thread, then ask a question in the Ask tab to start it.",
   "threads.loadFailed": "Could not load threads.",
   "threads.messagesFailed": "Could not load the thread's messages.",
+
+  // Thread selector
+  "threadSelect.label": "Thread",
+  "threadSelect.all": "All history (no thread)",
+  "threadSelect.new": "+ New thread",
+  "threadSelect.created": "New thread created.",
 
   // Review panel (spaced repetition)
   "review.title": "Spaced repetition",
@@ -397,6 +409,18 @@ const en = {
 
   // Misc
   "common.loading": "Loading",
+
+  // AI thinking indicator — staged messages cycled while the tutor works.
+  "thinking.answer.1": "Searching your courses…",
+  "thinking.answer.2": "Reading the sources…",
+  "thinking.answer.3": "Writing the answer…",
+  "thinking.exercise.1": "Finding the relevant material…",
+  "thinking.exercise.2": "Building the exercise…",
+  "thinking.grade.1": "Reading your answer…",
+  "thinking.grade.2": "Comparing with the reference…",
+  "thinking.grade.3": "Writing the correction…",
+  "thinking.quiz.1": "Finding the relevant material…",
+  "thinking.quiz.2": "Building the questions…",
 } as const;
 
 /** Translation key set, derived from the English dictionary. */
@@ -557,6 +581,7 @@ const fr: Record<TranslationKey, string> = {
 
   // Shared
   "common.requestFailed": "La requête a échoué.",
+  "common.upToDate": "À jour",
   "common.submitHint": "Appuyez sur ⌘/Ctrl + Entrée pour envoyer.",
   "common.sources": "Sources",
   "common.noSources": "Aucune source citée.",
@@ -699,6 +724,11 @@ const fr: Record<TranslationKey, string> = {
   "threads.create": "Créer",
   "threads.created": "Fil créé.",
   "threads.createFailed": "Impossible de créer le fil.",
+  "threads.delete": "Supprimer",
+  "threads.delete.confirm": "Supprimer ce fil ?",
+  "threads.delete.yes": "Oui, supprimer",
+  "threads.deleted": "Fil supprimé — ses messages restent dans votre historique.",
+  "threads.deleteFailed": "Impossible de supprimer le fil.",
   "threads.none": "Tout l'historique (sans fil)",
   "threads.noneHint": "Les nouvelles questions ne sont rattachées à aucun fil.",
   "threads.untitled": "Fil sans titre",
@@ -714,6 +744,12 @@ const fr: Record<TranslationKey, string> = {
     "Sélectionnez ce fil, puis posez une question dans l'onglet Demander pour le démarrer.",
   "threads.loadFailed": "Impossible de charger les fils.",
   "threads.messagesFailed": "Impossible de charger les messages du fil.",
+
+  // Thread selector
+  "threadSelect.label": "Fil",
+  "threadSelect.all": "Tout l'historique (aucun fil)",
+  "threadSelect.new": "+ Nouveau fil",
+  "threadSelect.created": "Nouveau fil créé.",
 
   // Review panel (spaced repetition)
   "review.title": "Répétition espacée",
@@ -795,6 +831,18 @@ const fr: Record<TranslationKey, string> = {
 
   // Misc
   "common.loading": "Chargement",
+
+  // AI thinking indicator — staged messages cycled while the tutor works.
+  "thinking.answer.1": "Recherche dans vos cours…",
+  "thinking.answer.2": "Lecture des sources…",
+  "thinking.answer.3": "Rédaction de la réponse…",
+  "thinking.exercise.1": "Recherche du contenu pertinent…",
+  "thinking.exercise.2": "Construction de l'exercice…",
+  "thinking.grade.1": "Lecture de votre réponse…",
+  "thinking.grade.2": "Comparaison avec la référence…",
+  "thinking.grade.3": "Rédaction de la correction…",
+  "thinking.quiz.1": "Recherche du contenu pertinent…",
+  "thinking.quiz.2": "Construction des questions…",
 };
 
 /** Dutch dictionary. Same keys as `en`; values are translations. */
@@ -945,6 +993,7 @@ const nl: Record<TranslationKey, string> = {
 
   // Shared
   "common.requestFailed": "Verzoek mislukt.",
+  "common.upToDate": "Bijgewerkt",
   "common.submitHint": "Druk op ⌘/Ctrl + Enter om te verzenden.",
   "common.sources": "Bronnen",
   "common.noSources": "Geen bronnen geciteerd.",
@@ -1080,6 +1129,11 @@ const nl: Record<TranslationKey, string> = {
   "threads.create": "Aanmaken",
   "threads.created": "Gesprek aangemaakt.",
   "threads.createFailed": "Kon het gesprek niet aanmaken.",
+  "threads.delete": "Verwijderen",
+  "threads.delete.confirm": "Dit gesprek verwijderen?",
+  "threads.delete.yes": "Ja, verwijderen",
+  "threads.deleted": "Gesprek verwijderd — de berichten blijven in je geschiedenis.",
+  "threads.deleteFailed": "Kon het gesprek niet verwijderen.",
   "threads.none": "Alle geschiedenis (zonder gesprek)",
   "threads.noneHint": "Nieuwe vragen worden aan geen enkel gesprek gekoppeld.",
   "threads.untitled": "Naamloos gesprek",
@@ -1095,6 +1149,12 @@ const nl: Record<TranslationKey, string> = {
     "Selecteer dit gesprek en stel een vraag op het tabblad Vragen om het te starten.",
   "threads.loadFailed": "Kon gesprekken niet laden.",
   "threads.messagesFailed": "Kon de berichten van het gesprek niet laden.",
+
+  // Thread selector
+  "threadSelect.label": "Gesprek",
+  "threadSelect.all": "Volledige geschiedenis (geen gesprek)",
+  "threadSelect.new": "+ Nieuw gesprek",
+  "threadSelect.created": "Nieuw gesprek aangemaakt.",
 
   // Review panel (spaced repetition)
   "review.title": "Gespreide herhaling",
@@ -1174,6 +1234,18 @@ const nl: Record<TranslationKey, string> = {
 
   // Misc
   "common.loading": "Laden",
+
+  // AI thinking indicator — staged messages cycled while the tutor works.
+  "thinking.answer.1": "Je cursussen doorzoeken…",
+  "thinking.answer.2": "De bronnen lezen…",
+  "thinking.answer.3": "Het antwoord schrijven…",
+  "thinking.exercise.1": "Relevant materiaal zoeken…",
+  "thinking.exercise.2": "De oefening opbouwen…",
+  "thinking.grade.1": "Je antwoord lezen…",
+  "thinking.grade.2": "Vergelijken met de referentie…",
+  "thinking.grade.3": "De correctie schrijven…",
+  "thinking.quiz.1": "Relevant materiaal zoeken…",
+  "thinking.quiz.2": "De vragen opbouwen…",
 };
 
 const DICTIONARIES: Record<Locale, Record<TranslationKey, string>> = { en, fr, nl };

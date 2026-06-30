@@ -169,15 +169,18 @@ def test_ask_without_session_stays_unthreaded(client, monkeypatch):
         assert all(m.session_id is None for m in msgs)
 
 
-def test_ask_with_foreign_session_404(client, monkeypatch):
+def test_ask_with_foreign_session_is_treated_as_unthreaded(client, monkeypatch):
     _stub_answer(monkeypatch)
     thread = client.post("/sessions", json={"student_id": "s1"}).json()
-    # s2 tries to attach to s1's thread.
+    # s2 references s1's thread (or a stale id): the request succeeds and the
+    # turn is simply unthreaded rather than failing with 404.
     response = client.post(
         "/ask",
         json={"student_id": "s2", "question": "q", "session_id": thread["id"]},
     )
-    assert response.status_code == 404
+    assert response.status_code == 200
+    # The message was not attached to s1's thread.
+    assert client.get(f"/sessions/s1/{thread['id']}/messages").json() == []
 
 
 # --- existing flat history unaffected ----------------------------------------
@@ -197,6 +200,30 @@ def test_flat_history_still_works(client, monkeypatch):
     contents = [row["content"] for row in rows]
     assert "q1" in contents
     assert "q2" in contents
+
+
+def test_delete_thread_keeps_messages_as_history(client, monkeypatch):
+    _stub_answer(monkeypatch)
+    thread = client.post("/sessions", json={"student_id": "s1"}).json()
+    client.post(
+        "/ask",
+        json={"student_id": "s1", "question": "q-threaded", "session_id": thread["id"]},
+    )
+
+    resp = client.delete(f"/sessions/s1/{thread['id']}")
+    assert resp.status_code == 200
+    assert resp.json() == {"deleted": True}
+
+    # The thread is gone...
+    assert client.get(f"/sessions/s1/{thread['id']}/messages").status_code == 404
+    assert client.get("/sessions/s1").json() == []
+    # ...but its message stays in the flat history (unthreaded), not lost.
+    contents = [row["content"] for row in client.get("/history/s1").json()]
+    assert "q-threaded" in contents
+
+
+def test_delete_unknown_thread_404(client):
+    assert client.delete("/sessions/s1/999").status_code == 404
 
 
 # --- API-key authentication --------------------------------------------------

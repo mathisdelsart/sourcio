@@ -587,6 +587,22 @@ export async function getSessionMessages(
   );
 }
 
+/**
+ * Delete a conversation thread. Its messages are kept (unlinked into the flat
+ * history), not lost, so deleting a thread never erases the conversation.
+ */
+export async function deleteSession(
+  studentId: string,
+  sessionId: number,
+  config?: ConnectionConfig,
+): Promise<{ deleted: boolean }> {
+  return request<{ deleted: boolean }>(
+    `/sessions/${encodeURIComponent(studentId)}/${sessionId}`,
+    { method: "DELETE", headers: buildHeaders(config) },
+    config,
+  );
+}
+
 /** List the notions due for spaced-repetition review now, soonest first. */
 export async function getDueReviews(
   studentId: string,

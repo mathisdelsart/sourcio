@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { RefreshButton } from "@/components/RefreshButton";
 import { TextField } from "@/components/TextField";
 import { EmptyState, Skeleton } from "@/components/States";
 import { useToast } from "@/components/Toast";
@@ -39,7 +40,6 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
   const { t } = useT();
   const [items, setItems] = useState<DocumentCourse[]>([]);
   const [loading, setLoading] = useState(false);
-  const [refreshed, setRefreshed] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [course, setCourse] = useState("");
   const [chapter, setChapter] = useState("");
@@ -67,14 +67,6 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Refresh with a minimum visible spinner, then a brief "up to date" confirmation.
-  async function refresh() {
-    setRefreshed(false);
-    await Promise.all([load(), new Promise((r) => setTimeout(r, 900))]);
-    setRefreshed(true);
-    setTimeout(() => setRefreshed(false), 1600);
-  }
 
   async function upload() {
     if (!file || !course.trim() || uploading) return;
@@ -279,18 +271,7 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
         <CardHeader
           title={t("doc.library.title")}
           description={t("doc.library.description")}
-          action={
-            <Button variant="secondary" onClick={refresh} loading={loading}>
-              {refreshed ? (
-                <span className="flex items-center gap-1.5 text-emerald-600">
-                  <CheckIcon />
-                  {t("doc.upToDate")}
-                </span>
-              ) : (
-                t("doc.refresh")
-              )}
-            </Button>
-          }
+          action={<RefreshButton onRefresh={load} label={t("doc.refresh")} />}
         />
         <CardBody>
           {loading && items.length === 0 ? (
