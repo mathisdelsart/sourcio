@@ -988,9 +988,7 @@ def test_endpoints_open_when_no_key_configured(client, monkeypatch, method, path
 
 def test_enqueue_review_makes_notion_due_immediately(client):
     """A notion added via /reviews/enqueue appears at once in /reviews/due."""
-    enqueue = client.post(
-        "/reviews/enqueue", json={"student_id": "s1", "notion": "wavelets"}
-    )
+    enqueue = client.post("/reviews/enqueue", json={"student_id": "s1", "notion": "wavelets"})
     assert enqueue.status_code == 200
     payload = enqueue.json()
     assert payload["notion"] == "wavelets"
@@ -1007,18 +1005,14 @@ def test_enqueue_review_makes_notion_due_immediately(client):
 def test_enqueue_review_resets_existing_notion_to_due(client):
     """Enqueuing a previously rated notion resets it so it is due again now."""
     # Rate it well first: this schedules it into the future, off the due list.
-    rated = client.post(
-        "/reviews", json={"student_id": "s1", "notion": "wavelets", "quality": 5}
-    )
+    rated = client.post("/reviews", json={"student_id": "s1", "notion": "wavelets", "quality": 5})
     assert rated.status_code == 200
     assert rated.json()["interval_days"] == 1
     before = client.get("/reviews/due", params={"student_id": "s1"})
     assert "wavelets" not in [item["notion"] for item in before.json()]
 
     # Enqueue resets it back to due-now without duplicating the row.
-    enqueue = client.post(
-        "/reviews/enqueue", json={"student_id": "s1", "notion": "wavelets"}
-    )
+    enqueue = client.post("/reviews/enqueue", json={"student_id": "s1", "notion": "wavelets"})
     assert enqueue.status_code == 200
     assert enqueue.json()["interval_days"] == 0
 

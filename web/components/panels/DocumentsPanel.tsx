@@ -44,6 +44,8 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
   const [course, setCourse] = useState("");
   const [chapter, setChapter] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
+  // Row currently awaiting an explicit red confirmation before deletion.
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   // Live ingestion progress; null when no upload is running.
   const [progress, setProgress] = useState<DocumentProgress | null>(null);
@@ -114,11 +116,10 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
     }
   }
 
-  async function remove(courseName: string, chapterName: string | null) {
-    if (deleting) return;
-    const label = chapterName ? `${courseName} — ${chapterName}` : courseName;
-    if (!window.confirm(t("doc.delete.confirm", { target: label }))) return;
+  async function confirmRemove(courseName: string, chapterName: string | null) {
     const key = rowKey(courseName, chapterName);
+    const label = chapterName ? `${courseName} — ${chapterName}` : courseName;
+    setConfirmKey(null);
     setDeleting(key);
     try {
       const result = await deleteDocument(courseName, chapterName, config);
@@ -129,6 +130,37 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
     } finally {
       setDeleting(null);
     }
+  }
+
+  /** Delete affordance: a neutral button that flips to a red confirm/cancel pair. */
+  function DeleteControl({ courseName, chapter }: { courseName: string; chapter: string | null }) {
+    const key = rowKey(courseName, chapter);
+    if (confirmKey === key) {
+      return (
+        <span className="inline-flex items-center gap-2">
+          <span className="text-xs text-zinc-500">{t("doc.delete.confirmShort")}</span>
+          <button
+            type="button"
+            onClick={() => confirmRemove(courseName, chapter)}
+            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+          >
+            {t("doc.delete.confirmYes")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmKey(null)}
+            className="rounded px-1.5 text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          >
+            {t("common.cancel")}
+          </button>
+        </span>
+      );
+    }
+    return (
+      <Button variant="ghost" loading={deleting === key} onClick={() => setConfirmKey(key)}>
+        {chapter ? t("doc.delete.chapter") : t("doc.delete.course")}
+      </Button>
+    );
   }
 
   const canUpload = !!file && course.trim().length > 0 && !uploading;
@@ -279,13 +311,7 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
                         {t("doc.pageCount", { count: courseItem.total_pages })}
                       </p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      onClick={() => remove(courseItem.course, null)}
-                      loading={deleting === rowKey(courseItem.course, null)}
-                    >
-                      {t("doc.delete.course")}
-                    </Button>
+                    <DeleteControl courseName={courseItem.course} chapter={null} />
                   </div>
 
                   {/* Original files, re-openable. */}
@@ -317,13 +343,7 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
                           <span className="text-xs tabular-nums text-zinc-500">
                             {t("doc.pageCount", { count: ch.pages })}
                           </span>
-                          <Button
-                            variant="ghost"
-                            onClick={() => remove(courseItem.course, ch.chapter)}
-                            loading={deleting === rowKey(courseItem.course, ch.chapter)}
-                          >
-                            {t("doc.delete.chapter")}
-                          </Button>
+                          <DeleteControl courseName={courseItem.course} chapter={ch.chapter} />
                         </div>
                       </li>
                     ))}

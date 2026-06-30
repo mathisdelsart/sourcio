@@ -392,6 +392,8 @@ const en = {
   "doc.progress.error": "Import failed: {message}",
   "doc.upToDate": "Up to date",
   "doc.viewFailed": "Could not open the file.",
+  "doc.delete.confirmShort": "Delete?",
+  "doc.delete.confirmYes": "Yes, delete",
 
   // Misc
   "common.loading": "Loading",
@@ -788,6 +790,8 @@ const fr: Record<TranslationKey, string> = {
   "doc.progress.error": "Échec de l'import : {message}",
   "doc.upToDate": "À jour",
   "doc.viewFailed": "Impossible d'ouvrir le fichier.",
+  "doc.delete.confirmShort": "Supprimer ?",
+  "doc.delete.confirmYes": "Oui, supprimer",
 
   // Misc
   "common.loading": "Chargement",
@@ -1165,6 +1169,8 @@ const nl: Record<TranslationKey, string> = {
   "doc.progress.error": "Import mislukt: {message}",
   "doc.upToDate": "Bijgewerkt",
   "doc.viewFailed": "Kon het bestand niet openen.",
+  "doc.delete.confirmShort": "Verwijderen?",
+  "doc.delete.confirmYes": "Ja, verwijderen",
 
   // Misc
   "common.loading": "Laden",
