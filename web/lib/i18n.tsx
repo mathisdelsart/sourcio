@@ -397,6 +397,18 @@ const en = {
 
   // Misc
   "common.loading": "Loading",
+
+  // AI thinking indicator — staged messages cycled while the tutor works.
+  "thinking.answer.1": "Searching your courses…",
+  "thinking.answer.2": "Reading the sources…",
+  "thinking.answer.3": "Writing the answer…",
+  "thinking.exercise.1": "Finding the relevant material…",
+  "thinking.exercise.2": "Building the exercise…",
+  "thinking.grade.1": "Reading your answer…",
+  "thinking.grade.2": "Comparing with the reference…",
+  "thinking.grade.3": "Writing the correction…",
+  "thinking.quiz.1": "Finding the relevant material…",
+  "thinking.quiz.2": "Building the questions…",
 } as const;
 
 /** Translation key set, derived from the English dictionary. */
@@ -795,6 +807,18 @@ const fr: Record<TranslationKey, string> = {
 
   // Misc
   "common.loading": "Chargement",
+
+  // AI thinking indicator — staged messages cycled while the tutor works.
+  "thinking.answer.1": "Recherche dans vos cours…",
+  "thinking.answer.2": "Lecture des sources…",
+  "thinking.answer.3": "Rédaction de la réponse…",
+  "thinking.exercise.1": "Recherche du contenu pertinent…",
+  "thinking.exercise.2": "Construction de l'exercice…",
+  "thinking.grade.1": "Lecture de votre réponse…",
+  "thinking.grade.2": "Comparaison avec la référence…",
+  "thinking.grade.3": "Rédaction de la correction…",
+  "thinking.quiz.1": "Recherche du contenu pertinent…",
+  "thinking.quiz.2": "Construction des questions…",
 };
 
 /** Dutch dictionary. Same keys as `en`; values are translations. */
@@ -1174,6 +1198,18 @@ const nl: Record<TranslationKey, string> = {
 
   // Misc
   "common.loading": "Laden",
+
+  // AI thinking indicator — staged messages cycled while the tutor works.
+  "thinking.answer.1": "Je cursussen doorzoeken…",
+  "thinking.answer.2": "De bronnen lezen…",
+  "thinking.answer.3": "Het antwoord schrijven…",
+  "thinking.exercise.1": "Relevant materiaal zoeken…",
+  "thinking.exercise.2": "De oefening opbouwen…",
+  "thinking.grade.1": "Je antwoord lezen…",
+  "thinking.grade.2": "Vergelijken met de referentie…",
+  "thinking.grade.3": "De correctie schrijven…",
+  "thinking.quiz.1": "Relevant materiaal zoeken…",
+  "thinking.quiz.2": "De vragen opbouwen…",
 };
 
 const DICTIONARIES: Record<Locale, Record<TranslationKey, string>> = { en, fr, nl };

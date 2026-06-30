@@ -12,7 +12,8 @@ import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { TextArea, TextField } from "@/components/TextField";
 import { Markdown } from "@/components/Markdown";
-import { EmptyState, RefusalBanner, Skeleton } from "@/components/States";
+import { EmptyState, RefusalBanner } from "@/components/States";
+import { ThinkingIndicator } from "@/components/ThinkingIndicator";
 import { useToast } from "@/components/Toast";
 import { useT } from "@/lib/i18n";
 import { submitOnCmdEnter } from "@/lib/keys";
@@ -129,7 +130,7 @@ export function ExercisePanel({ studentId, config }: ExercisePanelProps) {
         />
         <CardBody>
           {loading ? (
-            <Skeleton lines={4} />
+            <ThinkingIndicator variant="exercise" />
           ) : lastExercise == null ? (
             <EmptyState
               title={t("exercise.empty.title")}
@@ -178,7 +179,7 @@ export function ExercisePanel({ studentId, config }: ExercisePanelProps) {
             <CardHeader title={t("grade.verdictTitle")} />
             <CardBody>
               {grading ? (
-                <Skeleton lines={3} />
+                <ThinkingIndicator variant="grade" />
               ) : result == null ? (
                 <EmptyState
                   title={t("grade.empty.title")}
