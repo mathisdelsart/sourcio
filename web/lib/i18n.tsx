@@ -241,8 +241,9 @@ const en = {
   // Exercise panel
   "exercise.title": "Generate an exercise",
   "exercise.description": "A practice problem grounded in the course, using its notation.",
-  "exercise.notionLabel": "Notion to practice",
-  "exercise.notionPlaceholder": "e.g. continuous wavelet transform",
+  "exercise.notionLabel": "What exercise do you want?",
+  "exercise.notionPlaceholder":
+    "e.g. a medium-difficulty problem on the wavelet transform, with a full worked solution",
   "exercise.generate": "Generate",
   "exercise.resultTitle": "Exercise",
   "exercise.empty.title": "No exercise yet",
@@ -267,8 +268,9 @@ const en = {
   "quiz.title": "Generate a quiz",
   "quiz.description":
     "A set of practice questions grounded in the course, using its notation.",
-  "quiz.notionLabel": "Notion to quiz on",
-  "quiz.notionPlaceholder": "e.g. continuous wavelet transform",
+  "quiz.notionLabel": "What should the quiz cover?",
+  "quiz.notionPlaceholder":
+    "e.g. short questions on the wavelet transform, from its definition to a small calculation",
   "quiz.questions": "Questions",
   "quiz.generate": "Generate",
   "quiz.resultTitle": "Quiz",
@@ -664,8 +666,9 @@ const fr: Record<TranslationKey, string> = {
   "exercise.title": "Générer un exercice",
   "exercise.description":
     "Un problème d'entraînement ancré dans le cours, utilisant sa notation.",
-  "exercise.notionLabel": "Notion à travailler",
-  "exercise.notionPlaceholder": "ex. transformée en ondelettes continue",
+  "exercise.notionLabel": "Quel exercice veux-tu ?",
+  "exercise.notionPlaceholder":
+    "ex. un problème de difficulté moyenne sur la transformée en ondelettes, avec une solution détaillée",
   "exercise.generate": "Générer",
   "exercise.resultTitle": "Exercice",
   "exercise.empty.title": "Pas encore d'exercice",
@@ -692,8 +695,9 @@ const fr: Record<TranslationKey, string> = {
   "quiz.title": "Générer un quiz",
   "quiz.description":
     "Un ensemble de questions d'entraînement ancrées dans le cours, utilisant sa notation.",
-  "quiz.notionLabel": "Notion à tester",
-  "quiz.notionPlaceholder": "ex. transformée en ondelettes continue",
+  "quiz.notionLabel": "Sur quoi doit porter le quiz ?",
+  "quiz.notionPlaceholder":
+    "ex. des questions courtes sur la transformée en ondelettes, de sa définition à un petit calcul",
   "quiz.questions": "Questions",
   "quiz.generate": "Générer",
   "quiz.resultTitle": "Quiz",
@@ -1076,8 +1080,9 @@ const nl: Record<TranslationKey, string> = {
   // Exercise panel
   "exercise.title": "Genereer een oefening",
   "exercise.description": "Een oefenprobleem verankerd in de cursus, met diens notatie.",
-  "exercise.notionLabel": "Te oefenen begrip",
-  "exercise.notionPlaceholder": "bijv. continue wavelettransformatie",
+  "exercise.notionLabel": "Welke oefening wil je?",
+  "exercise.notionPlaceholder":
+    "bijv. een oefening van gemiddelde moeilijkheid over de wavelettransformatie, met een volledige uitgewerkte oplossing",
   "exercise.generate": "Genereren",
   "exercise.resultTitle": "Oefening",
   "exercise.empty.title": "Nog geen oefening",
@@ -1102,8 +1107,9 @@ const nl: Record<TranslationKey, string> = {
   // Quiz panel
   "quiz.title": "Genereer een quiz",
   "quiz.description": "Een reeks oefenvragen verankerd in de cursus, met diens notatie.",
-  "quiz.notionLabel": "Begrip om over te quizzen",
-  "quiz.notionPlaceholder": "bijv. continue wavelettransformatie",
+  "quiz.notionLabel": "Waarover moet de quiz gaan?",
+  "quiz.notionPlaceholder":
+    "bijv. korte vragen over de wavelettransformatie, van de definitie tot een kleine berekening",
   "quiz.questions": "Vragen",
   "quiz.generate": "Genereren",
   "quiz.resultTitle": "Quiz",

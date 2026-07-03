@@ -404,18 +404,26 @@ export async function reexplain(
   );
 }
 
-/** Generate a course-grounded exercise on a notion. */
+/**
+ * Generate a course-grounded exercise from a free-form request. `course` and
+ * `chapter` optionally scope retrieval and are only sent when truthy.
+ */
 export async function exercise(
   studentId: string,
   notion: string,
   config?: ConnectionConfig,
+  course?: string | null,
+  chapter?: string | null,
 ): Promise<ExerciseResponse> {
+  const payload: Record<string, unknown> = { student_id: studentId, notion };
+  if (course) payload.course = course;
+  if (chapter) payload.chapter = chapter;
   return request<ExerciseResponse>(
     "/exercise",
     {
       method: "POST",
       headers: buildHeaders(config, true),
-      body: JSON.stringify({ student_id: studentId, notion }),
+      body: JSON.stringify(payload),
     },
     config,
   );
@@ -439,19 +447,27 @@ export async function grade(
   );
 }
 
-/** Generate a course-grounded quiz of `n` questions on a notion. */
+/**
+ * Generate a course-grounded quiz of `n` questions from a free-form request.
+ * `course` and `chapter` optionally scope retrieval and are only sent when truthy.
+ */
 export async function quiz(
   studentId: string,
   notion: string,
   n: number,
   config?: ConnectionConfig,
+  course?: string | null,
+  chapter?: string | null,
 ): Promise<QuizResponse> {
+  const payload: Record<string, unknown> = { student_id: studentId, notion, n };
+  if (course) payload.course = course;
+  if (chapter) payload.chapter = chapter;
   return request<QuizResponse>(
     "/quiz",
     {
       method: "POST",
       headers: buildHeaders(config, true),
-      body: JSON.stringify({ student_id: studentId, notion, n }),
+      body: JSON.stringify(payload),
     },
     config,
   );

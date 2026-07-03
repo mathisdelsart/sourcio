@@ -118,21 +118,31 @@ def _persist_quiz(
         return skipped
 
 
-def generate_quiz(notion: str, n: int, student_id: str | None) -> dict[str, Any]:
+def generate_quiz(
+    notion: str,
+    n: int,
+    student_id: str | None,
+    *,
+    course: str | None = None,
+    chapter: str | None = None,
+) -> dict[str, Any]:
     """Generate a course-grounded quiz of ``n`` questions on ``notion``.
 
     Retrieves chunks for ``notion`` and builds the questions only from them.
-    Returns a refusal (``refused=True``, empty ``questions``) when nothing
-    relevant is found or the model produces no usable question, never inventing
-    content. On success the quiz and its questions are persisted (best-effort)
-    and the return exposes problems only — reference solutions stay server-side.
+    ``course`` and ``chapter`` optionally scope retrieval to a single course
+    (and chapter) so the quiz stays on the requested material; when both are
+    None the whole collection is searched. Returns a refusal (``refused=True``,
+    empty ``questions``) when nothing relevant is found or the model produces no
+    usable question, never inventing content. On success the quiz and its
+    questions are persisted (best-effort) and the return exposes problems only —
+    reference solutions stay server-side.
 
     Returns ``{"quiz_id", "notion", "questions": [{"id", "problem"}], "refused"}``.
     """
     from core.retrieval import retrieve
 
     n = max(1, int(n))
-    results = retrieve(notion)
+    results = retrieve(notion, course=course, chapter=chapter)
     if not results:
         return {"quiz_id": None, "notion": notion, "questions": [], "refused": True}
 

@@ -51,6 +51,8 @@ class TutorState(TypedDict, total=False):
     message: str
     intent: Intent  # explain | generate | grade | reexplain
     level: Level  # optional audience level for re-explanation
+    course: str | None  # optional course filter scoping grounded retrieval
+    chapter: str | None  # optional chapter filter scoping grounded retrieval
     retrieved: list[Any]  # citations/sources backing the last explanation
     answer: str  # grounded explanation (explain / reexplain output)
     exercise: dict[str, Any]  # generated exercise + reference solution

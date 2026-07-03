@@ -49,7 +49,11 @@ def generate(state: TutorState) -> TutorState:
     from core.retrieval import retrieve
 
     message = state.get("message", "")
-    results = retrieve(message)
+    # Scope retrieval to the requested course/chapter when given, so the exercise
+    # is built from the right material rather than whatever matched globally.
+    course_filter = state.get("course")
+    chapter_filter = state.get("chapter")
+    results = retrieve(message, course=course_filter, chapter=chapter_filter)
     if not results:
         return {
             "exercise": {"problem": REFUSAL, "solution": "", "refused": True},
@@ -67,10 +71,10 @@ def generate(state: TutorState) -> TutorState:
     )
 
     problem, solution = _split(raw)
-    # The notion is the request itself; the course comes from the retrieved
-    # chunks so the stored exercise stays attributed to its source course.
+    # The notion is the request itself. The explicitly requested course wins as
+    # the stored attribution; otherwise fall back to the retrieved chunk's course.
     notion = message
-    course = results[0].chunk.course
+    course = course_filter or results[0].chunk.course
     exercise_id = persist_exercise(
         state.get("student_id"),
         course=course,
