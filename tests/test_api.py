@@ -241,13 +241,24 @@ def test_exercise_returns_problem_without_solution(client, monkeypatch):
 
     monkeypatch.setattr(api_main, "generate", fake_generate)
 
-    response = client.post("/exercise", json={"student_id": "s1", "notion": "integrals"})
+    response = client.post(
+        "/exercise",
+        json={
+            "student_id": "s1",
+            "notion": "integrals",
+            "course": "Algebra",
+            "chapter": "Ch.2",
+        },
+    )
     assert response.status_code == 200
     body = response.json()
     assert body == {"problem": "Compute X.", "refused": False, "id": None}
     assert captured["message"] == "integrals"
     # The student id is threaded to the node so it can persist the exercise.
     assert captured["state"]["student_id"] == "s1"
+    # The course/chapter scope is threaded into the node's state for retrieval.
+    assert captured["state"]["course"] == "Algebra"
+    assert captured["state"]["chapter"] == "Ch.2"
     # The reference solution must never leak to the client.
     assert "solution" not in body
 
@@ -672,8 +683,9 @@ def test_grade_without_exercise_id_is_not_persisted(client, monkeypatch):
 def test_quiz_returns_questions_without_solutions(client, monkeypatch):
     captured = {}
 
-    def fake_generate_quiz(notion, n, student_id):
+    def fake_generate_quiz(notion, n, student_id, *, course=None, chapter=None):
         captured["args"] = (notion, n, student_id)
+        captured["scope"] = (course, chapter)
         return {
             "quiz_id": 1,
             "notion": notion,
@@ -686,7 +698,16 @@ def test_quiz_returns_questions_without_solutions(client, monkeypatch):
 
     monkeypatch.setattr(api_main, "generate_quiz", fake_generate_quiz)
 
-    response = client.post("/quiz", json={"student_id": "s1", "notion": "groups", "n": 2})
+    response = client.post(
+        "/quiz",
+        json={
+            "student_id": "s1",
+            "notion": "groups",
+            "n": 2,
+            "course": "Algebra",
+            "chapter": "Ch.2",
+        },
+    )
     assert response.status_code == 200
     body = response.json()
     assert body == {
@@ -697,6 +718,8 @@ def test_quiz_returns_questions_without_solutions(client, monkeypatch):
     }
     # The notion, count and student id reached the node.
     assert captured["args"] == ("groups", 2, "s1")
+    # The course/chapter scope was threaded through to retrieval.
+    assert captured["scope"] == ("Algebra", "Ch.2")
     # No reference solution field is present on any question.
     assert all("solution" not in q for q in body["questions"])
 
@@ -704,7 +727,7 @@ def test_quiz_returns_questions_without_solutions(client, monkeypatch):
 def test_quiz_defaults_question_count(client, monkeypatch):
     captured = {}
 
-    def fake_generate_quiz(notion, n, student_id):
+    def fake_generate_quiz(notion, n, student_id, *, course=None, chapter=None):
         captured["n"] = n
         return {"quiz_id": 1, "notion": notion, "questions": [], "refused": False}
 
@@ -718,7 +741,7 @@ def test_quiz_surfaces_refusal(client, monkeypatch):
     monkeypatch.setattr(
         api_main,
         "generate_quiz",
-        lambda notion, n, student_id: {
+        lambda notion, n, student_id, *, course=None, chapter=None: {
             "quiz_id": None,
             "notion": notion,
             "questions": [],
@@ -883,7 +906,7 @@ def _stub_nodes(monkeypatch):
     monkeypatch.setattr(
         api_main,
         "generate_quiz",
-        lambda notion, n, student_id: {
+        lambda notion, n, student_id, *, course=None, chapter=None: {
             "quiz_id": 1,
             "notion": notion,
             "questions": [{"id": 1, "problem": "Q?"}],

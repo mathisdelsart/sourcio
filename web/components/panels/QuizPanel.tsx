@@ -13,12 +13,14 @@ import {
 import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { TextField, TextArea } from "@/components/TextField";
+import { CourseSelect } from "@/components/CourseSelect";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, RefusalBanner } from "@/components/States";
 import { ThinkingIndicator } from "@/components/ThinkingIndicator";
 import { useToast } from "@/components/Toast";
 import { useT } from "@/lib/i18n";
 import { submitOnCmdEnter } from "@/lib/keys";
+import { KEYS, readLocal, writeLocal } from "@/lib/storage";
 import { cn } from "@/lib/cn";
 
 interface QuizPanelProps {
@@ -44,6 +46,10 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
   const toast = useToast();
   const { t } = useT();
   const [notion, setNotion] = useState("");
+  // Course/chapter scope retrieval so the quiz stays on the requested topic.
+  // Lazy-init the course from localStorage so a choice is shared across tabs.
+  const [course, setCourse] = useState(() => readLocal(KEYS.course));
+  const [chapter, setChapter] = useState("");
   const [count, setCount] = useState<number>(3);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<QuizResponse | null>(null);
@@ -58,6 +64,11 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
   const [gradingAll, setGradingAll] = useState(false);
 
   const canGenerate = notion.trim().length > 0 && !loading;
+
+  function selectCourse(next: string) {
+    setCourse(next);
+    writeLocal(KEYS.course, next);
+  }
 
   const hasAnyAnswer = useMemo(
     () =>
@@ -84,7 +95,14 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
     setGrading({});
     setSummary(null);
     try {
-      const data = await fetchQuiz(studentId, notion.trim(), count, config);
+      const data = await fetchQuiz(
+        studentId,
+        notion.trim(),
+        count,
+        config,
+        course.trim() || null,
+        chapter.trim() || null,
+      );
       setResult(data);
     } catch (err) {
       toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
@@ -154,16 +172,25 @@ export function QuizPanel({ studentId, config }: QuizPanelProps) {
           description={t("quiz.description")}
         />
         <CardBody className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <TextField
-                label={t("quiz.notionLabel")}
-                placeholder={t("quiz.notionPlaceholder")}
-                value={notion}
-                onChange={(e) => setNotion(e.target.value)}
-                onKeyDown={submitOnCmdEnter(generate)}
-              />
-            </div>
+          <TextArea
+            label={t("quiz.notionLabel")}
+            placeholder={t("quiz.notionPlaceholder")}
+            rows={3}
+            value={notion}
+            onChange={(e) => setNotion(e.target.value)}
+            onKeyDown={submitOnCmdEnter(generate)}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <CourseSelect value={course} onChange={selectCourse} config={config} />
+            <TextField
+              label={t("ask.chapterLabel")}
+              hint={t("ask.chapterHint")}
+              placeholder={t("ask.chapterPlaceholder")}
+              value={chapter}
+              onChange={(e) => setChapter(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-1.5">
               <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 {t("quiz.questions")}

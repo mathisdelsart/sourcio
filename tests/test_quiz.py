@@ -62,8 +62,13 @@ def _patch_llm(monkeypatch, reply: str) -> None:
     monkeypatch.setattr("agent.nodes.quiz.get_llm", lambda role="default": _FakeLLM(reply))
 
 
-def _patch_retrieve(monkeypatch, results) -> None:
-    monkeypatch.setattr("core.retrieval.retrieve", lambda *a, **k: results)
+def _patch_retrieve(monkeypatch, results, captured: dict | None = None) -> None:
+    def _retrieve(*_a, **kwargs):
+        if captured is not None:
+            captured.update(kwargs)
+        return results
+
+    monkeypatch.setattr("core.retrieval.retrieve", _retrieve)
 
 
 def test_generate_quiz_persists_quiz_and_questions(engine, monkeypatch):
@@ -95,6 +100,19 @@ def test_generate_quiz_persists_quiz_and_questions(engine, monkeypatch):
         assert [q.position for q in questions] == [0, 1]
         assert questions[0].reference_solution == "By axiom 1."
         assert questions[1].reference_solution == "The neutral element e."
+
+
+def test_generate_quiz_scopes_retrieval_by_course_and_chapter(engine, monkeypatch):
+    captured: dict = {}
+    _patch_retrieve(monkeypatch, _make_retrieved("Group axioms."), captured)
+    _patch_llm(monkeypatch, _TWO_QUESTIONS)
+
+    result = generate_quiz("groups", 2, "zoe", course="Algebra", chapter="Ch.2")
+
+    assert result["refused"] is False
+    # The explicit course/chapter reached retrieval so the quiz stays on topic.
+    assert captured["course"] == "Algebra"
+    assert captured["chapter"] == "Ch.2"
 
 
 def test_generate_quiz_never_returns_reference_solutions(engine, monkeypatch):

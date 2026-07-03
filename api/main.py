@@ -309,10 +309,17 @@ class ReexplainResponse(BaseModel):
 
 
 class ExerciseRequest(BaseModel):
-    """A notion to build a practice exercise on, for a student."""
+    """A free-form exercise request for a student.
+
+    ``notion`` is the request itself (any exercise, in free form). ``course`` and
+    ``chapter`` optionally scope retrieval so the exercise stays on the requested
+    material; when both are None the whole collection is searched.
+    """
 
     student_id: str
     notion: str
+    course: str | None = None
+    chapter: str | None = None
 
 
 class ExerciseResponse(BaseModel):
@@ -339,15 +346,20 @@ class GradeResponse(BaseModel):
 
 
 class QuizRequest(BaseModel):
-    """A notion to build a multi-question quiz on, for a student.
+    """A free-form quiz request for a student.
 
-    ``n`` is the desired number of questions; it is clamped to a small range so a
-    request can never ask for an unbounded quiz.
+    ``notion`` is the request itself (any quiz, in free form). ``n`` is the
+    desired number of questions; it is clamped to a small range so a request can
+    never ask for an unbounded quiz. ``course`` and ``chapter`` optionally scope
+    retrieval so the quiz stays on the requested material; when both are None the
+    whole collection is searched.
     """
 
     student_id: str
     notion: str
     n: int = Field(default=3, ge=1, le=10)
+    course: str | None = None
+    chapter: str | None = None
 
 
 class QuizQuestionOut(BaseModel):
@@ -795,7 +807,14 @@ def exercise(request: ExerciseRequest, user: UserOut | None = OptionalUser) -> d
     """
     with get_session(_engine) as session:
         _resolve_student(session, request.student_id, user)
-    state = generate({"message": request.notion, "student_id": request.student_id})
+    state = generate(
+        {
+            "message": request.notion,
+            "student_id": request.student_id,
+            "course": request.course,
+            "chapter": request.chapter,
+        }
+    )
     # generate always populates "exercise" (a built exercise or a refusal).
     built = state.get("exercise")
     assert built is not None
@@ -834,7 +853,13 @@ def quiz(request: QuizRequest, user: UserOut | None = OptionalUser) -> dict[str,
     """
     with get_session(_engine) as session:
         _resolve_student(session, request.student_id, user)
-    return generate_quiz(request.notion, request.n, request.student_id)
+    return generate_quiz(
+        request.notion,
+        request.n,
+        request.student_id,
+        course=request.course,
+        chapter=request.chapter,
+    )
 
 
 @app.post(

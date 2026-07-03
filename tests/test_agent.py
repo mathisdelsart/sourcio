@@ -29,10 +29,11 @@ def fake_retrieve(monkeypatch):
 
     Returns a setter; pass a list of Retrieved (or [] to simulate a miss).
     """
-    holder = {"results": [], "question": None}
+    holder = {"results": [], "question": None, "kwargs": {}}
 
     def _retrieve(question, **kwargs):
         holder["question"] = question
+        holder["kwargs"] = kwargs
         return holder["results"]
 
     import core.retrieval as retrieval_mod
@@ -244,6 +245,25 @@ def test_generate_node_grounds_on_retrieved_chunks(fake_llm, fake_retrieve):
     human_msg = fake_llm["last"].calls[0][-1][1]
     assert "Approximation space V_j." in human_msg
     assert "Projection onto V_j." in human_msg
+
+
+def test_generate_node_scopes_retrieval_by_course_and_chapter(fake_llm, fake_retrieve):
+    fake_retrieve["results"] = [_retrieved(3, "Approximation space V_j.")]
+    fake_llm["reply"] = "EXERCISE:\nDo this.\n\nSOLUTION:\nThe answer."
+    out = generate(
+        {
+            "message": "the approximation space",
+            "course": "ELEC2885",
+            "chapter": "Chapter 2",
+        }
+    )
+
+    # The explicit course/chapter scope retrieval...
+    assert fake_retrieve["kwargs"]["course"] == "ELEC2885"
+    assert fake_retrieve["kwargs"]["chapter"] == "Chapter 2"
+    # ...and the requested course wins as the exercise's stored attribution,
+    # not the retrieved chunk's course.
+    assert out["exercise"]["course"] == "ELEC2885"
 
 
 def test_generate_node_refuses_when_nothing_retrieved(fake_llm, fake_retrieve):
