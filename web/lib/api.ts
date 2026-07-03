@@ -618,8 +618,8 @@ export async function getSessionMessages(
 }
 
 /**
- * Delete a conversation thread. Its messages are kept (unlinked into the flat
- * history), not lost, so deleting a thread never erases the conversation.
+ * Delete a conversation thread together with its messages, so deleting a thread
+ * clears that conversation rather than leaving orphaned turns in the history.
  */
 export async function deleteSession(
   studentId: string,
@@ -696,6 +696,24 @@ export async function history(
   return request<HistoryItem[]>(
     `/history/${encodeURIComponent(studentId)}?limit=${limit}`,
     { method: "GET", headers: buildHeaders(config) },
+    config,
+  );
+}
+
+/**
+ * Delete a student's conversation messages. When `sessionId` is given, only
+ * that thread's messages are cleared; otherwise the whole (unthreaded) history
+ * is cleared. Returns how many rows were removed.
+ */
+export async function clearHistory(
+  studentId: string,
+  sessionId?: number | null,
+  config?: ConnectionConfig,
+): Promise<{ deleted: number }> {
+  const query = sessionId != null ? `?session_id=${sessionId}` : "";
+  return request<{ deleted: number }>(
+    `/history/${encodeURIComponent(studentId)}${query}`,
+    { method: "DELETE", headers: buildHeaders(config) },
     config,
   );
 }

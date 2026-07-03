@@ -212,6 +212,22 @@ def test_history_unknown_student_is_empty(client):
     assert client.get("/history/nobody").json() == []
 
 
+def test_clear_history_removes_all_turns(client, monkeypatch):
+    def fake_answer(question, *, k=5, course=None, chapter=None, language=None):
+        return {"answer": "a", "refused": False, "sources": [], "raw": "a"}
+
+    monkeypatch.setattr(api_main, "answer", fake_answer)
+
+    client.post("/ask", json={"student_id": "dave", "question": "q1"})
+    client.post("/ask", json={"student_id": "dave", "question": "q2"})
+
+    resp = client.delete("/history/dave")
+    assert resp.status_code == 200
+    # Two /ask calls write two rows each.
+    assert resp.json() == {"deleted": 4}
+    assert client.get("/history/dave").json() == []
+
+
 def test_student_get_or_create_reuses_same_student(client, monkeypatch):
     def fake_answer(question, *, k=5, course=None, chapter=None, language=None):
         return {"answer": "ok", "refused": False, "sources": [], "raw": "ok"}

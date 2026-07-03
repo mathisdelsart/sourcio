@@ -288,7 +288,7 @@ const en = {
 
   // History panel
   "history.title": "Conversation history",
-  "history.description": "Your turns with the tutor, grouped by thread.",
+  "history.description": "Your turns with the tutor for the active thread.",
   "history.refresh": "Refresh",
   "history.empty.title": "No history yet",
   "history.empty.description":
@@ -296,6 +296,11 @@ const en = {
   "history.unthreaded": "Unthreaded",
   "history.unthreadedHint": "Turns not attached to any thread.",
   "history.turnCount": "{count} messages",
+  "history.clear": "Clear history",
+  "history.clear.confirm": "Clear these messages?",
+  "history.clear.yes": "Yes, clear",
+  "history.cleared": "History cleared.",
+  "history.clearFailed": "Could not clear the history.",
 
   // Threads (conversation sessions)
   "threads.title": "Conversation threads",
@@ -312,7 +317,7 @@ const en = {
   "threads.delete": "Delete",
   "threads.delete.confirm": "Delete this thread?",
   "threads.delete.yes": "Yes, delete",
-  "threads.deleted": "Thread deleted — its messages stay in your history.",
+  "threads.deleted": "Thread deleted, along with its messages.",
   "threads.deleteFailed": "Could not delete the thread.",
   "threads.none": "All history (unthreaded)",
   "threads.noneHint": "New questions are not attached to any thread.",
@@ -716,7 +721,7 @@ const fr: Record<TranslationKey, string> = {
 
   // History panel
   "history.title": "Historique de conversation",
-  "history.description": "Vos échanges avec le tuteur, regroupés par fil.",
+  "history.description": "Vos échanges avec le tuteur pour le fil actif.",
   "history.refresh": "Actualiser",
   "history.empty.title": "Pas encore d'historique",
   "history.empty.description":
@@ -724,6 +729,11 @@ const fr: Record<TranslationKey, string> = {
   "history.unthreaded": "Sans fil",
   "history.unthreadedHint": "Échanges rattachés à aucun fil.",
   "history.turnCount": "{count} messages",
+  "history.clear": "Effacer l'historique",
+  "history.clear.confirm": "Effacer ces messages ?",
+  "history.clear.yes": "Oui, effacer",
+  "history.cleared": "Historique effacé.",
+  "history.clearFailed": "Impossible d'effacer l'historique.",
 
   // Threads (conversation sessions)
   "threads.title": "Fils de conversation",
@@ -740,7 +750,7 @@ const fr: Record<TranslationKey, string> = {
   "threads.delete": "Supprimer",
   "threads.delete.confirm": "Supprimer ce fil ?",
   "threads.delete.yes": "Oui, supprimer",
-  "threads.deleted": "Fil supprimé — ses messages restent dans votre historique.",
+  "threads.deleted": "Fil supprimé, ainsi que ses messages.",
   "threads.deleteFailed": "Impossible de supprimer le fil.",
   "threads.none": "Tout l'historique (sans fil)",
   "threads.noneHint": "Les nouvelles questions ne sont rattachées à aucun fil.",
@@ -1128,7 +1138,7 @@ const nl: Record<TranslationKey, string> = {
 
   // History panel
   "history.title": "Gespreksgeschiedenis",
-  "history.description": "Je beurten met de tutor, gegroepeerd per gesprek.",
+  "history.description": "Je beurten met de tutor voor het actieve gesprek.",
   "history.refresh": "Vernieuwen",
   "history.empty.title": "Nog geen geschiedenis",
   "history.empty.description":
@@ -1136,6 +1146,11 @@ const nl: Record<TranslationKey, string> = {
   "history.unthreaded": "Zonder gesprek",
   "history.unthreadedHint": "Beurten die aan geen enkel gesprek zijn gekoppeld.",
   "history.turnCount": "{count} berichten",
+  "history.clear": "Geschiedenis wissen",
+  "history.clear.confirm": "Deze berichten wissen?",
+  "history.clear.yes": "Ja, wissen",
+  "history.cleared": "Geschiedenis gewist.",
+  "history.clearFailed": "Kon de geschiedenis niet wissen.",
 
   // Threads (conversation sessions)
   "threads.title": "Gesprekken",
@@ -1152,7 +1167,7 @@ const nl: Record<TranslationKey, string> = {
   "threads.delete": "Verwijderen",
   "threads.delete.confirm": "Dit gesprek verwijderen?",
   "threads.delete.yes": "Ja, verwijderen",
-  "threads.deleted": "Gesprek verwijderd — de berichten blijven in je geschiedenis.",
+  "threads.deleted": "Gesprek verwijderd, samen met de berichten.",
   "threads.deleteFailed": "Kon het gesprek niet verwijderen.",
   "threads.none": "Alle geschiedenis (zonder gesprek)",
   "threads.noneHint": "Nieuwe vragen worden aan geen enkel gesprek gekoppeld.",

@@ -275,6 +275,7 @@ export default function Home() {
                       studentId={studentId}
                       config={config}
                       active={active === "history"}
+                      activeSessionId={activeSessionId}
                     />
                   )}
                   {active === "documents" && (
