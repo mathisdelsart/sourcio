@@ -353,6 +353,57 @@ def test_grade_node_clamps_negative_score(fake_llm):
     assert out["grade"]["feedback"] == "Below zero."
 
 
+def test_grade_node_prompt_includes_question_and_answer(fake_llm):
+    # The judge must see the question it grades against, not only the reference,
+    # so it never penalises information the question did not request.
+    fake_llm["reply"] = "SCORE: 70\n---\nGood."
+    grade(
+        {
+            "message": "my answer",
+            "exercise": {"problem": "Compute the FFT of x.", "solution": "ref"},
+        }
+    )
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    assert "Question/Exercise:" in human_msg
+    assert "Compute the FFT of x." in human_msg
+    assert "Reference solution:" in human_msg
+    assert "my answer" in human_msg
+
+
+# Distinctive substrings each rigor level's guidance must inject into the prompt.
+_RIGOR_MARKERS = {
+    "lenient": "Grade leniently",
+    "standard": "Grade with balance",
+    "strict": "Grade strictly",
+}
+
+
+@pytest.mark.parametrize("rigor", list(_RIGOR_MARKERS))
+def test_grade_node_reflects_requested_rigor_in_prompt(fake_llm, rigor):
+    fake_llm["reply"] = "SCORE: 50\n---\nok"
+    grade({"message": "my answer", "exercise": {"solution": "ref"}, "rigor": rigor})
+
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    # The requested rigor's guidance is present, and no other level leaks in.
+    assert _RIGOR_MARKERS[rigor] in human_msg
+    for other, marker in _RIGOR_MARKERS.items():
+        if other != rigor:
+            assert marker not in human_msg
+
+
+def test_grade_node_defaults_rigor_to_standard(fake_llm):
+    from agent.nodes.grade import _RIGOR_GUIDANCE, DEFAULT_RIGOR
+
+    assert DEFAULT_RIGOR == "standard"
+    fake_llm["reply"] = "SCORE: 50\n---\nok"
+    grade({"message": "my answer"})
+
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    # No rigor supplied falls back to the default level's guidance.
+    assert _RIGOR_GUIDANCE[DEFAULT_RIGOR] in human_msg
+    assert _RIGOR_MARKERS["standard"] in human_msg
+
+
 def test_reexplain_uses_previous_tutor_turn(fake_llm):
     fake_llm["reply"] = "Simpler version."
     history = [

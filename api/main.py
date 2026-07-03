@@ -58,7 +58,7 @@ from agent.nodes.generate import generate
 from agent.nodes.grade import grade
 from agent.nodes.quiz import generate_quiz, grade_quiz_answer, summarize_quiz
 from agent.nodes.reexplain import reexplain
-from agent.state import Level, TutorState, to_history
+from agent.state import Level, Rigor, TutorState, to_history
 from api.auth import (
     CurrentUser,
     LoginRequest,
@@ -335,11 +335,17 @@ class ExerciseResponse(BaseModel):
 
 
 class GradeRequest(BaseModel):
-    """A student's answer to grade, optionally against a prior exercise."""
+    """A student's answer to grade, optionally against a prior exercise.
+
+    ``rigor`` sets the marking strictness; an unsupported value is rejected with
+    422 by the ``Rigor`` literal, matching how ``ReexplainRequest.level`` is
+    validated.
+    """
 
     student_id: str
     message: str
     exercise: dict[str, Any] | None = None
+    rigor: Rigor = "standard"
 
 
 class GradeResponse(BaseModel):
@@ -849,7 +855,11 @@ def grade_answer(request: GradeRequest, user: UserOut | None = OptionalUser) -> 
     """
     with get_session(_engine) as session:
         _resolve_student(session, request.student_id, user)
-    state: TutorState = {"message": request.message, "student_id": request.student_id}
+    state: TutorState = {
+        "message": request.message,
+        "student_id": request.student_id,
+        "rigor": request.rigor,
+    }
     if request.exercise is not None:
         state["exercise"] = request.exercise
     # grade always populates "grade" with the judge's verdict.
