@@ -187,6 +187,11 @@ const en = {
   "level.beginner": "beginner",
   "level.intermediate": "intermediate",
   "level.advanced": "advanced",
+  "rigor.label": "Marking strictness",
+  "rigor.aria": "Marking strictness",
+  "rigor.lenient": "lenient",
+  "rigor.standard": "standard",
+  "rigor.strict": "strict",
 
   // Ask panel
   "ask.title": "Ask a question",
@@ -614,6 +619,11 @@ const fr: Record<TranslationKey, string> = {
   "level.beginner": "débutant",
   "level.intermediate": "intermédiaire",
   "level.advanced": "avancé",
+  "rigor.label": "Sévérité de la correction",
+  "rigor.aria": "Sévérité de la correction",
+  "rigor.lenient": "indulgente",
+  "rigor.standard": "standard",
+  "rigor.strict": "stricte",
 
   // Ask panel
   "ask.title": "Poser une question",
@@ -1038,6 +1048,11 @@ const nl: Record<TranslationKey, string> = {
   "level.beginner": "beginner",
   "level.intermediate": "gemiddeld",
   "level.advanced": "gevorderd",
+  "rigor.label": "Correctiestrengheid",
+  "rigor.aria": "Correctiestrengheid",
+  "rigor.lenient": "soepel",
+  "rigor.standard": "standaard",
+  "rigor.strict": "streng",
 
   // Ask panel
   "ask.title": "Stel een vraag",

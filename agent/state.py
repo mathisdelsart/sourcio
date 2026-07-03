@@ -17,6 +17,10 @@ Intent = Literal["explain", "generate", "grade", "reexplain"]
 # reexplain node falls back to a sensible default when none is supplied.
 Level = Literal["beginner", "intermediate", "advanced"]
 
+# Marking strictness the grade node applies. Optional in the state; the grade
+# node falls back to a sensible default when none is supplied.
+Rigor = Literal["lenient", "standard", "strict"]
+
 # Conversation roles. ``PersistedRole`` is what the relational store records on a
 # message; ``NodeRole`` is what the agent nodes read and write in the in-memory
 # history. They differ deliberately: a stored ``assistant`` turn is a tutor turn
@@ -51,6 +55,7 @@ class TutorState(TypedDict, total=False):
     message: str
     intent: Intent  # explain | generate | grade | reexplain
     level: Level  # optional audience level for re-explanation
+    rigor: Rigor  # optional marking strictness for grading
     course: str | None  # optional course filter scoping grounded retrieval
     chapter: str | None  # optional chapter filter scoping grounded retrieval
     retrieved: list[Any]  # citations/sources backing the last explanation
