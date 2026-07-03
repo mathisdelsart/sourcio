@@ -43,12 +43,11 @@ export function AskPanel({
   sessionId,
 }: AskPanelProps) {
   const toast = useToast();
-  const { t } = useT();
-  // Pre-fill only the question with the hero example so the tool is instantly
-  // clear. The course/chapter filters stay empty so retrieval searches every
-  // indexed course — pre-setting them to the example's course would filter out
-  // everything when a different course is indexed.
-  const [question, setQuestion] = useState(() => t("ask.example.question"));
+  const { t, locale } = useT();
+  // Start empty so the hero example shows only as the grey placeholder and
+  // disappears as soon as the user types. The course/chapter filters stay empty
+  // so retrieval searches every indexed course.
+  const [question, setQuestion] = useState("");
   // Lazy-init from localStorage so the last chosen course survives a reload.
   const [course, setCourse] = useState(() => readLocal(KEYS.course));
   const [chapter, setChapter] = useState("");
@@ -88,6 +87,8 @@ export function AskPanel({
       course: course.trim() || null,
       chapter: chapter.trim() || null,
       session_id: sessionId,
+      // Force the answer to default to the current UI language.
+      language: locale,
     };
     try {
       let buffer = "";
@@ -99,7 +100,10 @@ export function AskPanel({
         },
         (done) => {
           setLastAnswer({
-            answer: buffer,
+            // Prefer the server-cleaned final answer (e.g. a trailing refusal
+            // the model wrongly appended is stripped); fall back to the raw
+            // token buffer for an older backend that does not send it.
+            answer: done.answer ?? buffer,
             refused: done.refused,
             sources: done.sources,
             citations: done.citations,

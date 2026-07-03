@@ -275,6 +275,9 @@ class AskRequest(BaseModel):
     course: str | None = None
     chapter: str | None = None
     session_id: int | None = None
+    # Optional locale code ('en'/'fr'/'nl') to force the default answer language;
+    # None keeps the model answering in the question's own language.
+    language: str | None = None
 
 
 class Citation(BaseModel):
@@ -655,7 +658,13 @@ def ask(request: AskRequest, user: UserOut | None = OptionalUser) -> dict[str, A
     history for the student. When the request carries a valid bearer token, the
     student is linked to that account so the turns become the user's own.
     """
-    result = answer(request.question, k=request.k, course=request.course, chapter=request.chapter)
+    result = answer(
+        request.question,
+        k=request.k,
+        course=request.course,
+        chapter=request.chapter,
+        language=request.language,
+    )
     with get_session(_engine) as session:
         student = _resolve_student(session, request.student_id, user)
         thread_id = _resolve_session_id(session, student.id, request.session_id)
@@ -692,7 +701,11 @@ def _stream_ask_events(request: AskRequest, user: UserOut | None = None) -> Iter
     """
     final_answer = REFUSAL_FALLBACK
     for event in stream_answer(
-        request.question, k=request.k, course=request.course, chapter=request.chapter
+        request.question,
+        k=request.k,
+        course=request.course,
+        chapter=request.chapter,
+        language=request.language,
     ):
         if event.get("type") == "sources":
             final_answer = event.get("answer", final_answer)
@@ -701,6 +714,10 @@ def _stream_ask_events(request: AskRequest, user: UserOut | None = None) -> Iter
                 "sources": event.get("sources", []),
                 "citations": event.get("citations", []),
                 "refused": event.get("refused", False),
+                # Forward the cleaned final answer so the client can replace the
+                # raw token buffer (which may still show a trailing refusal the
+                # model wrongly appended) with the server-cleaned text.
+                "answer": final_answer,
             }
             yield f"data: {json.dumps(payload)}\n\n"
         else:

@@ -16,21 +16,65 @@ from ingestion.schema import Retrieved, format_numbered_sources
 
 REFUSAL = "This is not covered in the course material."
 
-_SYSTEM = (
-    "You are a course tutor that answers strictly from the provided sources.\n"
-    "- Use only the numbered sources below; never use outside knowledge.\n"
-    "- Reply in the same language as the question, unless it explicitly asks for "
-    "another language.\n"
-    "- After each claim, cite the source index it comes from, like [1] or [2].\n"
-    "- You are the judge of whether the course covers the question: answer as long "
-    "as the numbered sources contain the information needed, even partially. Only "
-    "if the sources genuinely do not contain the answer (they merely mention the "
-    "topic in passing, or are unrelated), reply with exactly this sentence and "
-    f"nothing else: {REFUSAL}\n"
-    "- Give the answer once: do not repeat it or append a restatement such as "
-    "'The complete answer is…'.\n"
-    "- Keep the course's own notation and definitions."
-)
+# Locale codes the UI sends, mapped to the language name used in the prompt.
+_LANGUAGE_NAMES = {"en": "English", "fr": "French", "nl": "Dutch"}
+
+
+def _language_instruction(language: str | None) -> str:
+    """Build the answer-language bullet for the system prompt.
+
+    With no explicit ``language`` we keep the original behavior: answer in the
+    question's own language. With a locale code ('en'/'fr'/'nl') we set that as
+    the default while still deferring to the question when it is written in, or
+    explicitly asks for, another language.
+    """
+    if language is None:
+        return (
+            "- Reply in the same language as the question, unless it explicitly "
+            "asks for another language.\n"
+        )
+    name = _LANGUAGE_NAMES.get(language, "English")
+    return (
+        f"- Answer in {name} by default. However, if the question is written in a "
+        "different language, or explicitly asks for another language, answer in "
+        "that language instead.\n"
+    )
+
+
+def _system_prompt(language: str | None = None) -> str:
+    """Assemble the grounding system prompt, with the language directive injected."""
+    return (
+        "You are a course tutor that answers strictly from the provided sources.\n"
+        "- Use only the numbered sources below; never use outside knowledge.\n"
+        + _language_instruction(language)
+        + "- After each claim, cite the source index it comes from, like [1] or [2].\n"
+        "- You are the judge of whether the course covers the question: answer as long "
+        "as the numbered sources contain the information needed, even partially. Only "
+        "if the sources genuinely do not contain the answer (they merely mention the "
+        "topic in passing, or are unrelated), reply with exactly this sentence and "
+        f"nothing else: {REFUSAL}\n"
+        "- The refusal sentence stands alone as a complete answer: never append it "
+        "after a real answer. Once you have answered, do not add it.\n"
+        "- Give the answer once: do not repeat it or append a restatement such as "
+        "'The complete answer is…'.\n"
+        "- Keep the course's own notation and definitions."
+    )
+
+
+def _strip_trailing_refusal(text: str) -> str:
+    """Drop a refusal sentence the model wrongly appended after a real answer.
+
+    The model is told to emit the refusal alone, but occasionally tacks it onto
+    the end of a genuine answer. When the text ends with the refusal (optionally
+    after a lead-in like 'Réponse :' the model may add), remove it and keep the
+    real answer.
+    """
+    stripped = text.rstrip()
+    if stripped.endswith(REFUSAL):
+        stripped = stripped[: -len(REFUSAL)].rstrip()
+        # Remove a dangling lead-in the model may have left before the refusal.
+        stripped = re.sub(r"(?i)\b(r[ée]ponse|answer)\s*:?\s*$", "", stripped).rstrip()
+    return stripped
 
 
 def _citations(raw: str, results: list[Retrieved]) -> list[dict]:
@@ -94,6 +138,7 @@ def answer(
     k: int = 5,
     course: str | None = None,
     chapter: str | None = None,
+    language: str | None = None,
 ) -> dict:
     """Answer a question grounded in the course, or refuse if uncovered.
 
@@ -107,6 +152,8 @@ def answer(
 
     ``course`` and ``chapter`` optionally restrict retrieval to a single course
     (and chapter); when both are None the whole collection is searched.
+    ``language`` (a locale code) sets the default answer language; when None the
+    model answers in the question's own language.
     """
     with timer("retrieval"):
         results = _retrieve(question, k=k, course=course, chapter=chapter)
@@ -125,13 +172,13 @@ def answer(
         raw = (
             get_llm("explain")
             .invoke(
-                [("system", _SYSTEM), ("human", prompt)],
+                [("system", _system_prompt(language)), ("human", prompt)],
                 config={"callbacks": get_callbacks()},
             )
             .content.strip()
         )
 
-    if raw.strip() == REFUSAL:
+    if raw == REFUSAL:
         return {
             "answer": REFUSAL,
             "refused": True,
@@ -141,10 +188,12 @@ def answer(
             "retrieved": [],
         }
 
+    # Guard against the model appending the refusal after a genuine answer.
+    cleaned = _strip_trailing_refusal(raw)
     # Only list the sources the answer truly relies on, not every retrieved chunk.
-    citations = _citations(raw, results)
+    citations = _citations(cleaned, results)
     return {
-        "answer": _remap_citations(raw, results),
+        "answer": _remap_citations(cleaned, results),
         "refused": False,
         "sources": [c["label"] for c in citations],
         "citations": citations,
@@ -159,6 +208,7 @@ def stream_answer(
     k: int = 5,
     course: str | None = None,
     chapter: str | None = None,
+    language: str | None = None,
 ) -> Iterator[dict]:
     """Stream a grounded answer token by token, mirroring :func:`answer`.
 
@@ -201,7 +251,7 @@ def stream_answer(
     parts: list[str] = []
     with timer("llm"):
         for piece in get_llm("explain").stream(
-            [("system", _SYSTEM), ("human", prompt)],
+            [("system", _system_prompt(language)), ("human", prompt)],
             config={"callbacks": get_callbacks()},
         ):
             delta = piece.content
@@ -221,11 +271,14 @@ def stream_answer(
         }
         return
 
-    citations = _citations(raw, results)
+    # Tokens were streamed verbatim; the final assembled answer drops a refusal
+    # sentence the model may have appended after a real answer.
+    cleaned = _strip_trailing_refusal(raw)
+    citations = _citations(cleaned, results)
     yield {
         "type": "sources",
         "sources": [c["label"] for c in citations],
         "citations": citations,
         "refused": False,
-        "answer": _remap_citations(raw, results),
+        "answer": _remap_citations(cleaned, results),
     }

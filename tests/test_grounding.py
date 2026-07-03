@@ -61,6 +61,79 @@ def test_answer_includes_retrieved_chunk_texts(monkeypatch):
     assert out["sources"] == ["(Wavelet Transform, p.11)"]
 
 
+def test_answer_strips_trailing_refusal_appended_after_real_answer(monkeypatch):
+    # The model answered, then wrongly tacked the refusal onto the end. The
+    # answer must stand and the contradictory refusal line must be removed.
+    results = [_retrieved(11, text="A wavelet is a localized oscillation.")]
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
+    reply = SimpleNamespace(
+        content=f"A wavelet is a localized oscillation [1].\n\n{answer_mod.REFUSAL}"
+    )
+    monkeypatch.setattr(
+        answer_mod,
+        "get_llm",
+        lambda role: SimpleNamespace(invoke=lambda messages, config=None: reply),
+    )
+
+    out = answer_mod.answer("what is a wavelet?")
+
+    assert out["refused"] is False
+    assert answer_mod.REFUSAL not in out["answer"]
+    assert out["answer"] == "A wavelet is a localized oscillation (Wavelet Transform, p.11)."
+
+
+def test_answer_refuses_when_whole_output_is_refusal(monkeypatch):
+    # Retrieval hit, but the model's entire output is exactly the refusal.
+    results = [_retrieved(11)]
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
+    reply = SimpleNamespace(content=answer_mod.REFUSAL)
+    monkeypatch.setattr(
+        answer_mod,
+        "get_llm",
+        lambda role: SimpleNamespace(invoke=lambda messages, config=None: reply),
+    )
+
+    out = answer_mod.answer("uncovered topic")
+
+    assert out["refused"] is True
+    assert out["answer"] == answer_mod.REFUSAL
+
+
+def test_answer_language_injects_french_instruction(monkeypatch):
+    # language='fr' must put the French default-language directive in the prompt.
+    captured: list = []
+    results = [_retrieved(11, text="A wavelet is localized.")]
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
+
+    def _invoke(messages, config=None):
+        captured.append(messages)
+        return SimpleNamespace(content="Une ondelette est localisée [1].")
+
+    monkeypatch.setattr(answer_mod, "get_llm", lambda role: SimpleNamespace(invoke=_invoke))
+
+    answer_mod.answer("qu'est-ce qu'une ondelette ?", language="fr")
+
+    system_prompt = captured[0][0][1]
+    assert "Answer in French by default" in system_prompt
+
+
+def test_stream_answer_strips_trailing_refusal(monkeypatch):
+    # The streamed final answer must not include a refusal appended after a body.
+    results = [_retrieved(11, text="A wavelet is localized.")]
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
+    monkeypatch.setattr(
+        answer_mod,
+        "get_llm",
+        lambda role: _fake_stream_llm(["A wavelet is X [1].\n\n", answer_mod.REFUSAL]),
+    )
+
+    events = list(answer_mod.stream_answer("what is a wavelet?"))
+    final = events[-1]
+    assert final["refused"] is False
+    assert answer_mod.REFUSAL not in final["answer"]
+    assert final["answer"] == "A wavelet is X (Wavelet Transform, p.11)."
+
+
 def test_answer_retrieved_is_empty_on_refusal(monkeypatch):
     # No retrieval hit -> refusal, and ``retrieved`` is an empty list (shape).
     monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: [])
