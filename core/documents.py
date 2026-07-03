@@ -58,6 +58,17 @@ def _course_dir(course: str) -> str:
     return os.path.join(UPLOADS_DIR, _slug(course))
 
 
+def _document_id(path: str) -> str:
+    """Stable per-document identifier derived from the uploaded file name.
+
+    The basename uniquely names a document within a course (uploads are stored as
+    ``uploads/<course>/<filename>``). It is stamped on every page so two distinct
+    files in the same course get distinct chunk ids and can be filtered/listed
+    apart, and it scopes the incremental-skip check to a single document.
+    """
+    return _safe_filename(os.path.basename(path))
+
+
 def save_upload(data: bytes, course: str, filename: str) -> str:
     """Persist an uploaded file under ``uploads/<course>/<filename>`` and return its path."""
     directory = _course_dir(course)
@@ -170,22 +181,28 @@ def list_documents() -> list[dict[str, Any]]:
     return result
 
 
-def _indexed_pages(course: str) -> set[int]:
-    """Page numbers already indexed for a course, so re-ingestion can skip them.
+def _indexed_pages(course: str, document: str | None = None) -> set[int]:
+    """Page numbers already indexed for a specific document, so a retry can skip.
 
     This is what makes a retry free: a page already in Qdrant is never sent to
-    the (paid) vision model again. Any error degrades to an empty set (nothing
-    skipped) rather than failing the ingest.
+    the (paid) vision model again. The filter is scoped to ``course`` **and**
+    ``document`` so a fresh document (whose page numbers 1..N would otherwise
+    collide with pages already indexed for the course) is never wrongly skipped;
+    only re-uploading the *same* document skips. Any error degrades to an empty
+    set (nothing skipped) rather than failing the ingest.
     """
     settings = get_settings()
     from qdrant_client.models import FieldCondition, Filter, MatchValue
 
+    conditions: list[Any] = [FieldCondition(key="course", match=MatchValue(value=course))]
+    if document is not None:
+        conditions.append(FieldCondition(key="document", match=MatchValue(value=document)))
     pages: set[int] = set()
     offset = None
     scanned = 0
     try:
         client = _client()
-        course_filter = Filter(must=[FieldCondition(key="course", match=MatchValue(value=course))])
+        course_filter = Filter(must=conditions)
         while scanned < _SCROLL_MAX_POINTS:
             points, offset = client.scroll(
                 collection_name=settings.qdrant_collection,
@@ -222,6 +239,34 @@ def _load_pages(path: str, course: str) -> list[Page]:
     return extract_pdf(path, course)
 
 
+def _stamp_pages(pages: list[Page], chapter: str | None, document: str) -> None:
+    """Stamp the document identity (and chosen chapter, if any) onto every page.
+
+    The document id distinguishes this upload from every other file in the course
+    (see :func:`_document_id`); a non-empty ``chapter`` overrides the
+    source-derived one so the material is filed under the user's chosen chapter.
+    """
+    for page in pages:
+        page.document = document
+        if chapter is not None:
+            page.chapter = chapter
+
+
+def _done_reason(indexed: int, skipped: int) -> str:
+    """Classify a finished ingest so a true 0 is reported honestly.
+
+    - ``"indexed"``: new chunks were added this run.
+    - ``"already_indexed"``: nothing new, but the document was already indexed.
+    - ``"empty"``: nothing new and nothing was there — the file had no
+      extractable content (blank/whitespace prose, or a text-less PDF).
+    """
+    if indexed > 0:
+        return "indexed"
+    if skipped > 0:
+        return "already_indexed"
+    return "empty"
+
+
 def ingest_document(
     path: str, course: str, chapter: str | None = None, *, sparse: bool = False
 ) -> int:
@@ -231,12 +276,12 @@ def ingest_document(
     ``chapter`` is given it overrides the source-derived chapter on every page so
     the uploaded material is filed under the user's chosen chapter; otherwise the
     pipeline's own chapter (the file stem for prose, ``None`` for slides) is kept.
-    Returns the number of indexed chunks (``0`` when the file has no content).
+    Every page is stamped with the document identity so distinct files in the same
+    course never collide or overwrite one another. Returns the number of indexed
+    chunks (``0`` when the file has no content).
     """
     pages = _load_pages(path, course)
-    if chapter is not None:
-        for page in pages:
-            page.chapter = chapter
+    _stamp_pages(pages, chapter, _document_id(path))
     if not pages:
         return 0
     chunks = chunk_pages(pages)
@@ -259,31 +304,51 @@ def stream_ingest(
     Yields, in order:
     - ``{"type": "start", "total": N, "skipped": K}`` once,
     - ``{"type": "progress", "done", "total", "indexed", "elapsed"}`` per batch,
-    - ``{"type": "done", "indexed", "total", "elapsed"}`` on success, or
+    - ``{"type": "done", "indexed", "skipped", "total", "reason", "elapsed"}`` on
+      success, where ``reason`` (``"indexed"`` / ``"already_indexed"`` /
+      ``"empty"``) lets the UI report a true 0 honestly rather than as a plain
+      success, or
     - ``{"type": "error", "message", ...}`` if a batch fails (earlier batches stay
       indexed — work is never lost).
 
-    For a PDF, pages already indexed for this course are skipped, so re-running an
-    interrupted ingest never re-pays the vision model. Each batch is indexed as
-    soon as it is extracted, so a mid-way failure keeps the pages done so far.
-    Prose (``.md``/``.txt``) is loaded and indexed in one step (no model cost).
+    Each document is scoped by its own identity (the stored file name), so two
+    different files in the same course never collide or overwrite one another, and
+    only re-uploading the *same* document skips already-indexed pages (never
+    re-paying the vision model). Each PDF batch is indexed as soon as it is
+    extracted, so a mid-way failure keeps the pages done so far. Prose
+    (``.md``/``.txt``) is loaded and indexed in one step (no model cost).
     """
     started = time.time()
+    document = _document_id(path)
 
     if is_text_file(path):
-        pages = load_text_file(path, course)
-        if chapter is not None:
-            for page in pages:
-                page.chapter = chapter
+        try:
+            pages = load_text_file(path, course)
+        except Exception as exc:
+            # A decode error (e.g. non-UTF-8 bytes) must surface as a clean error
+            # event rather than break the SSE stream mid-flight.
+            yield {
+                "type": "error",
+                "message": str(exc),
+                "done": 0,
+                "total": 0,
+                "indexed": 0,
+                "elapsed": round(time.time() - started, 1),
+            }
+            return
+        _stamp_pages(pages, chapter, document)
         total = len(pages)
         yield {"type": "start", "total": total, "skipped": 0}
         chunks = chunk_pages(pages) if pages else []
         if chunks:
             index_chunks(chunks, sparse=sparse)
+        indexed = len(chunks)
         yield {
             "type": "done",
-            "indexed": len(chunks),
+            "indexed": indexed,
+            "skipped": 0,
             "total": total,
+            "reason": _done_reason(indexed, 0),
             "elapsed": round(time.time() - started, 1),
         }
         return
@@ -292,19 +357,18 @@ def stream_ingest(
     from ingestion.run import _pdf_page_count
 
     total = _pdf_page_count(path)
-    already = _indexed_pages(course)
+    already = _indexed_pages(course, document)
     todo = [p for p in range(1, total + 1) if p not in already]
-    done = total - len(todo)  # count already-indexed pages as done for the bar
+    skipped = total - len(todo)  # pages already indexed for THIS document
+    done = skipped  # count already-indexed pages as done for the bar
     indexed = 0
-    yield {"type": "start", "total": total, "skipped": done}
+    yield {"type": "start", "total": total, "skipped": skipped}
 
     try:
         for start in range(0, len(todo), batch_size):
             batch = todo[start : start + batch_size]
             pages = extract_pdf(path, course, pages=batch)
-            if chapter is not None:
-                for page in pages:
-                    page.chapter = chapter
+            _stamp_pages(pages, chapter, document)
             chunks = chunk_pages(pages)
             if chunks:
                 index_chunks(chunks, sparse=sparse)
@@ -331,7 +395,9 @@ def stream_ingest(
     yield {
         "type": "done",
         "indexed": indexed,
+        "skipped": skipped,
         "total": total,
+        "reason": _done_reason(indexed, skipped),
         "elapsed": round(time.time() - started, 1),
     }
 

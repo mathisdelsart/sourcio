@@ -215,15 +215,23 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
                   "rounded-xl border p-4",
                   progress.type === "error"
                     ? "border-red-200 bg-red-50"
-                    : progress.type === "done"
-                      ? "border-emerald-200 bg-emerald-50"
-                      : "border-brand-200 bg-brand-50/60",
+                    : progress.type === "done" && (progress.indexed ?? 0) === 0
+                      ? "border-amber-200 bg-amber-50"
+                      : progress.type === "done"
+                        ? "border-emerald-200 bg-emerald-50"
+                        : "border-brand-200 bg-brand-50/60",
                 )}
                 aria-live="polite"
               >
                 {progress.type === "error" ? (
                   <p className="text-sm font-medium text-red-700">
                     {t("doc.progress.error", { message: progress.message ?? "" })}
+                  </p>
+                ) : progress.type === "done" && (progress.indexed ?? 0) === 0 ? (
+                  <p className="text-sm font-medium text-amber-700">
+                    {progress.reason === "already_indexed"
+                      ? t("doc.progress.alreadyIndexed")
+                      : t("doc.progress.empty")}
                   </p>
                 ) : progress.type === "done" ? (
                   <p className="flex items-center gap-2 text-sm font-medium text-emerald-700">
