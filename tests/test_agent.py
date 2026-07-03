@@ -278,6 +278,23 @@ def test_generate_node_refuses_when_nothing_retrieved(fake_llm, fake_retrieve):
     assert fake_llm["last"] is None
 
 
+def test_generate_node_refuses_when_model_judges_sources_uncovered(fake_llm, fake_retrieve):
+    # Retrieval returned chunks (e.g. because the request was scoped to the wrong
+    # course), but they do not cover the requested notion. Acting as the coverage
+    # judge, the model emits the exact refusal sentence; the node must surface an
+    # honest refusal, not parse an off-topic exercise out of unrelated material.
+    fake_retrieve["results"] = [_retrieved(3, "Wavelet approximation space V_j.")]
+    fake_llm["reply"] = REFUSAL
+    out = generate({"message": "Mathis Delsart", "course": "ELEC2885"})
+
+    assert set(out) == {"exercise", "retrieved"}
+    assert out["exercise"]["refused"] is True
+    assert out["exercise"]["problem"] == REFUSAL
+    assert out["exercise"]["solution"] == ""
+    # No fabricated exercise: the refusal did not produce a problem/solution.
+    assert out["retrieved"] == []
+
+
 def test_grade_node_parses_verdict_and_uses_reference(fake_llm):
     fake_llm["reply"] = 'Verdict: {"score": 55, "feedback": "Partly right."} done'
     out = grade({"message": "my answer", "exercise": {"solution": "ref"}})
