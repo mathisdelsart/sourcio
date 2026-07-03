@@ -163,6 +163,133 @@ def test_ingest_document_empty_file_indexes_nothing(monkeypatch, tmp_path):
     assert documents_mod.ingest_document(str(path), "Wavelets") == 0
 
 
+# --- stream_ingest: per-document scoping and honest 0 ------------------------
+
+
+def _fake_pdf_env(monkeypatch, *, page_count, indexed):
+    """Patch the PDF ingest dependencies of ``stream_ingest``.
+
+    ``indexed`` maps a document id -> set of page numbers already in Qdrant so the
+    incremental-skip check is exercised per document without a real Qdrant. The
+    returned list captures the chunks handed to ``index_chunks``.
+    """
+    import ingestion.extract
+    import ingestion.run
+
+    monkeypatch.setattr(ingestion.run, "_pdf_page_count", lambda path: page_count)  # noqa: ARG005
+
+    def fake_extract(path, course, *, pages=None, **kwargs):  # noqa: ARG001
+        nums = pages or list(range(1, page_count + 1))
+        return [Page(course=course, page=n, text=f"slide {n}", doc_type="slides") for n in nums]
+
+    monkeypatch.setattr(ingestion.extract, "extract_pdf", fake_extract)
+    monkeypatch.setattr(
+        documents_mod,
+        "_indexed_pages",
+        lambda course, document=None: set(indexed.get(document, set())),  # noqa: ARG005
+    )
+
+    captured: list = []
+    monkeypatch.setattr(documents_mod, "index_chunks", lambda chunks, **_: captured.extend(chunks))
+    return captured
+
+
+def test_stream_ingest_two_documents_index_independently(monkeypatch, tmp_path):
+    # Nothing indexed yet for either document: both must fully index, with
+    # disjoint chunk ids so the second deck never overwrites the first.
+    captured = _fake_pdf_env(monkeypatch, page_count=2, indexed={})
+    a = tmp_path / "deck_a.pdf"
+    a.write_bytes(b"%PDF")
+    b = tmp_path / "deck_b.pdf"
+    b.write_bytes(b"%PDF")
+
+    events_a = list(documents_mod.stream_ingest(str(a), "Wavelets"))
+    ids_a = {c.id for c in captured}
+    captured.clear()
+    events_b = list(documents_mod.stream_ingest(str(b), "Wavelets"))
+    ids_b = {c.id for c in captured}
+
+    assert events_a[-1]["indexed"] == 2
+    assert events_a[-1]["reason"] == "indexed"
+    assert events_b[-1]["indexed"] == 2
+    assert ids_a and ids_b and ids_a.isdisjoint(ids_b)
+
+
+def test_stream_ingest_same_document_skips(monkeypatch, tmp_path):
+    path = tmp_path / "deck.pdf"
+    path.write_bytes(b"%PDF")
+    doc = documents_mod._document_id(str(path))
+    captured = _fake_pdf_env(monkeypatch, page_count=2, indexed={doc: {1, 2}})
+
+    def boom_extract(*args, **kwargs):
+        raise AssertionError("extract must not run when the document is fully indexed")
+
+    import ingestion.extract
+
+    monkeypatch.setattr(ingestion.extract, "extract_pdf", boom_extract)
+
+    events = list(documents_mod.stream_ingest(str(path), "Wavelets"))
+    assert captured == []
+    done = events[-1]
+    assert done["type"] == "done"
+    assert done["indexed"] == 0
+    assert done["skipped"] == 2
+    assert done["reason"] == "already_indexed"
+
+
+def test_stream_ingest_empty_file_reports_zero_honestly(monkeypatch, tmp_path):
+    path = tmp_path / "blank.md"
+    path.write_text("   \n\n  ", encoding="utf-8")
+
+    def boom_index(*args, **kwargs):
+        raise AssertionError("index_chunks must not run for an empty file")
+
+    monkeypatch.setattr(documents_mod, "index_chunks", boom_index)
+
+    events = list(documents_mod.stream_ingest(str(path), "Wavelets"))
+    done = events[-1]
+    assert done["type"] == "done"
+    assert done["indexed"] == 0
+    assert done["total"] == 0
+    assert done["reason"] == "empty"
+
+
+def test_stream_ingest_text_decode_error_emits_error_event(monkeypatch, tmp_path):
+    # A non-UTF-8 text file must surface a clean error event, not break the stream.
+    path = tmp_path / "bad.txt"
+    path.write_bytes(b"\xff\xfe\x00 invalid utf-8")
+
+    def boom_index(*args, **kwargs):
+        raise AssertionError("index_chunks must not run when decoding fails")
+
+    monkeypatch.setattr(documents_mod, "index_chunks", boom_index)
+
+    events = list(documents_mod.stream_ingest(str(path), "Wavelets"))
+    assert events[-1]["type"] == "error"
+    assert events[-1]["message"]
+
+
+def test_indexed_pages_scopes_to_course_and_document(monkeypatch):
+    class _CapturingScroll:
+        last_filter = None
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def scroll(self, *, scroll_filter, **kwargs):  # noqa: ARG002
+            type(self).last_filter = scroll_filter
+            return [SimpleNamespace(payload={"page": 1})], None
+
+    _use_client(monkeypatch, _CapturingScroll)
+
+    assert documents_mod._indexed_pages("Wavelets", "deck.pdf") == {1}
+    # course + document -> two filter conditions.
+    assert len(_CapturingScroll.last_filter.must) == 2
+    # course only -> a single condition (backward-compatible).
+    documents_mod._indexed_pages("Wavelets")
+    assert len(_CapturingScroll.last_filter.must) == 1
+
+
 # --- delete_documents: payload filter + count --------------------------------
 
 

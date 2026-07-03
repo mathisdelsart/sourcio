@@ -138,6 +138,37 @@ def test_sparse_skips_when_collection_exists(monkeypatch):
     assert client.upserted is not None  # still upserts
 
 
+class _PayloadIndexClient(_FakeIndexClient):
+    """Fake client that supports create_payload_index, recording its fields."""
+
+    def __init__(self, *, raises=False):
+        super().__init__()
+        self.indexed_fields: list[str] = []
+        self._raises = raises
+
+    def create_payload_index(self, *, collection_name, field_name, field_schema):  # noqa: ARG002
+        if self._raises:
+            raise RuntimeError("index already exists")
+        self.indexed_fields.append(field_name)
+
+
+def test_ensure_payload_indexes_covers_course_and_document(monkeypatch):
+    client = _PayloadIndexClient()
+    _patch_index(monkeypatch, client)
+    index.index_chunks([_chunk("a")])
+    # Keyword indexes are created for both filterable payload fields.
+    assert set(client.indexed_fields) == {"course", "document"}
+
+
+def test_ensure_payload_indexes_is_best_effort(monkeypatch):
+    # A client whose create_payload_index raises (e.g. index already exists) must
+    # not fail indexing: the upsert still happens.
+    client = _PayloadIndexClient(raises=True)
+    _patch_index(monkeypatch, client)
+    index.index_chunks([_chunk("a")])
+    assert client.upserted is not None
+
+
 # --- A/B harness math -------------------------------------------------------
 
 

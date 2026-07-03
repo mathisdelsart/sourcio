@@ -855,6 +855,13 @@ export interface DocumentProgress {
   indexed?: number;
   elapsed?: number;
   message?: string;
+  /**
+   * Why the ingest finished with the count it did, on a `done` event:
+   * `indexed` (new pages added), `already_indexed` (nothing new, document was
+   * already indexed) or `empty` (nothing extractable). Lets the UI report a
+   * true 0 honestly instead of as a plain success.
+   */
+  reason?: "indexed" | "already_indexed" | "empty";
 }
 
 /** How many indexed points a delete request removed. */

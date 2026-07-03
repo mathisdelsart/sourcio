@@ -1120,9 +1120,12 @@ async def upload_document(
     JSON event from ``core.documents.stream_ingest`` — ``start`` (with the total
     page count and how many were already indexed and thus skipped), one
     ``progress`` per batch (pages done, indexed count, elapsed seconds), then a
-    final ``done`` or ``error``. Pages already indexed for the course are skipped,
-    so re-running an interrupted upload never re-pays the vision model, and each
-    batch is indexed as it is extracted, so a failure keeps the pages done so far.
+    final ``done`` (carrying ``indexed``/``skipped`` and a ``reason`` so a true 0
+    is reported honestly) or ``error``. Each document is scoped by its own
+    identity, so a second file in the same course indexes independently; only
+    re-uploading the same document skips already-indexed pages (never re-paying
+    the vision model), and each batch is indexed as it is extracted, so a failure
+    keeps the pages done so far.
     """
     normalized_chapter = chapter.strip() if chapter and chapter.strip() else None
     contents = await file.read()

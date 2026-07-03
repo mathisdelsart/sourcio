@@ -118,6 +118,16 @@ def test_slide_chunk_ids_unchanged():
     assert chunks[0].id == expected
 
 
+def test_slide_chunk_ids_distinct_across_documents():
+    # Two decks in the same course share page numbers 1..N; folding the document
+    # identity into the id keeps their chunks distinct (no overwrite).
+    a = chunk_pages([Page(course="C", page=1, text="a", doc_type="slides", document="deck_a.pdf")])
+    b = chunk_pages([Page(course="C", page=1, text="b", doc_type="slides", document="deck_b.pdf")])
+    assert a[0].id != b[0].id
+    # And the document identity is carried through onto the chunk.
+    assert a[0].document == "deck_a.pdf"
+
+
 # --- CLI routing: text files indexed without touching the PDF path -----------
 
 

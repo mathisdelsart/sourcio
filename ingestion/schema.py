@@ -17,6 +17,9 @@ class Page:
     text: str
     doc_type: str  # "slides" | "prose"
     chapter: str | None = None
+    # Stable per-document identifier (usually the uploaded filename). ``None`` for
+    # material ingested via the CLI, keeping chunk ids/payloads backward-compatible.
+    document: str | None = None
 
 
 @dataclass
@@ -28,6 +31,9 @@ class Chunk:
     page: int
     text: str
     chapter: str | None = None
+    # Document the chunk came from (see :class:`Page.document`). ``None`` when the
+    # source document is unknown (CLI ingestion), preserving the legacy chunk id.
+    document: str | None = None
 
 
 @dataclass
