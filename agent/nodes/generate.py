@@ -2,9 +2,11 @@
 
 The reference solution is stored server-side and is never returned by /exercise.
 The exercise is grounded in the course: it is built strictly from chunks
-retrieved for the requested notion, using the course's own notation. If nothing
-relevant is retrieved, the node refuses rather than inventing content that is
-not in the course (mirroring the refusal contract in ``answer.py``).
+retrieved for the requested notion, using the course's own notation. The node
+refuses rather than inventing content that is not in the course (mirroring the
+refusal contract in ``answer.py``), in two cases: when nothing is retrieved at
+all, and when the model — acting as the coverage judge — decides the retrieved
+sources do not actually cover the requested notion.
 """
 
 from agent.persistence import persist_exercise
@@ -16,7 +18,14 @@ from ingestion.schema import format_numbered_sources
 
 _SYSTEM = (
     "You are a course tutor who writes practice exercises.\n"
-    "- Build one exercise on the requested notion using ONLY the numbered sources below.\n"
+    "- You are the judge of whether the numbered sources below actually cover the "
+    "requested notion. If they do NOT cover it (they only mention it in passing, or "
+    "are about a different topic), reply with exactly this sentence and nothing else: "
+    f"{REFUSAL}\n"
+    "- Never invent an exercise on unrelated material just because some source was "
+    "retrieved; the refusal sentence stands alone as a complete reply.\n"
+    "- When the sources do cover the notion, build one exercise on it using ONLY the "
+    "numbered sources below.\n"
     "- Never introduce material that is not in the sources; keep the course's notation.\n"
     "- Make the exercise SELF-CONTAINED: never refer to 'the source', 'the slide',"
     " 'the figure' or 'the provided code' — restate any needed context inside it.\n"
@@ -69,6 +78,17 @@ def generate(state: TutorState) -> TutorState:
         )
         .content.strip()
     )
+
+    # The model is the coverage judge: when the retrieved sources do not actually
+    # cover the requested notion (e.g. the request was scoped to the wrong course,
+    # or only matched a chunk mentioning the topic in passing), it emits the exact
+    # refusal sentence. Mirror answer.py: detect that and refuse instead of parsing
+    # an off-topic exercise out of unrelated material.
+    if raw == REFUSAL:
+        return {
+            "exercise": {"problem": REFUSAL, "solution": "", "refused": True},
+            "retrieved": [],
+        }
 
     problem, solution = _split(raw)
     # The notion is the request itself. The explicitly requested course wins as
