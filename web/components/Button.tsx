@@ -3,11 +3,18 @@ import { cn } from "@/lib/cn";
 import { Spinner } from "./Spinner";
 
 type Variant = "primary" | "secondary" | "ghost";
+type Size = "sm" | "md";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
+  size?: Size;
   loading?: boolean;
 }
+
+const sizes: Record<Size, string> = {
+  sm: "px-3 py-1.5 text-xs",
+  md: "px-3.5 py-2 text-sm",
+};
 
 const variants: Record<Variant, string> = {
   primary:
@@ -22,7 +29,7 @@ const variants: Record<Variant, string> = {
 
 /** Primary action button with loading and disabled states. */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "primary", loading = false, disabled, className, children, ...props },
+  { variant = "primary", size = "md", loading = false, disabled, className, children, ...props },
   ref,
 ) {
   return (
@@ -30,7 +37,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       disabled={disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium",
+        "inline-flex items-center justify-center gap-2 rounded-lg font-medium",
+        sizes[size],
         "transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950",
         "disabled:cursor-not-allowed",
         variants[variant],

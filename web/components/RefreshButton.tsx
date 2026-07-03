@@ -13,9 +13,11 @@ import { useT } from "@/lib/i18n";
 export function RefreshButton({
   onRefresh,
   label,
+  size = "md",
 }: {
   onRefresh: () => Promise<unknown>;
   label: string;
+  size?: "sm" | "md";
 }) {
   const { t } = useT();
   const [busy, setBusy] = useState(false);
@@ -38,7 +40,7 @@ export function RefreshButton({
   }
 
   return (
-    <Button variant="secondary" onClick={run} loading={busy}>
+    <Button variant="secondary" size={size} onClick={run} loading={busy}>
       {done ? (
         <span className="flex items-center gap-1.5 text-emerald-600">
           <svg

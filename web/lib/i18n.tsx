@@ -290,6 +290,8 @@ const en = {
   "history.title": "Conversation history",
   "history.description": "Your turns with the tutor for the active thread.",
   "history.refresh": "Refresh",
+  "role.you": "You",
+  "role.tutor": "Tutor",
   "history.empty.title": "No history yet",
   "history.empty.description":
     "Ask a question or generate an exercise — your turns will appear here.",
@@ -723,6 +725,8 @@ const fr: Record<TranslationKey, string> = {
   "history.title": "Historique de conversation",
   "history.description": "Vos échanges avec le tuteur pour le fil actif.",
   "history.refresh": "Actualiser",
+  "role.you": "Vous",
+  "role.tutor": "Tuteur",
   "history.empty.title": "Pas encore d'historique",
   "history.empty.description":
     "Posez une question ou générez un exercice — vos échanges apparaîtront ici.",
@@ -1140,6 +1144,8 @@ const nl: Record<TranslationKey, string> = {
   "history.title": "Gespreksgeschiedenis",
   "history.description": "Je beurten met de tutor voor het actieve gesprek.",
   "history.refresh": "Vernieuwen",
+  "role.you": "Jij",
+  "role.tutor": "Tutor",
   "history.empty.title": "Nog geen geschiedenis",
   "history.empty.description":
     "Stel een vraag of genereer een oefening — je beurten verschijnen hier.",
