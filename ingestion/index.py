@@ -41,6 +41,7 @@ def _ensure_collection(client: QdrantClient, name: str, *, sparse: bool) -> None
     weights -- so the Query API can prefetch and RRF-fuse both branches.
     """
     if client.collection_exists(name):
+        _ensure_payload_indexes(client, name)
         return
 
     dense_params = models.VectorParams(
@@ -49,14 +50,38 @@ def _ensure_collection(client: QdrantClient, name: str, *, sparse: bool) -> None
     )
     if not sparse:
         client.create_collection(collection_name=name, vectors_config=dense_params)
-        return
+    else:
+        settings = get_settings()
+        client.create_collection(
+            collection_name=name,
+            vectors_config={DENSE_VECTOR_NAME: dense_params},
+            sparse_vectors_config={settings.sparse_vector_name: models.SparseVectorParams()},
+        )
+    _ensure_payload_indexes(client, name)
 
-    settings = get_settings()
-    client.create_collection(
-        collection_name=name,
-        vectors_config={DENSE_VECTOR_NAME: dense_params},
-        sparse_vectors_config={settings.sparse_vector_name: models.SparseVectorParams()},
-    )
+
+def _ensure_payload_indexes(client: QdrantClient, name: str) -> None:
+    """Ensure keyword payload indexes exist on ``course`` and ``document``.
+
+    A keyword index on ``course`` lets Qdrant's facet API aggregate distinct
+    courses server-side (otherwise it 400s and callers fall back to a scroll),
+    and an index on ``document`` keeps per-document filtering fast. Both calls are
+    idempotent and best-effort: creating an index that already exists, or a client
+    that lacks the method, is swallowed so indexing never fails over this.
+    """
+    create = getattr(client, "create_payload_index", None)
+    if create is None:
+        return
+    for field in ("course", "document"):
+        try:
+            create(
+                collection_name=name,
+                field_name=field,
+                field_schema=models.PayloadSchemaType.KEYWORD,
+            )
+        except Exception:
+            # Already indexed, or the server/client does not support it: harmless.
+            logger.debug("payload index on %r not created (may already exist)", field)
 
 
 def index_chunks(chunks: list[Chunk], *, sparse: bool = False) -> None:
@@ -78,7 +103,14 @@ def index_chunks(chunks: list[Chunk], *, sparse: bool = False) -> None:
 
     dense_vectors = embed_texts([c.text for c in chunks])
     payloads = [
-        {"text": c.text, "course": c.course, "chapter": c.chapter, "page": c.page} for c in chunks
+        {
+            "text": c.text,
+            "course": c.course,
+            "chapter": c.chapter,
+            "page": c.page,
+            "document": c.document,
+        }
+        for c in chunks
     ]
 
     if not sparse:

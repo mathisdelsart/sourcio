@@ -307,59 +307,93 @@ export default function Home() {
 
                 <Tabs tabs={TABS} active={active} onChange={setActive} />
 
-                {/* `key={active}` remounts the panel on every tab switch so the
-                    fade-in replays, not just on first render. */}
+                {/* Every panel stays mounted across tab switches so in-progress
+                    work (a drafted question, a running quiz, a generated
+                    exercise) survives — inactive panels are hidden with the
+                    `hidden` attribute (display:none, and removed from the
+                    accessibility tree, so exactly one tabpanel is exposed) rather
+                    than unmounted. The fade-in is applied to the active panel
+                    only, so it still replays on each switch without forcing a
+                    remount that would wipe local state. */}
                 <div
-                  key={active}
-                  id={`tabpanel-${active}`}
+                  id="tabpanel-ask"
                   role="tabpanel"
-                  aria-labelledby={`tab-${active}`}
-                  className="animate-fade-in"
+                  aria-labelledby="tab-ask"
+                  hidden={active !== "ask"}
+                  className={active === "ask" ? "animate-fade-in" : undefined}
                 >
-                  {active === "ask" && (
-                    <AskPanel
-                      studentId={effectiveStudentId}
-                      config={config}
-                      lastAnswer={lastAnswer}
-                      setLastAnswer={setLastAnswer}
-                      sessionId={activeSessionId}
-                      sourcesMax={sourcesMax}
-                    />
-                  )}
-                  {active === "exercise" && (
-                    <ExercisePanel
-                      studentId={effectiveStudentId}
-                      config={config}
-                      sessionId={activeSessionId}
-                    />
-                  )}
-                  {active === "quiz" && (
-                    <QuizPanel
-                      studentId={effectiveStudentId}
-                      config={config}
-                      sessionId={activeSessionId}
-                    />
-                  )}
-                  {active === "threads" && (
-                    <ThreadsPanel
-                      studentId={effectiveStudentId}
-                      config={config}
-                      active={active === "threads"}
-                      activeSessionId={activeSessionId}
-                      setActiveSessionId={selectSession}
-                    />
-                  )}
-                  {active === "history" && (
-                    <HistoryPanel
-                      studentId={effectiveStudentId}
-                      config={config}
-                      active={active === "history"}
-                      activeSessionId={activeSessionId}
-                    />
-                  )}
-                  {active === "documents" && (
-                    <DocumentsPanel studentId={effectiveStudentId} config={config} />
-                  )}
+                  <AskPanel
+                    studentId={effectiveStudentId}
+                    config={config}
+                    lastAnswer={lastAnswer}
+                    setLastAnswer={setLastAnswer}
+                    sessionId={activeSessionId}
+                    sourcesMax={sourcesMax}
+                  />
+                </div>
+                <div
+                  id="tabpanel-exercise"
+                  role="tabpanel"
+                  aria-labelledby="tab-exercise"
+                  hidden={active !== "exercise"}
+                  className={active === "exercise" ? "animate-fade-in" : undefined}
+                >
+                  <ExercisePanel
+                    studentId={effectiveStudentId}
+                    config={config}
+                    sessionId={activeSessionId}
+                  />
+                </div>
+                <div
+                  id="tabpanel-quiz"
+                  role="tabpanel"
+                  aria-labelledby="tab-quiz"
+                  hidden={active !== "quiz"}
+                  className={active === "quiz" ? "animate-fade-in" : undefined}
+                >
+                  <QuizPanel
+                    studentId={effectiveStudentId}
+                    config={config}
+                    sessionId={activeSessionId}
+                  />
+                </div>
+                <div
+                  id="tabpanel-threads"
+                  role="tabpanel"
+                  aria-labelledby="tab-threads"
+                  hidden={active !== "threads"}
+                  className={active === "threads" ? "animate-fade-in" : undefined}
+                >
+                  <ThreadsPanel
+                    studentId={effectiveStudentId}
+                    config={config}
+                    active={active === "threads"}
+                    activeSessionId={activeSessionId}
+                    setActiveSessionId={selectSession}
+                  />
+                </div>
+                <div
+                  id="tabpanel-history"
+                  role="tabpanel"
+                  aria-labelledby="tab-history"
+                  hidden={active !== "history"}
+                  className={active === "history" ? "animate-fade-in" : undefined}
+                >
+                  <HistoryPanel
+                    studentId={effectiveStudentId}
+                    config={config}
+                    active={active === "history"}
+                    activeSessionId={activeSessionId}
+                  />
+                </div>
+                <div
+                  id="tabpanel-documents"
+                  role="tabpanel"
+                  aria-labelledby="tab-documents"
+                  hidden={active !== "documents"}
+                  className={active === "documents" ? "animate-fade-in" : undefined}
+                >
+                  <DocumentsPanel studentId={effectiveStudentId} config={config} />
                 </div>
               </div>
             </div>

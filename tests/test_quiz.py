@@ -230,6 +230,58 @@ def test_grade_quiz_answer_uses_stored_reference(engine, monkeypatch):
     assert "By axiom 1." in captured["human"]
 
 
+def test_grade_quiz_answer_applies_rigor_guidance(engine, monkeypatch):
+    # The requested rigor must reach the shared grade judge, injecting the exact
+    # per-level guidance the exercise judge uses.
+    from agent.nodes.grade import _RIGOR_GUIDANCE
+
+    _patch_retrieve(monkeypatch, _make_retrieved("Group axioms."))
+    _patch_llm(monkeypatch, _TWO_QUESTIONS)
+    result = generate_quiz("groups", 2, "zoe")
+    quiz_id = result["quiz_id"]
+    question_id = result["questions"][0]["id"]
+
+    captured = {}
+
+    class _CaptureLLM:
+        def invoke(self, messages, config=None):
+            captured["human"] = messages[-1][1]
+            return _FakeMessage('{"score": 50, "feedback": "ok"}')
+
+    monkeypatch.setattr("agent.nodes.grade.get_llm", lambda role="default": _CaptureLLM())
+
+    grade_quiz_answer(quiz_id, question_id, "answer", "zoe", "strict")
+    assert _RIGOR_GUIDANCE["strict"] in captured["human"]
+
+    # Default rigor is the balanced "standard" strictness.
+    grade_quiz_answer(quiz_id, question_id, "answer", "zoe")
+    assert _RIGOR_GUIDANCE["standard"] in captured["human"]
+
+
+def test_summarize_quiz_threads_rigor_to_judge(engine, monkeypatch):
+    from agent.nodes.grade import _RIGOR_GUIDANCE
+
+    _patch_retrieve(monkeypatch, _make_retrieved("Group axioms."))
+    _patch_llm(monkeypatch, _TWO_QUESTIONS)
+    result = generate_quiz("groups", 2, "zoe")
+    quiz_id = result["quiz_id"]
+    q0 = result["questions"][0]["id"]
+
+    seen: list[str] = []
+
+    class _CaptureLLM:
+        def invoke(self, messages, config=None):
+            seen.append(messages[-1][1])
+            return _FakeMessage('{"score": 70, "feedback": "ok"}')
+
+    monkeypatch.setattr("agent.nodes.grade.get_llm", lambda role="default": _CaptureLLM())
+    monkeypatch.setattr("agent.nodes.quiz.get_llm", lambda role="default": _FakeLLM("Keep going."))
+
+    summarize_quiz(quiz_id, [{"question_id": q0, "answer": "a0"}], "zoe", "lenient")
+    # The lenient guidance was applied when grading the answer.
+    assert any(_RIGOR_GUIDANCE["lenient"] in human for human in seen)
+
+
 def test_summarize_quiz_averages_and_recommends(engine, monkeypatch):
     _patch_retrieve(monkeypatch, _make_retrieved("Group axioms."))
     _patch_llm(monkeypatch, _TWO_QUESTIONS)

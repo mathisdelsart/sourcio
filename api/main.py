@@ -476,11 +476,17 @@ class QuizResponse(BaseModel):
 
 
 class QuizGradeRequest(BaseModel):
-    """A student's answer to one quiz question, graded against its reference."""
+    """A student's answer to one quiz question, graded against its reference.
+
+    ``rigor`` sets the marking strictness applied by the shared grade judge; an
+    unsupported value is rejected with 422 by the ``Rigor`` literal, matching how
+    ``GradeRequest.rigor`` is validated.
+    """
 
     student_id: str
     question_id: int
     answer: str
+    rigor: Rigor = "standard"
 
 
 class QuizGradeAllItem(BaseModel):
@@ -491,10 +497,15 @@ class QuizGradeAllItem(BaseModel):
 
 
 class QuizGradeAllRequest(BaseModel):
-    """All of a student's quiz answers, graded together for a final score."""
+    """All of a student's quiz answers, graded together for a final score.
+
+    ``rigor`` sets the marking strictness applied to every answer; an unsupported
+    value is rejected with 422 by the ``Rigor`` literal, matching ``GradeRequest``.
+    """
 
     student_id: str
     answers: list[QuizGradeAllItem]
+    rigor: Rigor = "standard"
 
 
 class QuizGradeResult(BaseModel):
@@ -1103,7 +1114,9 @@ def quiz_grade(
     """
     with get_session(_engine) as session:
         _resolve_student(session, request.student_id, user)
-    verdict = grade_quiz_answer(quiz_id, request.question_id, request.answer, request.student_id)
+    verdict = grade_quiz_answer(
+        quiz_id, request.question_id, request.answer, request.student_id, request.rigor
+    )
     if verdict is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1133,7 +1146,7 @@ def quiz_grade_all(
     with get_session(_engine) as session:
         _resolve_student(session, request.student_id, user)
     answers = [{"question_id": a.question_id, "answer": a.answer} for a in request.answers]
-    return summarize_quiz(quiz_id, answers, request.student_id)
+    return summarize_quiz(quiz_id, answers, request.student_id, request.rigor)
 
 
 @app.get(
@@ -1181,9 +1194,12 @@ async def upload_document(
     JSON event from ``core.documents.stream_ingest`` — ``start`` (with the total
     page count and how many were already indexed and thus skipped), one
     ``progress`` per batch (pages done, indexed count, elapsed seconds), then a
-    final ``done`` or ``error``. Pages already indexed for the course are skipped,
-    so re-running an interrupted upload never re-pays the vision model, and each
-    batch is indexed as it is extracted, so a failure keeps the pages done so far.
+    final ``done`` (carrying ``indexed``/``skipped`` and a ``reason`` so a true 0
+    is reported honestly) or ``error``. Each document is scoped by its own
+    identity, so a second file in the same course indexes independently; only
+    re-uploading the same document skips already-indexed pages (never re-paying
+    the vision model), and each batch is indexed as it is extracted, so a failure
+    keeps the pages done so far.
     """
     normalized_chapter = chapter.strip() if chapter and chapter.strip() else None
     contents = await file.read()

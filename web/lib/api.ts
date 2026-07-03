@@ -594,6 +594,7 @@ export async function gradeQuizAnswer(
   quizId: number,
   questionId: number,
   answer: string,
+  rigor: Rigor = "standard",
   config?: ConnectionConfig,
 ): Promise<GradeResponse> {
   return request<GradeResponse>(
@@ -601,7 +602,7 @@ export async function gradeQuizAnswer(
     {
       method: "POST",
       headers: buildHeaders(config, true),
-      body: JSON.stringify({ student_id: studentId, question_id: questionId, answer }),
+      body: JSON.stringify({ student_id: studentId, question_id: questionId, answer, rigor }),
     },
     config,
   );
@@ -612,6 +613,7 @@ export async function gradeQuizAll(
   studentId: string,
   quizId: number,
   answers: QuizGradeAllItem[],
+  rigor: Rigor = "standard",
   config?: ConnectionConfig,
 ): Promise<QuizSummaryResponse> {
   return request<QuizSummaryResponse>(
@@ -619,7 +621,7 @@ export async function gradeQuizAll(
     {
       method: "POST",
       headers: buildHeaders(config, true),
-      body: JSON.stringify({ student_id: studentId, answers }),
+      body: JSON.stringify({ student_id: studentId, answers, rigor }),
     },
     config,
   );
@@ -859,6 +861,13 @@ export interface DocumentProgress {
   indexed?: number;
   elapsed?: number;
   message?: string;
+  /**
+   * Why the ingest finished with the count it did, on a `done` event:
+   * `indexed` (new pages added), `already_indexed` (nothing new, document was
+   * already indexed) or `empty` (nothing extractable). Lets the UI report a
+   * true 0 honestly instead of as a plain success.
+   */
+  reason?: "indexed" | "already_indexed" | "empty";
 }
 
 /** How many indexed points a delete request removed. */

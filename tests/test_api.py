@@ -934,24 +934,53 @@ def test_quiz_rejects_out_of_range_count(client):
 def test_quiz_grade_returns_score_and_feedback(client, monkeypatch):
     captured = {}
 
-    def fake_grade_quiz_answer(quiz_id, question_id, answer, student_id):
-        captured["args"] = (quiz_id, question_id, answer, student_id)
+    def fake_grade_quiz_answer(quiz_id, question_id, answer, student_id, rigor="standard"):
+        captured["args"] = (quiz_id, question_id, answer, student_id, rigor)
         return {"score": 80, "feedback": "Good."}
 
     monkeypatch.setattr(api_main, "grade_quiz_answer", fake_grade_quiz_answer)
 
     response = client.post(
         "/quiz/5/grade",
-        json={"student_id": "s1", "question_id": 10, "answer": "my answer"},
+        json={"student_id": "s1", "question_id": 10, "answer": "my answer", "rigor": "strict"},
     )
     assert response.status_code == 200
     assert response.json() == {"score": 80, "feedback": "Good."}
-    assert captured["args"] == (5, 10, "my answer", "s1")
+    # The requested rigor is threaded into the judge node.
+    assert captured["args"] == (5, 10, "my answer", "s1", "strict")
+
+
+def test_quiz_grade_defaults_rigor_to_standard(client, monkeypatch):
+    captured = {}
+
+    def fake_grade_quiz_answer(quiz_id, question_id, answer, student_id, rigor="standard"):
+        captured["rigor"] = rigor
+        return {"score": 80, "feedback": "Good."}
+
+    monkeypatch.setattr(api_main, "grade_quiz_answer", fake_grade_quiz_answer)
+
+    response = client.post(
+        "/quiz/5/grade", json={"student_id": "s1", "question_id": 10, "answer": "a"}
+    )
+    assert response.status_code == 200
+    # Omitting rigor defaults to the balanced "standard" strictness.
+    assert captured["rigor"] == "standard"
+
+
+def test_quiz_grade_rejects_invalid_rigor(client):
+    response = client.post(
+        "/quiz/5/grade",
+        json={"student_id": "s1", "question_id": 10, "answer": "a", "rigor": "brutal"},
+    )
+    # An unsupported rigor value is rejected by the Rigor literal, like /grade.
+    assert response.status_code == 422
 
 
 def test_quiz_grade_unknown_question_is_404(client, monkeypatch):
     monkeypatch.setattr(
-        api_main, "grade_quiz_answer", lambda quiz_id, question_id, answer, student_id: None
+        api_main,
+        "grade_quiz_answer",
+        lambda quiz_id, question_id, answer, student_id, rigor="standard": None,
     )
 
     response = client.post(
@@ -1016,6 +1045,61 @@ def test_quiz_then_grade_end_to_end(client, monkeypatch):
         assert len(grades) == 1
         assert grades[0].exercise_id is None
         assert grades[0].score == 90
+
+
+def test_quiz_grade_all_threads_rigor(client, monkeypatch):
+    captured = {}
+
+    def fake_summarize_quiz(quiz_id, answers, student_id, rigor="standard"):
+        captured["args"] = (quiz_id, answers, student_id, rigor)
+        return {"total": 70, "results": [], "recommendation": "keep going"}
+
+    monkeypatch.setattr(api_main, "summarize_quiz", fake_summarize_quiz)
+
+    response = client.post(
+        "/quiz/9/grade-all",
+        json={
+            "student_id": "s1",
+            "answers": [{"question_id": 1, "answer": "a1"}],
+            "rigor": "lenient",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["total"] == 70
+    quiz_id, answers, student_id, rigor = captured["args"]
+    assert (quiz_id, student_id, rigor) == (9, "s1", "lenient")
+    assert answers == [{"question_id": 1, "answer": "a1"}]
+
+
+def test_quiz_grade_all_defaults_rigor_to_standard(client, monkeypatch):
+    captured = {}
+
+    def fake_summarize_quiz(quiz_id, answers, student_id, rigor="standard"):
+        captured["rigor"] = rigor
+        return {"total": 0, "results": [], "recommendation": ""}
+
+    monkeypatch.setattr(api_main, "summarize_quiz", fake_summarize_quiz)
+
+    response = client.post(
+        "/quiz/9/grade-all",
+        json={"student_id": "s1", "answers": [{"question_id": 1, "answer": "a"}]},
+    )
+    assert response.status_code == 200
+    # Omitting rigor defaults to the balanced "standard" strictness.
+    assert captured["rigor"] == "standard"
+
+
+def test_quiz_grade_all_rejects_invalid_rigor(client):
+    response = client.post(
+        "/quiz/9/grade-all",
+        json={
+            "student_id": "s1",
+            "answers": [{"question_id": 1, "answer": "a"}],
+            "rigor": "brutal",
+        },
+    )
+    # An unsupported rigor value is rejected by the Rigor literal, like /grade.
+    assert response.status_code == 422
 
 
 # --- API-key authentication --------------------------------------------------
@@ -1084,7 +1168,10 @@ def _stub_nodes(monkeypatch):
     monkeypatch.setattr(
         api_main,
         "grade_quiz_answer",
-        lambda quiz_id, question_id, answer, student_id: {"score": 50, "feedback": "ok"},
+        lambda quiz_id, question_id, answer, student_id, rigor="standard": {
+            "score": 50,
+            "feedback": "ok",
+        },
     )
 
 

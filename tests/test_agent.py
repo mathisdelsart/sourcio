@@ -285,14 +285,38 @@ def test_generate_node_refuses_when_nothing_retrieved(fake_llm, fake_retrieve):
     assert fake_llm["last"] is None
 
 
+def test_generate_node_builds_exercise_on_covered_non_math_content(fake_llm, fake_retrieve):
+    # A factual/biographical course (e.g. a CV) covers the request. Non-math
+    # material must still yield a real exercise: the node must NOT refuse just
+    # because there is no formula or notation to work with.
+    fake_retrieve["results"] = [
+        _retrieved(1, "Mathis Delsart studied at UCLouvain and worked on RAG systems."),
+        _retrieved(2, "He built a grounded tutor with FastAPI and Qdrant."),
+    ]
+    fake_llm["reply"] = (
+        "EXERCISE:\nWhat did Mathis study and build?\n\n"
+        "SOLUTION:\nHe studied at UCLouvain and built a grounded tutor."
+    )
+    out = generate({"message": "Mathis Delsart", "course": "CV"})
+
+    assert set(out) == {"exercise", "retrieved"}
+    assert out["exercise"]["refused"] is False
+    assert out["exercise"]["problem"] == "What did Mathis study and build?"
+    assert out["exercise"]["solution"] == "He studied at UCLouvain and built a grounded tutor."
+    # The requested course wins as the exercise's stored attribution.
+    assert out["exercise"]["course"] == "CV"
+    assert out["retrieved"] == ["(Course, p.1)", "(Course, p.2)"]
+
+
 def test_generate_node_refuses_when_model_judges_sources_uncovered(fake_llm, fake_retrieve):
     # Retrieval returned chunks (e.g. because the request was scoped to the wrong
-    # course), but they do not cover the requested notion. Acting as the coverage
-    # judge, the model emits the exact refusal sentence; the node must surface an
-    # honest refusal, not parse an off-topic exercise out of unrelated material.
-    fake_retrieve["results"] = [_retrieved(3, "Wavelet approximation space V_j.")]
+    # course), but they are genuinely unrelated to the requested notion. Acting as
+    # the coverage judge, the model emits the exact refusal sentence; the node must
+    # surface an honest refusal, not parse an off-topic exercise out of unrelated
+    # material.
+    fake_retrieve["results"] = [_retrieved(1, "Mathis Delsart studied at UCLouvain.")]
     fake_llm["reply"] = REFUSAL
-    out = generate({"message": "Mathis Delsart", "course": "ELEC2885"})
+    out = generate({"message": "quantum chromodynamics", "course": "CV"})
 
     assert set(out) == {"exercise", "retrieved"}
     assert out["exercise"]["refused"] is True

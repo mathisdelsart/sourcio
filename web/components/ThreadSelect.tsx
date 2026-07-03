@@ -66,7 +66,7 @@ export function ThreadSelect({ studentId, config, value, onChange, onManage }: T
       <div className="flex items-center gap-2">
         <select
           id={id}
-          className={cn(baseField, "pr-8")}
+          className={cn(baseField, "pr-10")}
           value={value == null ? "" : String(value)}
           onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
         >

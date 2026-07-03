@@ -128,7 +128,13 @@ export function ThreadsPanel({
       <Card>
         <CardHeader
           title={t("threads.title")}
-          description={t("threads.description")}
+          description={
+            <>
+              {t("threads.description.line1")}
+              <br />
+              {t("threads.description.line2")}
+            </>
+          }
           action={<RefreshButton onRefresh={loadSessions} label={t("threads.refresh")} />}
         />
         <CardBody className="space-y-4">

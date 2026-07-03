@@ -19,9 +19,14 @@ import json
 import re
 from typing import Any
 
+from agent.state import Rigor
 from core.config import get_llm
 from core.obs import get_callbacks
 from ingestion.schema import format_numbered_sources
+
+# Fallback marking strictness when the caller supplies none. Mirrors the exercise
+# grade node's default so quiz and exercise grading behave identically.
+DEFAULT_RIGOR: Rigor = "standard"
 
 _SYSTEM = (
     "You are a course tutor who writes short practice quizzes.\n"
@@ -181,12 +186,14 @@ def summarize_quiz(
     quiz_id: int,
     answers: list[dict[str, Any]],
     student_id: str | None = None,
+    rigor: Rigor = DEFAULT_RIGOR,
 ) -> dict[str, Any]:
     """Grade a whole quiz at once and return a final score plus a recommendation.
 
     ``answers`` is a list of ``{"question_id", "answer"}``. Each answered question
     is graded by reusing :func:`grade_quiz_answer` (so reference solutions stay
-    server-side and every verdict is persisted just like one-by-one grading).
+    server-side and every verdict is persisted just like one-by-one grading), at
+    the requested ``rigor`` — the same marking strictness the exercise judge uses.
     Items whose question cannot be resolved — unknown id, or one not belonging to
     ``quiz_id`` — are skipped. ``total`` is the average per-question score over the
     graded questions (0 when none could be graded).
@@ -208,7 +215,7 @@ def summarize_quiz(
         question_id = int(raw_id)
         answer = str(item.get("answer", ""))
         answer_by_id[question_id] = answer
-        verdict = grade_quiz_answer(quiz_id, question_id, answer, student_id)
+        verdict = grade_quiz_answer(quiz_id, question_id, answer, student_id, rigor)
         if verdict is None:
             continue
         results.append(
@@ -245,13 +252,20 @@ def summarize_quiz(
 
 
 def grade_quiz_answer(
-    quiz_id: int, question_id: int, answer: str, student_id: str | None
+    quiz_id: int,
+    question_id: int,
+    answer: str,
+    student_id: str | None,
+    rigor: Rigor = DEFAULT_RIGOR,
 ) -> dict[str, Any] | None:
     """Grade ``answer`` against a stored quiz question's reference solution.
 
     Loads the question's server-side reference solution, scores the answer with
-    the existing grade judge, and persists the verdict as a ``Grade`` linked to
-    the question (best-effort). The reference solution never leaves the server.
+    the existing grade judge at the requested ``rigor``, and persists the verdict
+    as a ``Grade`` linked to the question (best-effort). ``rigor`` is threaded
+    into the shared grade node, so the exercise judge's per-level guidance
+    (``agent.nodes.grade._RIGOR_GUIDANCE``) applies identically here. The
+    reference solution never leaves the server.
 
     Returns ``{"score", "feedback"}``, or ``None`` when the question does not
     exist (or belongs to another quiz), so the API can surface a 404. When no
@@ -273,8 +287,11 @@ def grade_quiz_answer(
                 return None
             reference = question.reference_solution
 
-            # Reuse the existing judge node with the stored reference solution.
-            verdict = grade({"message": answer, "exercise": {"solution": reference}}).get("grade")
+            # Reuse the existing judge node with the stored reference solution,
+            # passing the marking strictness so the shared rigor guidance applies.
+            verdict = grade(
+                {"message": answer, "exercise": {"solution": reference}, "rigor": rigor}
+            ).get("grade")
             assert verdict is not None
 
             if student_id:

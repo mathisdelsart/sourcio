@@ -37,13 +37,17 @@ function usePrefersReducedMotion(): boolean {
  * Friendly "what the tutor is doing" indicator. Cycles through stage messages
  * every ~1.6s and then holds on the last one, so a slow local-LLM wait reads as
  * real work rather than a stuck screen. Honors `prefers-reduced-motion` by
- * skipping the cycling and the spinner animation.
+ * skipping the cycling and the spinner animation. When `label` is given it shows
+ * that single static message instead of cycling the variant's sequence, for a
+ * one-shot wait (e.g. grading a whole quiz) that has no natural stages.
  */
 export function ThinkingIndicator({
   variant,
+  label,
   className,
 }: {
   variant: ThinkingVariant;
+  label?: string;
   className?: string;
 }) {
   const { t } = useT();
@@ -57,14 +61,14 @@ export function ThinkingIndicator({
   }, [variant]);
 
   useEffect(() => {
-    if (reduced) return;
+    if (reduced || label) return;
     if (index >= steps.length - 1) return; // Hold on the last message.
     const id = setTimeout(() => setIndex((i) => i + 1), STEP_MS);
     return () => clearTimeout(id);
-  }, [reduced, index, steps.length]);
+  }, [reduced, label, index, steps.length]);
 
-  // Reduced motion: no cycling, just show the last (overall) stage statically.
-  const message = reduced ? t(steps[steps.length - 1]) : t(steps[index]);
+  // A static label wins; otherwise show the current (or last, if reduced) stage.
+  const message = label ?? (reduced ? t(steps[steps.length - 1]) : t(steps[index]));
 
   return (
     <div

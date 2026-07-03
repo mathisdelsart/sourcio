@@ -17,17 +17,25 @@ from ingestion.schema import Chunk, Page
 logger = logging.getLogger(__name__)
 
 
-def _chunk_id(course: str, page: int, chapter: str | None) -> str:
+def _chunk_id(course: str, page: int, chapter: str | None, document: str | None = None) -> str:
     """Stable UUID so re-ingesting a course overwrites rather than duplicates.
 
     Qdrant point ids must be unsigned ints or UUIDs, hence uuid5 over a stable
-    key. Slides have a globally unique page number within a course, so the key
-    is ``course``+``page``. Prose ``page`` is only a per-document window index,
-    so the document's ``chapter`` is folded in to keep windows from different
-    files distinct. Slide keys are unchanged (``chapter`` is None there), so
-    existing slide ids stay byte-identical.
+    key. When a ``document`` identifier is known (uploads), it is folded into the
+    key so two decks in the same course never share a page number and thus never
+    overwrite one another (slide page numbers are per-document 1..N). Prose
+    ``page`` is only a per-document window index, so the document's ``chapter`` is
+    also folded in to keep windows from different files distinct.
+
+    When ``document`` is ``None`` (CLI ingestion) the legacy key is kept, so
+    existing slide ids stay byte-identical: ``course``+``page`` for slides
+    (``chapter`` is None) and ``course``+``chapter``+``page`` for prose.
     """
-    key = f"{course}-p{page}" if chapter is None else f"{course}-{chapter}-p{page}"
+    if document is not None:
+        base = f"{course}-{document}"
+    else:
+        base = course
+    key = f"{base}-p{page}" if chapter is None else f"{base}-{chapter}-p{page}"
     return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
 
 
@@ -48,11 +56,12 @@ def chunk_pages(pages: list[Page], *, log_sample: int = 3) -> list[Chunk]:
             continue
         chunks.append(
             Chunk(
-                id=_chunk_id(page.course, page.page, page.chapter),
+                id=_chunk_id(page.course, page.page, page.chapter, page.document),
                 course=page.course,
                 page=page.page,
                 text=page.text,
                 chapter=page.chapter,
+                document=page.document,
             )
         )
 
