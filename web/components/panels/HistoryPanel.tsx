@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  ApiError,
   clearHistory,
   getSessionMessages,
   history,
@@ -50,6 +51,9 @@ export function HistoryPanel({ studentId, config, active, activeSessionId }: His
 
   const load = useCallback(async () => {
     setLoading(true);
+    // Drop any previously loaded turns up front so a failed or empty load can
+    // never leave a different thread's content on screen.
+    setMessages([]);
     try {
       // With an active thread, show only that thread's turns; otherwise show the
       // unthreaded flat history.
@@ -59,7 +63,13 @@ export function HistoryPanel({ studentId, config, active, activeSessionId }: His
           : await history(studentId, 100, config);
       setMessages(rows);
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
+      // A 404 (e.g. a stale/empty thread id after a DB reset) is not an error:
+      // treat it as an empty thread and let the empty state render.
+      if (err instanceof ApiError && err.status === 404) {
+        setMessages([]);
+      } else {
+        toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
+      }
     } finally {
       setLoading(false);
     }
@@ -121,7 +131,7 @@ export function HistoryPanel({ studentId, config, active, activeSessionId }: His
                 {t("history.clear")}
               </button>
             )}
-            <RefreshButton onRefresh={load} label={t("history.refresh")} />
+            <RefreshButton onRefresh={load} label={t("history.refresh")} size="sm" />
           </div>
         }
       />
@@ -144,8 +154,8 @@ export function HistoryPanel({ studentId, config, active, activeSessionId }: His
                 )}
               >
                 <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
-                  <span className="font-medium capitalize text-zinc-500 dark:text-zinc-400">
-                    {turn.role}
+                  <span className="font-medium text-zinc-500 dark:text-zinc-400">
+                    {isUser(turn.role) ? t("role.you") : t("role.tutor")}
                   </span>
                   {turn.created_at && <span>· {formatTime(turn.created_at, locale)}</span>}
                 </div>

@@ -323,13 +323,44 @@ def test_grade_returns_score_and_feedback(client, monkeypatch):
 
     response = client.post(
         "/grade",
-        json={"student_id": "s1", "message": "X = 42", "exercise": {"solution": "X = 42"}},
+        json={
+            "student_id": "s1",
+            "message": "X = 42",
+            "exercise": {"solution": "X = 42"},
+            "rigor": "strict",
+        },
     )
     assert response.status_code == 200
     assert response.json() == {"score": 80, "feedback": "Good method."}
     # Both the answer and the optional reference exercise reached the node.
     assert captured["state"]["message"] == "X = 42"
     assert captured["state"]["exercise"] == {"solution": "X = 42"}
+    # The requested marking strictness is forwarded to the grade node.
+    assert captured["state"]["rigor"] == "strict"
+
+
+def test_grade_defaults_rigor_to_standard(client, monkeypatch):
+    captured = {}
+
+    def fake_grade(state):
+        captured["state"] = state
+        return {"grade": {"score": 60, "feedback": "ok"}}
+
+    monkeypatch.setattr(api_main, "grade", fake_grade)
+
+    response = client.post("/grade", json={"student_id": "s1", "message": "X = 42"})
+    assert response.status_code == 200
+    # Omitting rigor defaults to the balanced "standard" strictness.
+    assert captured["state"]["rigor"] == "standard"
+
+
+def test_grade_rejects_invalid_rigor(client):
+    response = client.post(
+        "/grade",
+        json={"student_id": "s1", "message": "X = 42", "rigor": "brutal"},
+    )
+    # An unsupported rigor value is rejected by the Rigor literal, like level.
+    assert response.status_code == 422
 
 
 def test_grade_without_exercise(client, monkeypatch):
@@ -599,6 +630,48 @@ def test_reexplain_defaults_level_to_beginner(client, monkeypatch):
 def test_reexplain_rejects_invalid_level(client):
     response = client.post("/reexplain", json={"student_id": "s1", "level": "expert"})
     assert response.status_code == 422
+
+
+# --- /reexplain/stream (SSE) -------------------------------------------------
+
+
+def test_reexplain_stream_streams_tokens_then_done_and_persists(client, monkeypatch):
+    _seed_conversation(client, monkeypatch, "rexs")
+
+    def fake_stream_reexplain(state):
+        yield {"type": "token", "text": "Plainer "}
+        yield {"type": "token", "text": "words."}
+        yield {"type": "done", "answer": "Plainer words."}
+
+    monkeypatch.setattr(api_main, "stream_reexplain", fake_stream_reexplain)
+
+    response = client.post("/reexplain/stream", json={"student_id": "rexs", "level": "beginner"})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+
+    events = _parse_sse(response.text)
+    assert events[0] == {"type": "token", "text": "Plainer "}
+    assert events[-1] == {"type": "done", "answer": "Plainer words."}
+
+    # The assembled re-explanation is persisted as the last assistant turn.
+    history = client.get("/history/rexs").json()
+    assert (history[-1]["role"], history[-1]["content"]) == ("assistant", "Plainer words.")
+
+
+def test_reexplain_stream_without_prior_answer_is_graceful(client, monkeypatch):
+    called = {"node": False}
+
+    def fake_stream_reexplain(state):
+        called["node"] = True
+        yield {"type": "done", "answer": "should not happen"}
+
+    monkeypatch.setattr(api_main, "stream_reexplain", fake_stream_reexplain)
+
+    response = client.post("/reexplain/stream", json={"student_id": "nobody", "level": "beginner"})
+    assert response.status_code == 200
+    events = _parse_sse(response.text)
+    assert "no previous answer" in events[-1]["answer"].lower()
+    assert called["node"] is False
 
 
 # --- End-to-end persistence (real generate/grade nodes, no LLM/network) ------

@@ -14,15 +14,18 @@ const CHIP =
  * "(Wavelet Transform, p.12)". When a chunk `id` is provided the chip becomes a
  * button that opens the exact source excerpt (resolved via GET /source/{id}) in
  * a modal, so the reader can check precisely where a claim comes from. Without
- * an id it renders as a plain, non-interactive pill.
+ * an id it renders as a plain, non-interactive pill. When `n` is given, the chip
+ * leads with the inline marker `[n]` so it pairs with the `[n]` in the answer.
  */
 export function CitationChip({
   label,
   id,
+  n,
   config,
 }: {
   label: string;
   id?: string;
+  n?: number;
   config?: ConnectionConfig;
 }) {
   const { t } = useT();
@@ -41,10 +44,18 @@ export function CitationChip({
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // Lead with the inline marker `[n]` when given, otherwise a small dot.
+  const marker =
+    typeof n === "number" ? (
+      <span className="font-semibold tabular-nums">[{n}]</span>
+    ) : (
+      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+    );
+
   if (!id) {
     return (
       <span className={CHIP}>
-        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+        {marker}
         {label}
       </span>
     );
@@ -72,7 +83,7 @@ export function CitationChip({
         title={t("source.view")}
         className={`${CHIP} cursor-pointer transition-colors hover:bg-brand-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2`}
       >
-        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+        {marker}
         {label}
         <svg
           aria-hidden

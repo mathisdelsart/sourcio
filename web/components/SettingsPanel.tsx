@@ -10,25 +10,45 @@ interface SettingsPanelProps {
   studentId: string;
   baseUrl: string;
   apiKey: string;
-  onSave: (next: { studentId: string; baseUrl: string; apiKey: string }) => void;
+  sourcesMax: number;
+  onSave: (next: {
+    studentId: string;
+    baseUrl: string;
+    apiKey: string;
+    sourcesMax: number;
+  }) => void;
 }
+
+// Bounds for the candidate-source ceiling. A too-small pool starves the answer
+// of sources; a very high one slows a LOCAL model (larger context, latency).
+const SOURCES_MAX_MIN = 1;
+const SOURCES_MAX_MAX = 50;
+export const DEFAULT_SOURCES_MAX = 15;
 
 /**
  * Collapsible identity + connection settings: editable student id, API base URL
- * override, and an optional API key. Values are persisted by the parent.
+ * override, an optional API key, and the max candidate-source pool. Values are
+ * persisted by the parent.
  */
-export function SettingsPanel({ studentId, baseUrl, apiKey, onSave }: SettingsPanelProps) {
+export function SettingsPanel({ studentId, baseUrl, apiKey, sourcesMax, onSave }: SettingsPanelProps) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
   const [draftStudent, setDraftStudent] = useState(studentId);
   const [draftBase, setDraftBase] = useState(baseUrl);
   const [draftKey, setDraftKey] = useState(apiKey);
+  const [draftSources, setDraftSources] = useState(String(sourcesMax));
 
   function save() {
+    // Clamp to a sane range and fall back to the current value on bad input.
+    const parsed = Number.parseInt(draftSources, 10);
+    const nextSources = Number.isFinite(parsed)
+      ? Math.min(SOURCES_MAX_MAX, Math.max(SOURCES_MAX_MIN, parsed))
+      : sourcesMax;
     onSave({
       studentId: draftStudent.trim() || studentId,
       baseUrl: draftBase.trim(),
       apiKey: draftKey.trim(),
+      sourcesMax: nextSources,
     });
     setOpen(false);
   }
@@ -78,6 +98,16 @@ export function SettingsPanel({ studentId, baseUrl, apiKey, onSave }: SettingsPa
             placeholder={t("settings.apiKeyPlaceholder")}
             value={draftKey}
             onChange={(e) => setDraftKey(e.target.value)}
+          />
+          <TextField
+            label={t("settings.sourcesMax")}
+            hint={t("settings.sourcesMaxHint")}
+            type="number"
+            inputMode="numeric"
+            min={SOURCES_MAX_MIN}
+            max={SOURCES_MAX_MAX}
+            value={draftSources}
+            onChange={(e) => setDraftSources(e.target.value)}
           />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setOpen(false)}>

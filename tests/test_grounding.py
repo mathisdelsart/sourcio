@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 
 import core.answer as answer_mod
-from core.answer import _cited_indices, _remap_citations
+from core.answer import _citations, _cited_indices, _strip_filler_lead_ins
 from ingestion.chunk import chunk_pages
 from ingestion.schema import Chunk, Page, Retrieved
 
@@ -17,18 +17,15 @@ def test_citation_label_without_chapter():
     assert _retrieved(11).citation() == "(Wavelet Transform, p.11)"
 
 
-def test_remap_replaces_indices_with_real_sources():
-    results = [_retrieved(11), _retrieved(12)]
-    out = _remap_citations("Defined here [1] and extended there [2].", results)
-    assert out == (
-        "Defined here (Wavelet Transform, p.11) and extended there (Wavelet Transform, p.12)."
-    )
-
-
-def test_remap_leaves_out_of_range_indices_untouched():
-    # The model cannot fabricate a page: an unknown index is left as-is.
-    results = [_retrieved(11)]
-    assert _remap_citations("Bogus [7]", results) == "Bogus [7]"
+def test_citations_carry_marker_number_id_and_label_ascending():
+    # The legend pairs each inline [n] with its number, chunk id and label,
+    # ordered by ascending n even when the answer cites them out of order.
+    results = [_retrieved(11), _retrieved(12), _retrieved(13)]
+    cites = _citations("First [3] then [1].", results)
+    assert cites == [
+        {"n": 1, "id": "id11", "label": "(Wavelet Transform, p.11)"},
+        {"n": 3, "id": "id13", "label": "(Wavelet Transform, p.13)"},
+    ]
 
 
 def test_cited_indices_returns_only_used_sources_in_order():
@@ -57,8 +54,12 @@ def test_answer_includes_retrieved_chunk_texts(monkeypatch):
         "A wavelet is a localized oscillation.",
         "Multiresolution analysis decomposes a signal.",
     ]
+    # The answer keeps the inline [n] marker (no remapping) so the UI can pair it
+    # with the numbered legend.
+    assert out["answer"] == "A wavelet is X [1]."
     # ``sources`` stays the citation labels, distinct from the chunk texts.
     assert out["sources"] == ["(Wavelet Transform, p.11)"]
+    assert out["citations"] == [{"n": 1, "id": "id11", "label": "(Wavelet Transform, p.11)"}]
 
 
 def test_answer_strips_trailing_refusal_appended_after_real_answer(monkeypatch):
@@ -79,7 +80,37 @@ def test_answer_strips_trailing_refusal_appended_after_real_answer(monkeypatch):
 
     assert out["refused"] is False
     assert answer_mod.REFUSAL not in out["answer"]
-    assert out["answer"] == "A wavelet is a localized oscillation (Wavelet Transform, p.11)."
+    # The [n] marker is preserved (remapping was removed).
+    assert out["answer"] == "A wavelet is a localized oscillation [1]."
+
+
+def test_strip_filler_lead_ins_removes_standalone_lines():
+    # A filler lead-in on its own line is dropped; real content is untouched.
+    text = "La réponse finale est donc :\nA wavelet is localized [1]."
+    assert _strip_filler_lead_ins(text) == "A wavelet is localized [1]."
+    # An English filler line is removed too.
+    assert _strip_filler_lead_ins("The final answer is:\nBody [1].") == "Body [1]."
+    # A line that merely starts with a filler phrase but carries content stays.
+    kept = "In summary the transform is linear [1]."
+    assert _strip_filler_lead_ins(kept) == kept
+
+
+def test_answer_strips_filler_lead_in_line(monkeypatch):
+    # The model prepended an announcing line despite the prompt; it is stripped
+    # while the real, cited answer is preserved with its [n] marker.
+    results = [_retrieved(11, text="A wavelet is localized.")]
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
+    reply = SimpleNamespace(content="The final answer is:\nA wavelet is localized [1].")
+    monkeypatch.setattr(
+        answer_mod,
+        "get_llm",
+        lambda role: SimpleNamespace(invoke=lambda messages, config=None: reply),
+    )
+
+    out = answer_mod.answer("what is a wavelet?")
+
+    assert out["refused"] is False
+    assert out["answer"] == "A wavelet is localized [1]."
 
 
 def test_answer_refuses_when_whole_output_is_refusal(monkeypatch):
@@ -131,7 +162,7 @@ def test_stream_answer_strips_trailing_refusal(monkeypatch):
     final = events[-1]
     assert final["refused"] is False
     assert answer_mod.REFUSAL not in final["answer"]
-    assert final["answer"] == "A wavelet is X (Wavelet Transform, p.11)."
+    assert final["answer"] == "A wavelet is X [1]."
 
 
 def test_answer_retrieved_is_empty_on_refusal(monkeypatch):
@@ -170,9 +201,10 @@ def test_stream_answer_yields_tokens_then_sources(monkeypatch):
     final = events[-1]
     assert final["type"] == "sources"
     assert final["refused"] is False
-    # The assembled answer is remapped; the model only ever emitted [1].
-    assert final["answer"] == "A wavelet is X (Wavelet Transform, p.11)."
+    # The assembled answer keeps its [n] markers; the model only ever emitted [1].
+    assert final["answer"] == "A wavelet is X [1]."
     assert final["sources"] == ["(Wavelet Transform, p.11)"]
+    assert final["citations"] == [{"n": 1, "id": "id11", "label": "(Wavelet Transform, p.11)"}]
 
 
 def test_stream_answer_refuses_when_no_retrieval(monkeypatch):

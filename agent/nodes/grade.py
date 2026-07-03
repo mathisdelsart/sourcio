@@ -13,14 +13,18 @@ import json
 import re
 
 from agent.persistence import persist_grade
-from agent.state import TutorState
+from agent.state import Rigor, TutorState
 from core.config import get_llm
 from core.obs import get_callbacks
 
 _SYSTEM = (
     "You are a supportive but rigorous tutor correcting a student's answer.\n"
-    "- Compare the student's answer to the reference solution when one is given.\n"
-    "- Reward correct method and the course's notation; point out every error and gap.\n"
+    "- Grade ONLY against what the question actually asked: never penalise "
+    "information the question did not request.\n"
+    "- Compare the student's answer to the reference solution when one is given, "
+    "and reward any correct method and the course's notation.\n"
+    "- Be encouraging: flag real errors and genuine gaps, not accessory "
+    "differences in wording, ordering or notation.\n"
     "- Write the whole correction in the SAME LANGUAGE as the student's answer.\n"
     "\n"
     "Reply in EXACTLY this format and nothing else:\n"
@@ -29,11 +33,36 @@ _SYSTEM = (
     "<a detailed correction in Markdown, translating these headings into the "
     "student's language>:\n"
     "**What you got right** — what the answer covers correctly.\n"
-    "**What to fix or add** — a point-by-point list of errors, imprecisions and "
-    "anything missing.\n"
+    "**What to fix or add** — a point-by-point list of real errors and anything "
+    "the question asked for that is missing.\n"
     "**Model answer** — a complete, correct answer grounded in the reference and "
     "the course's notation."
 )
+
+# Sensible fallback when the state carries no explicit marking strictness.
+DEFAULT_RIGOR: Rigor = "standard"
+
+# Per-rigor guidance appended to the prompt so the same answer is marked at the
+# requested strictness. Every level still grades strictly against what the
+# question asked and tolerates accessory differences unless strict. Keys mirror
+# the ``Rigor`` literal.
+_RIGOR_GUIDANCE: dict[Rigor, str] = {
+    "lenient": (
+        "Grade leniently: award full or near-full credit when the substance is "
+        "correct. Ignore typos, ordering, phrasing and minor numeric rounding "
+        "that do not change the meaning; deduct only for content that is "
+        "genuinely wrong or that the question asked for and is missing."
+    ),
+    "standard": (
+        "Grade with balance: reward the correct method and substance, note real "
+        "errors, and do not penalise unrequested details or trivial slips."
+    ),
+    "strict": (
+        "Grade strictly: expect exact notation and full completeness of what the "
+        "question asked. Deduct for imprecision, but still only for content the "
+        "question actually required."
+    ),
+}
 
 # "SCORE: 60" — requires the colon, so a legacy JSON `"score": 60` (quote before
 # the colon) does not match here and instead falls through to the JSON branch.
@@ -93,9 +122,19 @@ def grade(state: TutorState) -> TutorState:
     """
     exercise = state.get("exercise") or {}
     reference = exercise.get("solution", "")
+    problem = exercise.get("problem", "")
     message = state.get("message", "")
+    rigor: Rigor = state.get("rigor") or DEFAULT_RIGOR
+    guidance = _RIGOR_GUIDANCE.get(rigor, _RIGOR_GUIDANCE[DEFAULT_RIGOR])
 
-    human = f"Reference solution:\n{reference}\n\nStudent answer:\n{message}"
+    # The question is given first so the judge marks against what was actually
+    # asked rather than demanding unrequested detail from the reference.
+    human = (
+        f"Question/Exercise:\n{problem}\n\n"
+        f"Reference solution:\n{reference}\n\n"
+        f"Student answer:\n{message}\n\n"
+        f"{guidance}"
+    )
     raw = (
         get_llm("grade")
         .invoke(

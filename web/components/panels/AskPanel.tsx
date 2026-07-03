@@ -5,6 +5,7 @@ import {
   ask,
   askStream,
   reexplain,
+  reexplainStream,
   type AskResponse,
   type ConnectionConfig,
   type Level,
@@ -15,6 +16,7 @@ import { TextField, TextArea } from "@/components/TextField";
 import { CourseSelect } from "@/components/CourseSelect";
 import { Markdown } from "@/components/Markdown";
 import { CitationChip } from "@/components/CitationChip";
+import { Spinner } from "@/components/Spinner";
 import { ExportActions } from "@/components/ExportActions";
 import { AnswerFeedback } from "@/components/AnswerFeedback";
 import { EmptyState, RefusalBanner } from "@/components/States";
@@ -33,6 +35,8 @@ interface AskPanelProps {
   setLastAnswer: (a: AskResponse | null) => void;
   /** Active conversation thread; when set, questions attach to it. */
   sessionId: number | null;
+  /** Max candidate sources to retrieve (the ceiling `k`); configurable in Settings. */
+  sourcesMax: number;
 }
 
 export function AskPanel({
@@ -41,6 +45,7 @@ export function AskPanel({
   lastAnswer,
   setLastAnswer,
   sessionId,
+  sourcesMax,
 }: AskPanelProps) {
   const toast = useToast();
   const { t, locale } = useT();
@@ -51,9 +56,11 @@ export function AskPanel({
   // Lazy-init from localStorage so the last chosen course survives a reload.
   const [course, setCourse] = useState(() => readLocal(KEYS.course));
   const [chapter, setChapter] = useState("");
-  // Always retrieve the maximum: more candidate sources means more links to
-  // ground the answer in. The threshold still filters out irrelevant ones.
-  const MAX_SOURCES = 10;
+  // `sourcesMax` is the candidate pool ceiling (`k`), configurable in Settings.
+  // A generous pool gives the answer more sources to ground in; the similarity
+  // threshold still prunes irrelevant chunks and the answer cites only useful
+  // ones. It is a tunable ceiling rather than unbounded because a very high
+  // value slows a LOCAL model (larger context, higher latency).
   const [loading, setLoading] = useState(false);
   /** Text accumulated from the live token stream, before the final event lands. */
   const [streaming, setStreaming] = useState<string | null>(null);
@@ -64,6 +71,8 @@ export function AskPanel({
   const [reexplained, setReexplained] = useState<string | null>(null);
   const [level, setLevel] = useState<Level>("beginner");
   const [reLoading, setReLoading] = useState(false);
+  /** Text accumulated from the live re-explanation stream, before it completes. */
+  const [reStreaming, setReStreaming] = useState<string | null>(null);
 
   const canAsk = question.trim().length > 0 && !loading;
 
@@ -83,7 +92,7 @@ export function AskPanel({
     const req = {
       student_id: studentId,
       question: question.trim(),
-      k: MAX_SOURCES,
+      k: sourcesMax,
       course: course.trim() || null,
       chapter: chapter.trim() || null,
       session_id: sessionId,
@@ -133,12 +142,33 @@ export function AskPanel({
 
   async function runReexplain() {
     setReLoading(true);
+    setReexplained(null);
+    setReStreaming("");
     try {
-      const result = await reexplain(studentId, level, config);
-      setReexplained(result.answer);
-    } catch (err) {
-      toast.push(err instanceof Error ? err.message : "Request failed.", "error");
+      let buffer = "";
+      await reexplainStream(
+        studentId,
+        level,
+        (text) => {
+          buffer += text;
+          setReStreaming(buffer);
+        },
+        (answer) => {
+          setReexplained(answer || buffer);
+        },
+        config,
+      );
+    } catch {
+      // Streaming failed (e.g. proxy buffering, older backend): fall back to the
+      // non-streaming endpoint so the user still gets a re-explanation.
+      try {
+        const result = await reexplain(studentId, level, config);
+        setReexplained(result.answer);
+      } catch (err) {
+        toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
+      }
     } finally {
+      setReStreaming(null);
       setReLoading(false);
     }
   }
@@ -206,17 +236,27 @@ export function AskPanel({
               <div className="border-t border-zinc-100 pt-4 dark:border-zinc-800">
                 <p className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
                   {t("common.sources")}
+                  {/* Show the count of CITED (useful) sources, not the request k. */}
+                  {(lastAnswer.citations?.length || lastAnswer.sources.length) > 0 && (
+                    <span className="ml-1.5 font-normal text-zinc-400 dark:text-zinc-500">
+                      ({lastAnswer.citations?.length || lastAnswer.sources.length})
+                    </span>
+                  )}
                 </p>
                 {lastAnswer.citations && lastAnswer.citations.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
+                  // Numbered legend: each entry leads with the inline marker [n]
+                  // and stays clickable to open the exact source excerpt.
+                  <ol className="space-y-1.5">
                     {lastAnswer.citations.map((c, i) => (
-                      <CitationChip key={`${c.id}-${i}`} label={c.label} id={c.id} config={config} />
+                      <li key={`${c.id}-${i}`}>
+                        <CitationChip label={c.label} id={c.id} n={c.n} config={config} />
+                      </li>
                     ))}
-                  </div>
+                  </ol>
                 ) : lastAnswer.sources.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {lastAnswer.sources.map((source, i) => (
-                      <CitationChip key={`${source}-${i}`} label={source} />
+                      <CitationChip key={`${source}-${i}`} label={source} n={i + 1} />
                     ))}
                   </div>
                 ) : (
@@ -252,10 +292,24 @@ export function AskPanel({
                     {t("ask.reexplain")}
                   </Button>
                 </div>
-                {reexplained && (
+                {reStreaming != null ? (
                   <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
-                    <Markdown>{reexplained}</Markdown>
+                    {reStreaming.length === 0 ? (
+                      <p className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+                        <Spinner /> {t("ask.rephrasing")}
+                      </p>
+                    ) : (
+                      <div className="streaming-answer" aria-live="polite" aria-busy="true">
+                        <Markdown>{reStreaming}</Markdown>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  reexplained && (
+                    <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
+                      <Markdown>{reexplained}</Markdown>
+                    </div>
+                  )
                 )}
               </div>
             </div>

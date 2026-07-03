@@ -11,6 +11,11 @@ export type Level = "beginner" | "intermediate" | "advanced";
 
 export const LEVELS: readonly Level[] = ["beginner", "intermediate", "advanced"] as const;
 
+/** Marking strictness applied when grading a student's answer. */
+export type Rigor = "lenient" | "standard" | "strict";
+
+export const RIGORS: readonly Rigor[] = ["lenient", "standard", "strict"] as const;
+
 export interface AskRequest {
   student_id: string;
   question: string;
@@ -30,8 +35,13 @@ export interface SessionOut {
   created_at: string;
 }
 
-/** A cited source: the chunk id (to fetch its excerpt) and its display label. */
+/**
+ * A cited source: its inline marker number, the chunk id (to fetch its excerpt)
+ * and its display label. `n` is the 1-based index exactly as written inline in
+ * the answer (`[n]`), so the UI can render a numbered legend matching the markers.
+ */
 export interface Citation {
+  n: number;
   id: string;
   label: string;
 }
@@ -430,6 +440,81 @@ export async function reexplain(
 }
 
 /**
+ * Re-explain the last tutor answer and stream it token by token over SSE.
+ *
+ * Token-only (re-explain runs no retrieval, so there is no sources/stage event):
+ * `onToken` is called with each text delta as it arrives, `onDone` once with the
+ * fully assembled re-explanation. Throws an `ApiError` if the request cannot be
+ * reached or returns a non-2xx status, so callers can fall back to `reexplain`.
+ */
+export async function reexplainStream(
+  studentId: string,
+  level: Level,
+  onToken: (text: string) => void,
+  onDone: (answer: string) => void,
+  config?: ConnectionConfig,
+): Promise<void> {
+  const url = `${resolveBaseUrl(config)}/reexplain/stream`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: buildHeaders(config, true),
+      body: JSON.stringify({ student_id: studentId, level }),
+    });
+  } catch {
+    throw new ApiError(
+      "Could not reach the backend. Check that it is running and the base URL is correct.",
+    );
+  }
+  if (!response.ok) {
+    throw new ApiError(await readError(response), response.status);
+  }
+  if (!response.body) {
+    throw new ApiError("Streaming is not supported by this response.", response.status);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let buffered = "";
+
+  const handleEvent = (raw: string) => {
+    const data = raw
+      .split("\n")
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trim())
+      .join("");
+    if (!data) return;
+    let event: { type?: string; text?: string; answer?: string };
+    try {
+      event = JSON.parse(data);
+    } catch {
+      return; // ignore malformed frames rather than crashing the stream
+    }
+    if (event.type === "token" && typeof event.text === "string") {
+      buffered += event.text;
+      onToken(event.text);
+    } else if (event.type === "done") {
+      onDone(typeof event.answer === "string" ? event.answer : buffered);
+    }
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      const chunk = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      handleEvent(chunk);
+    }
+  }
+  if (buffer.trim()) handleEvent(buffer);
+}
+
+/**
  * Generate a course-grounded exercise from a free-form request. `course` and
  * `chapter` optionally scope retrieval and are only sent when truthy.
  */
@@ -459,9 +544,10 @@ export async function grade(
   studentId: string,
   message: string,
   exercisePayload: Record<string, unknown> | null,
+  rigor: Rigor = "standard",
   config?: ConnectionConfig,
 ): Promise<GradeResponse> {
-  const body: Record<string, unknown> = { student_id: studentId, message };
+  const body: Record<string, unknown> = { student_id: studentId, message, rigor };
   if (exercisePayload != null) {
     body.exercise = exercisePayload;
   }

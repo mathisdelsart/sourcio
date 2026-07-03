@@ -165,6 +165,9 @@ const en = {
   "settings.apiKey": "API key",
   "settings.apiKeyHint": "Optional — sent as the X-API-Key header when set.",
   "settings.apiKeyPlaceholder": "(none)",
+  "settings.sourcesMax": "Max sources",
+  "settings.sourcesMaxHint":
+    "Maximum candidate sources to retrieve per question. Only the sources actually used are shown; a higher value can slow a local model.",
   "common.cancel": "Cancel",
   "common.save": "Save",
 
@@ -191,6 +194,11 @@ const en = {
   "level.beginner": "beginner",
   "level.intermediate": "intermediate",
   "level.advanced": "advanced",
+  "rigor.label": "Marking strictness",
+  "rigor.aria": "Marking strictness",
+  "rigor.lenient": "lenient",
+  "rigor.standard": "standard",
+  "rigor.strict": "strict",
 
   // Ask panel
   "ask.title": "Ask a question",
@@ -219,6 +227,7 @@ const en = {
   "ask.empty.description": "Ask a question above to see a grounded, cited explanation.",
   "ask.reexplainPrompt": "Didn't get it? Re-explain at a level:",
   "ask.reexplain": "Re-explain",
+  "ask.rephrasing": "Rephrasing…",
 
   // Answer feedback
   "feedback.prompt": "Was this answer helpful?",
@@ -294,6 +303,8 @@ const en = {
   "history.title": "Conversation history",
   "history.description": "Your turns with the tutor for the active thread.",
   "history.refresh": "Refresh",
+  "role.you": "You",
+  "role.tutor": "Tutor",
   "history.empty.title": "No history yet",
   "history.empty.description":
     "Ask a question or generate an exercise — your turns will appear here.",
@@ -597,6 +608,9 @@ const fr: Record<TranslationKey, string> = {
   "settings.apiKey": "Clé API",
   "settings.apiKeyHint": "Optionnel — envoyée comme en-tête X-API-Key si définie.",
   "settings.apiKeyPlaceholder": "(aucune)",
+  "settings.sourcesMax": "Sources max",
+  "settings.sourcesMaxHint":
+    "Nombre maximal de sources candidates à récupérer par question. Seules les sources réellement utilisées sont affichées ; une valeur élevée peut ralentir un modèle local.",
   "common.cancel": "Annuler",
   "common.save": "Enregistrer",
 
@@ -623,6 +637,11 @@ const fr: Record<TranslationKey, string> = {
   "level.beginner": "débutant",
   "level.intermediate": "intermédiaire",
   "level.advanced": "avancé",
+  "rigor.label": "Sévérité de la correction",
+  "rigor.aria": "Sévérité de la correction",
+  "rigor.lenient": "indulgente",
+  "rigor.standard": "standard",
+  "rigor.strict": "stricte",
 
   // Ask panel
   "ask.title": "Poser une question",
@@ -653,6 +672,7 @@ const fr: Record<TranslationKey, string> = {
     "Posez une question ci-dessus pour voir une explication ancrée et citée.",
   "ask.reexplainPrompt": "Pas compris ? Réexpliquer à un niveau :",
   "ask.reexplain": "Réexpliquer",
+  "ask.rephrasing": "Reformulation…",
 
   // Answer feedback
   "feedback.prompt": "Cette réponse vous a-t-elle été utile ?",
@@ -732,6 +752,8 @@ const fr: Record<TranslationKey, string> = {
   "history.title": "Historique de conversation",
   "history.description": "Vos échanges avec le tuteur pour le fil actif.",
   "history.refresh": "Actualiser",
+  "role.you": "Vous",
+  "role.tutor": "Tuteur",
   "history.empty.title": "Pas encore d'historique",
   "history.empty.description":
     "Posez une question ou générez un exercice — vos échanges apparaîtront ici.",
@@ -1026,6 +1048,9 @@ const nl: Record<TranslationKey, string> = {
   "settings.apiKey": "API-sleutel",
   "settings.apiKeyHint": "Optioneel — verzonden als de X-API-Key-header indien ingesteld.",
   "settings.apiKeyPlaceholder": "(geen)",
+  "settings.sourcesMax": "Max. bronnen",
+  "settings.sourcesMaxHint":
+    "Maximaal aantal kandidaat-bronnen dat per vraag wordt opgehaald. Alleen de daadwerkelijk gebruikte bronnen worden getoond; een hogere waarde kan een lokaal model vertragen.",
   "common.cancel": "Annuleren",
   "common.save": "Opslaan",
 
@@ -1052,6 +1077,11 @@ const nl: Record<TranslationKey, string> = {
   "level.beginner": "beginner",
   "level.intermediate": "gemiddeld",
   "level.advanced": "gevorderd",
+  "rigor.label": "Correctiestrengheid",
+  "rigor.aria": "Correctiestrengheid",
+  "rigor.lenient": "soepel",
+  "rigor.standard": "standaard",
+  "rigor.strict": "streng",
 
   // Ask panel
   "ask.title": "Stel een vraag",
@@ -1079,6 +1109,7 @@ const nl: Record<TranslationKey, string> = {
   "ask.empty.description": "Stel hierboven een vraag voor een onderbouwde, geciteerde uitleg.",
   "ask.reexplainPrompt": "Niet begrepen? Leg opnieuw uit op niveau:",
   "ask.reexplain": "Heruitleggen",
+  "ask.rephrasing": "Opnieuw formuleren…",
 
   // Answer feedback
   "feedback.prompt": "Was dit antwoord nuttig?",
@@ -1154,6 +1185,8 @@ const nl: Record<TranslationKey, string> = {
   "history.title": "Gespreksgeschiedenis",
   "history.description": "Je beurten met de tutor voor het actieve gesprek.",
   "history.refresh": "Vernieuwen",
+  "role.you": "Jij",
+  "role.tutor": "Tutor",
   "history.empty.title": "Nog geen geschiedenis",
   "history.empty.description":
     "Stel een vraag of genereer een oefening — je beurten verschijnen hier.",

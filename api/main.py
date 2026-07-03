@@ -4,6 +4,7 @@ Endpoints:
     GET  /health            health check
     POST /ask               answer a question, grounded in the course (explain path)
     POST /reexplain         rephrase the last tutor answer at a chosen level
+    POST /reexplain/stream  same, streamed token by token as Server-Sent Events
     POST /exercise          generate an exercise (never returns the reference solution)
     POST /grade             grade a student's answer
     POST /quiz              generate a grounded multi-question quiz (no solutions)
@@ -57,8 +58,8 @@ from sqlalchemy import Engine, func, select
 from agent.nodes.generate import generate
 from agent.nodes.grade import grade
 from agent.nodes.quiz import generate_quiz, grade_quiz_answer, summarize_quiz
-from agent.nodes.reexplain import reexplain
-from agent.state import Level, TutorState, to_history
+from agent.nodes.reexplain import reexplain, stream_reexplain
+from agent.state import Level, Rigor, TutorState, to_history
 from api.auth import (
     CurrentUser,
     LoginRequest,
@@ -324,8 +325,14 @@ class AskRequest(BaseModel):
 
 
 class Citation(BaseModel):
-    """A cited source: the chunk id (to fetch its excerpt) and its label."""
+    """A cited source: its inline marker number, chunk id (to fetch its excerpt)
+    and label.
 
+    ``n`` is the 1-based index exactly as written inline in the answer (``[n]``),
+    so a UI can render a numbered legend matching the markers.
+    """
+
+    n: int
     id: str
     label: str
 
@@ -377,11 +384,17 @@ class ExerciseResponse(BaseModel):
 
 
 class GradeRequest(BaseModel):
-    """A student's answer to grade, optionally against a prior exercise."""
+    """A student's answer to grade, optionally against a prior exercise.
+
+    ``rigor`` sets the marking strictness; an unsupported value is rejected with
+    422 by the ``Rigor`` literal, matching how ``ReexplainRequest.level`` is
+    validated.
+    """
 
     student_id: str
     message: str
     exercise: dict[str, Any] | None = None
+    rigor: Rigor = "standard"
 
 
 class GradeResponse(BaseModel):
@@ -876,6 +889,70 @@ def reexplain_answer(request: ReexplainRequest, user: UserOut | None = DataUser)
     return {"answer": rephrased}
 
 
+def _reexplain_state(request: ReexplainRequest) -> TutorState | None:
+    """Rebuild the re-explain state from stored history, or None when there is none.
+
+    Returns None when the student is unknown or has no prior tutor answer, so the
+    caller can surface the friendly ``NOTHING_TO_REEXPLAIN`` note instead of
+    calling the model.
+    """
+    with get_session(_engine) as session:
+        student = session.scalar(select(Student).where(Student.external_id == request.student_id))
+        if student is None:
+            return None
+        history = to_history(recent_messages(session, student.id))
+        if _last_tutor_answer(history) is None:
+            return None
+        return {
+            "student_id": request.student_id,
+            "message": "Please re-explain that.",
+            "level": request.level,
+            "history": history,
+        }
+
+
+def _stream_reexplain_events(request: ReexplainRequest) -> Iterator[str]:
+    """Serialize ``stream_reexplain`` as Server-Sent Events and persist on completion.
+
+    Mirrors ``/ask/stream`` but token-only: no retrieval, so no "retrieving"
+    stage and no sources event. When there is nothing to re-explain, the friendly
+    note is emitted as a single token then a ``done`` event. Otherwise token
+    deltas stream, then a final ``{"type": "done", "answer": ...}`` event, and the
+    assembled re-explanation is persisted as an assistant turn.
+    """
+    state = _reexplain_state(request)
+    if state is None:
+        yield f"data: {json.dumps({'type': 'token', 'text': NOTHING_TO_REEXPLAIN})}\n\n"
+        yield f"data: {json.dumps({'type': 'done', 'answer': NOTHING_TO_REEXPLAIN})}\n\n"
+        return
+
+    final_answer = ""
+    for event in stream_reexplain(state):
+        if event.get("type") == "done":
+            final_answer = event.get("answer", "")
+        yield f"data: {json.dumps(event)}\n\n"
+
+    with get_session(_engine) as session:
+        student = session.scalar(select(Student).where(Student.external_id == request.student_id))
+        if student is not None:
+            add_message(session, student_id=student.id, role="assistant", content=final_answer)
+
+
+@app.post("/reexplain/stream", dependencies=[Depends(require_api_key)])
+def reexplain_stream(request: ReexplainRequest) -> StreamingResponse:
+    """Stream a re-explanation of the last tutor answer as Server-Sent Events.
+
+    Mirrors ``/reexplain`` (same request model, auth and history persistence) but
+    returns a ``text/event-stream`` response so the re-explanation types out.
+    ``/reexplain`` stays available for non-streaming clients.
+    """
+    return StreamingResponse(
+        _stream_reexplain_events(request),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.post("/exercise", response_model=ExerciseResponse, dependencies=[Depends(require_api_key)])
 def exercise(request: ExerciseRequest, user: UserOut | None = DataUser) -> dict[str, Any]:
     """Generate a course-grounded exercise on the requested notion.
@@ -912,7 +989,11 @@ def grade_answer(request: GradeRequest, user: UserOut | None = DataUser) -> dict
     """
     with get_session(_engine) as session:
         _resolve_student(session, request.student_id, user)
-    state: TutorState = {"message": request.message, "student_id": request.student_id}
+    state: TutorState = {
+        "message": request.message,
+        "student_id": request.student_id,
+        "rigor": request.rigor,
+    }
     if request.exercise is not None:
         state["exercise"] = request.exercise
     # grade always populates "grade" with the judge's verdict.

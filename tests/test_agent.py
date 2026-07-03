@@ -13,7 +13,7 @@ from agent.graph import INTENTS, build_graph, classify_intent, route
 from agent.nodes.explain import explain
 from agent.nodes.generate import generate
 from agent.nodes.grade import grade
-from agent.nodes.reexplain import reexplain
+from agent.nodes.reexplain import reexplain, stream_reexplain
 from core.answer import REFUSAL
 from ingestion.schema import Chunk, Retrieved
 
@@ -59,6 +59,13 @@ class _FakeLLM:
         self.calls.append(messages)
         self.configs.append(config)
         return _FakeMessage(self.reply)
+
+    def stream(self, messages, config=None):
+        """Yield the reply as streamed chunks so streaming nodes can be tested."""
+        self.calls.append(messages)
+        self.configs.append(config)
+        for word in self.reply.split(" "):
+            yield _FakeMessage(word + " ")
 
 
 @pytest.fixture
@@ -278,6 +285,23 @@ def test_generate_node_refuses_when_nothing_retrieved(fake_llm, fake_retrieve):
     assert fake_llm["last"] is None
 
 
+def test_generate_node_refuses_when_model_judges_sources_uncovered(fake_llm, fake_retrieve):
+    # Retrieval returned chunks (e.g. because the request was scoped to the wrong
+    # course), but they do not cover the requested notion. Acting as the coverage
+    # judge, the model emits the exact refusal sentence; the node must surface an
+    # honest refusal, not parse an off-topic exercise out of unrelated material.
+    fake_retrieve["results"] = [_retrieved(3, "Wavelet approximation space V_j.")]
+    fake_llm["reply"] = REFUSAL
+    out = generate({"message": "Mathis Delsart", "course": "ELEC2885"})
+
+    assert set(out) == {"exercise", "retrieved"}
+    assert out["exercise"]["refused"] is True
+    assert out["exercise"]["problem"] == REFUSAL
+    assert out["exercise"]["solution"] == ""
+    # No fabricated exercise: the refusal did not produce a problem/solution.
+    assert out["retrieved"] == []
+
+
 def test_grade_node_parses_verdict_and_uses_reference(fake_llm):
     fake_llm["reply"] = 'Verdict: {"score": 55, "feedback": "Partly right."} done'
     out = grade({"message": "my answer", "exercise": {"solution": "ref"}})
@@ -336,6 +360,57 @@ def test_grade_node_clamps_negative_score(fake_llm):
     assert out["grade"]["feedback"] == "Below zero."
 
 
+def test_grade_node_prompt_includes_question_and_answer(fake_llm):
+    # The judge must see the question it grades against, not only the reference,
+    # so it never penalises information the question did not request.
+    fake_llm["reply"] = "SCORE: 70\n---\nGood."
+    grade(
+        {
+            "message": "my answer",
+            "exercise": {"problem": "Compute the FFT of x.", "solution": "ref"},
+        }
+    )
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    assert "Question/Exercise:" in human_msg
+    assert "Compute the FFT of x." in human_msg
+    assert "Reference solution:" in human_msg
+    assert "my answer" in human_msg
+
+
+# Distinctive substrings each rigor level's guidance must inject into the prompt.
+_RIGOR_MARKERS = {
+    "lenient": "Grade leniently",
+    "standard": "Grade with balance",
+    "strict": "Grade strictly",
+}
+
+
+@pytest.mark.parametrize("rigor", list(_RIGOR_MARKERS))
+def test_grade_node_reflects_requested_rigor_in_prompt(fake_llm, rigor):
+    fake_llm["reply"] = "SCORE: 50\n---\nok"
+    grade({"message": "my answer", "exercise": {"solution": "ref"}, "rigor": rigor})
+
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    # The requested rigor's guidance is present, and no other level leaks in.
+    assert _RIGOR_MARKERS[rigor] in human_msg
+    for other, marker in _RIGOR_MARKERS.items():
+        if other != rigor:
+            assert marker not in human_msg
+
+
+def test_grade_node_defaults_rigor_to_standard(fake_llm):
+    from agent.nodes.grade import _RIGOR_GUIDANCE, DEFAULT_RIGOR
+
+    assert DEFAULT_RIGOR == "standard"
+    fake_llm["reply"] = "SCORE: 50\n---\nok"
+    grade({"message": "my answer"})
+
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    # No rigor supplied falls back to the default level's guidance.
+    assert _RIGOR_GUIDANCE[DEFAULT_RIGOR] in human_msg
+    assert _RIGOR_MARKERS["standard"] in human_msg
+
+
 def test_reexplain_uses_previous_tutor_turn(fake_llm):
     fake_llm["reply"] = "Simpler version."
     history = [
@@ -392,6 +467,22 @@ def test_reexplain_picks_tutor_turn_despite_malformed_turns(fake_llm):
     # The most recent valid tutor turn is used, earlier ones are not.
     assert "Latest valid explanation [3]." in human_msg
     assert "Older explanation." not in human_msg
+
+
+def test_stream_reexplain_yields_tokens_then_done(fake_llm):
+    # The streaming variant emits token deltas, then a final done event carrying
+    # the fully assembled re-explanation. It grounds on the last tutor turn and
+    # runs no retrieval (no sources/stage events).
+    fake_llm["reply"] = "Even simpler version"
+    history = [{"role": "tutor", "content": "Original explanation [1]."}]
+    events = list(stream_reexplain({"message": "again", "history": history}))
+
+    tokens = [e["text"] for e in events if e["type"] == "token"]
+    assert "".join(tokens).strip() == "Even simpler version"
+    assert events[-1] == {"type": "done", "answer": "Even simpler version"}
+    # The previous tutor explanation was fed to the model, not re-retrieved.
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    assert "Original explanation [1]." in human_msg
 
 
 # --- adaptive re-explanation by level ----------------------------------------
