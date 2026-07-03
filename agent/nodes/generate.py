@@ -1,12 +1,14 @@
 """generate node: produce an exercise and its reference solution.
 
 The reference solution is stored server-side and is never returned by /exercise.
-The exercise is grounded in the course: it is built strictly from chunks
-retrieved for the requested notion, using the course's own notation. The node
-refuses rather than inventing content that is not in the course (mirroring the
-refusal contract in ``answer.py``), in two cases: when nothing is retrieved at
-all, and when the model — acting as the coverage judge — decides the retrieved
-sources do not actually cover the requested notion.
+The exercise is grounded in the course: it is built strictly from the chunks
+retrieved for the requested topic — a worked problem when the material is
+mathematical, or recall / short-answer questions when it is factual or prose.
+The node refuses rather than inventing content that is not in the course
+(mirroring the permissive refusal contract in ``answer.py``), in two cases: when
+nothing is retrieved at all, and when the model — acting as the coverage judge —
+decides the retrieved sources are genuinely unrelated to the request. It does
+NOT refuse merely because the material is non-mathematical.
 """
 
 from agent.persistence import persist_exercise
@@ -17,19 +19,25 @@ from core.obs import get_callbacks
 from ingestion.schema import format_numbered_sources
 
 _SYSTEM = (
-    "You are a course tutor who writes practice exercises.\n"
-    "- You are the judge of whether the numbered sources below actually cover the "
-    "requested notion. If they do NOT cover it (they only mention it in passing, or "
-    "are about a different topic), reply with exactly this sentence and nothing else: "
-    f"{REFUSAL}\n"
-    "- Never invent an exercise on unrelated material just because some source was "
-    "retrieved; the refusal sentence stands alone as a complete reply.\n"
-    "- When the sources do cover the notion, build one exercise on it using ONLY the "
-    "numbered sources below.\n"
-    "- Never introduce material that is not in the sources; keep the course's notation.\n"
+    "You are a course tutor who writes practice exercises on the requested topic "
+    "using ONLY the numbered sources below.\n"
+    "- Build an exercise as long as the numbered sources contain information "
+    "relevant to the request, even partially. The material may be of any kind: a "
+    "worked problem when it is mathematical, or recall / short-answer / Q&A "
+    "questions when it is factual, biographical or prose. Never refuse merely "
+    "because the material is non-mathematical or has no formulas.\n"
+    "- You are the judge of coverage. Only if the sources are genuinely unrelated "
+    "to the request (a truly off-topic notion — they merely mention it in passing, "
+    "or are about a different subject) reply with exactly this sentence and nothing "
+    f"else: {REFUSAL}\n"
+    "- The refusal sentence stands alone as a complete reply; never invent an "
+    "exercise on unrelated material just because some source was retrieved.\n"
+    "- Never introduce material that is not in the sources. When the material uses "
+    "the course's notation, keep that notation.\n"
     "- Make the exercise SELF-CONTAINED: never refer to 'the source', 'the slide',"
     " 'the figure' or 'the provided code' — restate any needed context inside it.\n"
-    "- Write all mathematics in LaTeX: inline as $...$ and display as $$...$$.\n"
+    "- When the material is mathematical, write mathematics in LaTeX: inline as "
+    "$...$ and display as $$...$$.\n"
     "- Then provide a complete reference solution, also grounded in the sources.\n"
     "Format your reply exactly as:\n"
     "EXERCISE:\n<the exercise>\n\nSOLUTION:\n<the reference solution>"
