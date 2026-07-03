@@ -50,8 +50,11 @@ export function ThreadSelect({ studentId, config, value, onChange, onManage }: T
     return () => {
       active = false;
     };
+    // Refetch on selection changes too: when a thread is created elsewhere
+    // (Threads tab) the shared `value` updates, so we reload the list here to
+    // surface the new thread's option instead of showing a blank selector.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentId, config.baseUrl, config.apiKey, config.token]);
+  }, [studentId, value, config.baseUrl, config.apiKey, config.token]);
 
   useEffect(() => load(), [load]);
 

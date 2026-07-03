@@ -202,7 +202,7 @@ def test_flat_history_still_works(client, monkeypatch):
     assert "q2" in contents
 
 
-def test_delete_thread_keeps_messages_as_history(client, monkeypatch):
+def test_delete_thread_removes_its_messages(client, monkeypatch):
     _stub_answer(monkeypatch)
     thread = client.post("/sessions", json={"student_id": "s1"}).json()
     client.post(
@@ -217,13 +217,88 @@ def test_delete_thread_keeps_messages_as_history(client, monkeypatch):
     # The thread is gone...
     assert client.get(f"/sessions/s1/{thread['id']}/messages").status_code == 404
     assert client.get("/sessions/s1").json() == []
-    # ...but its message stays in the flat history (unthreaded), not lost.
+    # ...and its messages are gone too — no longer in the flat history.
     contents = [row["content"] for row in client.get("/history/s1").json()]
-    assert "q-threaded" in contents
+    assert "q-threaded" not in contents
+
+
+def test_delete_thread_keeps_unthreaded_history(client, monkeypatch):
+    _stub_answer(monkeypatch)
+    client.post("/ask", json={"student_id": "s1", "question": "q-flat"})
+    thread = client.post("/sessions", json={"student_id": "s1"}).json()
+    client.post(
+        "/ask",
+        json={"student_id": "s1", "question": "q-threaded", "session_id": thread["id"]},
+    )
+
+    client.delete(f"/sessions/s1/{thread['id']}")
+
+    # Only the thread's messages are removed; unthreaded turns stay.
+    contents = [row["content"] for row in client.get("/history/s1").json()]
+    assert "q-flat" in contents
+    assert "q-threaded" not in contents
 
 
 def test_delete_unknown_thread_404(client):
     assert client.delete("/sessions/s1/999").status_code == 404
+
+
+# --- clear history -----------------------------------------------------------
+
+
+def test_clear_history_removes_all_messages(client, monkeypatch):
+    _stub_answer(monkeypatch)
+    client.post("/ask", json={"student_id": "s1", "question": "q-flat"})
+    thread = client.post("/sessions", json={"student_id": "s1"}).json()
+    client.post(
+        "/ask",
+        json={"student_id": "s1", "question": "q-threaded", "session_id": thread["id"]},
+    )
+
+    resp = client.delete("/history/s1")
+    assert resp.status_code == 200
+    # Two turns (user + assistant) for each of the two questions.
+    assert resp.json() == {"deleted": 4}
+    assert client.get("/history/s1").json() == []
+    # The thread row survives; only its messages were cleared.
+    assert client.get(f"/sessions/s1/{thread['id']}/messages").json() == []
+
+
+def test_clear_history_scoped_to_thread(client, monkeypatch):
+    _stub_answer(monkeypatch)
+    client.post("/ask", json={"student_id": "s1", "question": "q-flat"})
+    thread = client.post("/sessions", json={"student_id": "s1"}).json()
+    client.post(
+        "/ask",
+        json={"student_id": "s1", "question": "q-threaded", "session_id": thread["id"]},
+    )
+
+    resp = client.delete(f"/history/s1?session_id={thread['id']}")
+    assert resp.status_code == 200
+    assert resp.json() == {"deleted": 2}
+
+    # The thread's turns are gone, the unthreaded ones remain.
+    assert client.get(f"/sessions/s1/{thread['id']}/messages").json() == []
+    contents = [row["content"] for row in client.get("/history/s1").json()]
+    assert "q-flat" in contents
+    assert "q-threaded" not in contents
+
+
+def test_clear_history_unknown_student_is_noop(client):
+    assert client.delete("/history/nobody").json() == {"deleted": 0}
+
+
+def test_clear_history_foreign_thread_is_noop(client, monkeypatch):
+    _stub_answer(monkeypatch)
+    thread = client.post("/sessions", json={"student_id": "s1"}).json()
+    client.post(
+        "/ask",
+        json={"student_id": "s1", "question": "q-threaded", "session_id": thread["id"]},
+    )
+    # Another student cannot clear s1's thread.
+    resp = client.delete(f"/history/s2?session_id={thread['id']}")
+    assert resp.json() == {"deleted": 0}
+    assert client.get(f"/sessions/s1/{thread['id']}/messages").json() != []
 
 
 # --- API-key authentication --------------------------------------------------
@@ -244,6 +319,7 @@ def _set_api_key(monkeypatch, key):
         ("post", "/sessions", {"student_id": "s1"}),
         ("get", "/sessions/s1", None),
         ("get", "/sessions/s1/1/messages", None),
+        ("delete", "/history/s1", None),
     ],
 )
 def test_sessions_reject_missing_key(client, monkeypatch, method, path, body):

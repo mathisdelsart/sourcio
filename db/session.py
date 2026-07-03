@@ -168,3 +168,20 @@ def recent_messages(session: Session, student_id: int, limit: int = 20) -> list[
     rows = list(session.scalars(stmt))
     rows.reverse()
     return rows
+
+
+def delete_messages(session: Session, student_id: int, session_id: int | None = None) -> int:
+    """Delete a student's messages and return how many rows were removed.
+
+    When ``session_id`` is given, only that thread's messages are deleted;
+    otherwise every message of the student is removed. The delete is issued
+    through the ORM ``delete`` construct so it works on SQLite as well as
+    PostgreSQL. Returns the number of deleted rows.
+    """
+    from sqlalchemy import delete
+
+    stmt = delete(Message).where(Message.student_id == student_id)
+    if session_id is not None:
+        stmt = stmt.where(Message.session_id == session_id)
+    result = session.execute(stmt)
+    return int(getattr(result, "rowcount", 0) or 0)

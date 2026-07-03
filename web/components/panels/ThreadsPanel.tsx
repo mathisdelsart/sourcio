@@ -4,17 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import {
   createSession,
   deleteSession,
-  getSessionMessages,
   listSessions,
   type ConnectionConfig,
-  type HistoryItem,
   type SessionOut,
 } from "@/lib/api";
 import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { RefreshButton } from "@/components/RefreshButton";
 import { TextField } from "@/components/TextField";
-import { Markdown } from "@/components/Markdown";
 import { EmptyState, Skeleton } from "@/components/States";
 import { useToast } from "@/components/Toast";
 import { useT, type Locale } from "@/lib/i18n";
@@ -42,10 +39,6 @@ function formatTime(iso: string, locale: Locale): string {
   });
 }
 
-function isUser(role: string): boolean {
-  return role.toLowerCase() === "user";
-}
-
 export function ThreadsPanel({
   studentId,
   config,
@@ -62,9 +55,6 @@ export function ThreadsPanel({
 
   const [newTitle, setNewTitle] = useState("");
   const [creating, setCreating] = useState(false);
-
-  const [messages, setMessages] = useState<HistoryItem[]>([]);
-  const [messagesLoading, setMessagesLoading] = useState(false);
 
   // Thread deletion: the id awaiting red confirmation, and the one in flight.
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
@@ -84,23 +74,6 @@ export function ThreadsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId, config, toast, t]);
 
-  const loadMessages = useCallback(
-    async (sessionId: number) => {
-      setMessagesLoading(true);
-      try {
-        const rows = await getSessionMessages(studentId, sessionId, config);
-        setMessages(rows);
-      } catch (err) {
-        toast.push(err instanceof Error ? err.message : t("threads.messagesFailed"), "error");
-        setMessages([]);
-      } finally {
-        setMessagesLoading(false);
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    },
-    [studentId, config, toast, t],
-  );
-
   // Load the thread list the first time this tab is opened for a student.
   useEffect(() => {
     if (active && !loaded && !loading) {
@@ -108,17 +81,6 @@ export function ThreadsPanel({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
-
-  // Fetch messages whenever a thread is selected (and on tab open with one set).
-  useEffect(() => {
-    if (!active) return;
-    if (activeSessionId == null) {
-      setMessages([]);
-      return;
-    }
-    loadMessages(activeSessionId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, activeSessionId]);
 
   async function onCreate() {
     setCreating(true);
@@ -144,7 +106,6 @@ export function ThreadsPanel({
       // Deleting the active thread falls back to "all history".
       if (id === activeSessionId) {
         setActiveSessionId(null);
-        setMessages([]);
       }
       toast.push(t("threads.deleted"), "success");
     } catch (err) {
@@ -291,54 +252,6 @@ export function ThreadsPanel({
           </div>
         </CardBody>
       </Card>
-
-      {activeSessionId != null && (
-        <Card>
-          <CardHeader title={t("threads.messages.title")} />
-          <CardBody>
-            <p className="mb-4 rounded-lg border border-brand-100 bg-brand-50/70 px-4 py-2 text-sm text-brand-900 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-200">
-              {t("threads.activeBanner")}
-            </p>
-            {messagesLoading && messages.length === 0 ? (
-              <Skeleton lines={5} />
-            ) : messages.length === 0 ? (
-              <EmptyState
-                title={t("threads.messages.empty.title")}
-                description={t("threads.messages.empty.description")}
-              />
-            ) : (
-              <ol className="space-y-4">
-                {messages.map((turn, i) => (
-                  <li
-                    key={`${turn.created_at}-${i}`}
-                    className={cn(
-                      "flex flex-col gap-1",
-                      isUser(turn.role) ? "items-end" : "items-start",
-                    )}
-                  >
-                    <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
-                      <span className="font-medium capitalize text-zinc-500 dark:text-zinc-400">
-                        {turn.role}
-                      </span>
-                      {turn.created_at && <span>· {formatTime(turn.created_at, locale)}</span>}
-                    </div>
-                    <div
-                      className={cn(
-                        "max-w-[85%] rounded-xl border px-4 py-3",
-                        isUser(turn.role)
-                          ? "border-brand-100 bg-brand-50/70 dark:border-brand-500/30 dark:bg-brand-500/10"
-                          : "border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800/60",
-                      )}
-                    >
-                      <Markdown>{turn.content}</Markdown>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </CardBody>
-        </Card>
-      )}
     </div>
   );
 }
