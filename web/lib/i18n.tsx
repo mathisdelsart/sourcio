@@ -190,6 +190,11 @@ const en = {
   "level.beginner": "beginner",
   "level.intermediate": "intermediate",
   "level.advanced": "advanced",
+  "rigor.label": "Marking strictness",
+  "rigor.aria": "Marking strictness",
+  "rigor.lenient": "lenient",
+  "rigor.standard": "standard",
+  "rigor.strict": "strict",
 
   // Ask panel
   "ask.title": "Ask a question",
@@ -294,6 +299,8 @@ const en = {
   "history.title": "Conversation history",
   "history.description": "Your turns with the tutor for the active thread.",
   "history.refresh": "Refresh",
+  "role.you": "You",
+  "role.tutor": "Tutor",
   "history.empty.title": "No history yet",
   "history.empty.description":
     "Ask a question or generate an exercise — your turns will appear here.",
@@ -621,6 +628,11 @@ const fr: Record<TranslationKey, string> = {
   "level.beginner": "débutant",
   "level.intermediate": "intermédiaire",
   "level.advanced": "avancé",
+  "rigor.label": "Sévérité de la correction",
+  "rigor.aria": "Sévérité de la correction",
+  "rigor.lenient": "indulgente",
+  "rigor.standard": "standard",
+  "rigor.strict": "stricte",
 
   // Ask panel
   "ask.title": "Poser une question",
@@ -731,6 +743,8 @@ const fr: Record<TranslationKey, string> = {
   "history.title": "Historique de conversation",
   "history.description": "Vos échanges avec le tuteur pour le fil actif.",
   "history.refresh": "Actualiser",
+  "role.you": "Vous",
+  "role.tutor": "Tuteur",
   "history.empty.title": "Pas encore d'historique",
   "history.empty.description":
     "Posez une question ou générez un exercice — vos échanges apparaîtront ici.",
@@ -1049,6 +1063,11 @@ const nl: Record<TranslationKey, string> = {
   "level.beginner": "beginner",
   "level.intermediate": "gemiddeld",
   "level.advanced": "gevorderd",
+  "rigor.label": "Correctiestrengheid",
+  "rigor.aria": "Correctiestrengheid",
+  "rigor.lenient": "soepel",
+  "rigor.standard": "standaard",
+  "rigor.strict": "streng",
 
   // Ask panel
   "ask.title": "Stel een vraag",
@@ -1152,6 +1171,8 @@ const nl: Record<TranslationKey, string> = {
   "history.title": "Gespreksgeschiedenis",
   "history.description": "Je beurten met de tutor voor het actieve gesprek.",
   "history.refresh": "Vernieuwen",
+  "role.you": "Jij",
+  "role.tutor": "Tutor",
   "history.empty.title": "Nog geen geschiedenis",
   "history.empty.description":
     "Stel een vraag of genereer een oefening — je beurten verschijnen hier.",

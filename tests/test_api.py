@@ -323,13 +323,44 @@ def test_grade_returns_score_and_feedback(client, monkeypatch):
 
     response = client.post(
         "/grade",
-        json={"student_id": "s1", "message": "X = 42", "exercise": {"solution": "X = 42"}},
+        json={
+            "student_id": "s1",
+            "message": "X = 42",
+            "exercise": {"solution": "X = 42"},
+            "rigor": "strict",
+        },
     )
     assert response.status_code == 200
     assert response.json() == {"score": 80, "feedback": "Good method."}
     # Both the answer and the optional reference exercise reached the node.
     assert captured["state"]["message"] == "X = 42"
     assert captured["state"]["exercise"] == {"solution": "X = 42"}
+    # The requested marking strictness is forwarded to the grade node.
+    assert captured["state"]["rigor"] == "strict"
+
+
+def test_grade_defaults_rigor_to_standard(client, monkeypatch):
+    captured = {}
+
+    def fake_grade(state):
+        captured["state"] = state
+        return {"grade": {"score": 60, "feedback": "ok"}}
+
+    monkeypatch.setattr(api_main, "grade", fake_grade)
+
+    response = client.post("/grade", json={"student_id": "s1", "message": "X = 42"})
+    assert response.status_code == 200
+    # Omitting rigor defaults to the balanced "standard" strictness.
+    assert captured["state"]["rigor"] == "standard"
+
+
+def test_grade_rejects_invalid_rigor(client):
+    response = client.post(
+        "/grade",
+        json={"student_id": "s1", "message": "X = 42", "rigor": "brutal"},
+    )
+    # An unsupported rigor value is rejected by the Rigor literal, like level.
+    assert response.status_code == 422
 
 
 def test_grade_without_exercise(client, monkeypatch):

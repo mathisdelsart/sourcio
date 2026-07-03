@@ -7,11 +7,13 @@ import {
   type ConnectionConfig,
   type ExerciseResponse,
   type GradeResponse,
+  type Rigor,
 } from "@/lib/api";
 import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { TextArea, TextField } from "@/components/TextField";
 import { CourseSelect } from "@/components/CourseSelect";
+import { RigorSelector } from "@/components/RigorSelector";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, RefusalBanner } from "@/components/States";
 import { ThinkingIndicator } from "@/components/ThinkingIndicator";
@@ -56,6 +58,7 @@ export function ExercisePanel({ studentId, config }: ExercisePanelProps) {
 
   // Grading state, reset whenever a new exercise is generated.
   const [answer, setAnswer] = useState("");
+  const [rigor, setRigor] = useState<Rigor>("standard");
   const [grading, setGrading] = useState(false);
   const [result, setResult] = useState<GradeResponse | null>(null);
 
@@ -98,7 +101,7 @@ export function ExercisePanel({ studentId, config }: ExercisePanelProps) {
     setGrading(true);
     try {
       const payload = { id: gradable.id, problem: gradable.problem } as Record<string, unknown>;
-      const verdict = await grade(studentId, answer.trim(), payload, config);
+      const verdict = await grade(studentId, answer.trim(), payload, rigor, config);
       setResult(verdict);
     } catch (err) {
       toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
@@ -190,6 +193,14 @@ export function ExercisePanel({ studentId, config }: ExercisePanelProps) {
                 onChange={(e) => setAnswer(e.target.value)}
                 onKeyDown={submitOnCmdEnter(runGrade)}
               />
+              <div className="space-y-1.5">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  {t("rigor.label")}
+                </span>
+                <div>
+                  <RigorSelector value={rigor} onChange={setRigor} disabled={grading} />
+                </div>
+              </div>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-zinc-400 dark:text-zinc-500">
                   {t("common.submitHint")}

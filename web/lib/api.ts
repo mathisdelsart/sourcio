@@ -11,6 +11,11 @@ export type Level = "beginner" | "intermediate" | "advanced";
 
 export const LEVELS: readonly Level[] = ["beginner", "intermediate", "advanced"] as const;
 
+/** Marking strictness applied when grading a student's answer. */
+export type Rigor = "lenient" | "standard" | "strict";
+
+export const RIGORS: readonly Rigor[] = ["lenient", "standard", "strict"] as const;
+
 export interface AskRequest {
   student_id: string;
   question: string;
@@ -514,9 +519,10 @@ export async function grade(
   studentId: string,
   message: string,
   exercisePayload: Record<string, unknown> | null,
+  rigor: Rigor = "standard",
   config?: ConnectionConfig,
 ): Promise<GradeResponse> {
-  const body: Record<string, unknown> = { student_id: studentId, message };
+  const body: Record<string, unknown> = { student_id: studentId, message, rigor };
   if (exercisePayload != null) {
     body.exercise = exercisePayload;
   }
