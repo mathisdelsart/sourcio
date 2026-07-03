@@ -228,7 +228,7 @@ def test_existing_endpoints_do_not_require_bearer(client, monkeypatch):
     monkeypatch.setattr(
         api_main,
         "answer",
-        lambda question, *, k=5, course=None, chapter=None: {
+        lambda question, *, k=5, course=None, chapter=None, language=None: {
             "answer": "ok",
             "refused": False,
             "sources": [],

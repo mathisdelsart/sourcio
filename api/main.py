@@ -276,6 +276,9 @@ class AskRequest(BaseModel):
     course: str | None = None
     chapter: str | None = None
     session_id: int | None = None
+    # Optional locale code ('en'/'fr'/'nl') to force the default answer language;
+    # None keeps the model answering in the question's own language.
+    language: str | None = None
 
 
 class Citation(BaseModel):
@@ -310,10 +313,17 @@ class ReexplainResponse(BaseModel):
 
 
 class ExerciseRequest(BaseModel):
-    """A notion to build a practice exercise on, for a student."""
+    """A free-form exercise request for a student.
+
+    ``notion`` is the request itself (any exercise, in free form). ``course`` and
+    ``chapter`` optionally scope retrieval so the exercise stays on the requested
+    material; when both are None the whole collection is searched.
+    """
 
     student_id: str
     notion: str
+    course: str | None = None
+    chapter: str | None = None
 
 
 class ExerciseResponse(BaseModel):
@@ -340,15 +350,20 @@ class GradeResponse(BaseModel):
 
 
 class QuizRequest(BaseModel):
-    """A notion to build a multi-question quiz on, for a student.
+    """A free-form quiz request for a student.
 
-    ``n`` is the desired number of questions; it is clamped to a small range so a
-    request can never ask for an unbounded quiz.
+    ``notion`` is the request itself (any quiz, in free form). ``n`` is the
+    desired number of questions; it is clamped to a small range so a request can
+    never ask for an unbounded quiz. ``course`` and ``chapter`` optionally scope
+    retrieval so the quiz stays on the requested material; when both are None the
+    whole collection is searched.
     """
 
     student_id: str
     notion: str
     n: int = Field(default=3, ge=1, le=10)
+    course: str | None = None
+    chapter: str | None = None
 
 
 class QuizQuestionOut(BaseModel):
@@ -656,7 +671,13 @@ def ask(request: AskRequest, user: UserOut | None = OptionalUser) -> dict[str, A
     history for the student. When the request carries a valid bearer token, the
     student is linked to that account so the turns become the user's own.
     """
-    result = answer(request.question, k=request.k, course=request.course, chapter=request.chapter)
+    result = answer(
+        request.question,
+        k=request.k,
+        course=request.course,
+        chapter=request.chapter,
+        language=request.language,
+    )
     with get_session(_engine) as session:
         student = _resolve_student(session, request.student_id, user)
         thread_id = _resolve_session_id(session, student.id, request.session_id)
@@ -693,7 +714,11 @@ def _stream_ask_events(request: AskRequest, user: UserOut | None = None) -> Iter
     """
     final_answer = REFUSAL_FALLBACK
     for event in stream_answer(
-        request.question, k=request.k, course=request.course, chapter=request.chapter
+        request.question,
+        k=request.k,
+        course=request.course,
+        chapter=request.chapter,
+        language=request.language,
     ):
         if event.get("type") == "sources":
             final_answer = event.get("answer", final_answer)
@@ -702,6 +727,10 @@ def _stream_ask_events(request: AskRequest, user: UserOut | None = None) -> Iter
                 "sources": event.get("sources", []),
                 "citations": event.get("citations", []),
                 "refused": event.get("refused", False),
+                # Forward the cleaned final answer so the client can replace the
+                # raw token buffer (which may still show a trailing refusal the
+                # model wrongly appended) with the server-cleaned text.
+                "answer": final_answer,
             }
             yield f"data: {json.dumps(payload)}\n\n"
         else:
@@ -796,7 +825,14 @@ def exercise(request: ExerciseRequest, user: UserOut | None = OptionalUser) -> d
     """
     with get_session(_engine) as session:
         _resolve_student(session, request.student_id, user)
-    state = generate({"message": request.notion, "student_id": request.student_id})
+    state = generate(
+        {
+            "message": request.notion,
+            "student_id": request.student_id,
+            "course": request.course,
+            "chapter": request.chapter,
+        }
+    )
     # generate always populates "exercise" (a built exercise or a refusal).
     built = state.get("exercise")
     assert built is not None
@@ -835,7 +871,13 @@ def quiz(request: QuizRequest, user: UserOut | None = OptionalUser) -> dict[str,
     """
     with get_session(_engine) as session:
         _resolve_student(session, request.student_id, user)
-    return generate_quiz(request.notion, request.n, request.student_id)
+    return generate_quiz(
+        request.notion,
+        request.n,
+        request.student_id,
+        course=request.course,
+        chapter=request.chapter,
+    )
 
 
 @app.post(

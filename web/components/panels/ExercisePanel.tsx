@@ -11,12 +11,14 @@ import {
 import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { TextArea, TextField } from "@/components/TextField";
+import { CourseSelect } from "@/components/CourseSelect";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, RefusalBanner } from "@/components/States";
 import { ThinkingIndicator } from "@/components/ThinkingIndicator";
 import { useToast } from "@/components/Toast";
 import { useT } from "@/lib/i18n";
 import { submitOnCmdEnter } from "@/lib/keys";
+import { KEYS, readLocal, writeLocal } from "@/lib/storage";
 import { cn } from "@/lib/cn";
 
 interface ExercisePanelProps {
@@ -45,6 +47,10 @@ export function ExercisePanel({ studentId, config }: ExercisePanelProps) {
   const toast = useToast();
   const { t } = useT();
   const [notion, setNotion] = useState("");
+  // Course/chapter scope retrieval so the exercise stays on the requested topic.
+  // Lazy-init the course from localStorage so a choice is shared across tabs.
+  const [course, setCourse] = useState(() => readLocal(KEYS.course));
+  const [chapter, setChapter] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastExercise, setLastExercise] = useState<ExerciseResponse | null>(null);
 
@@ -60,11 +66,22 @@ export function ExercisePanel({ studentId, config }: ExercisePanelProps) {
     lastExercise && !lastExercise.refused && lastExercise.id != null ? lastExercise : null;
   const canGrade = answer.trim().length > 0 && !grading;
 
+  function selectCourse(next: string) {
+    setCourse(next);
+    writeLocal(KEYS.course, next);
+  }
+
   async function run() {
     if (!canGenerate) return;
     setLoading(true);
     try {
-      const generated = await exercise(studentId, notion.trim(), config);
+      const generated = await exercise(
+        studentId,
+        notion.trim(),
+        config,
+        course.trim() || null,
+        chapter.trim() || null,
+      );
       setLastExercise(generated);
       // A fresh exercise invalidates any answer/verdict from the previous one.
       setAnswer("");
@@ -100,16 +117,25 @@ export function ExercisePanel({ studentId, config }: ExercisePanelProps) {
           description={t("exercise.description")}
         />
         <CardBody className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <TextField
-                label={t("exercise.notionLabel")}
-                placeholder={t("exercise.notionPlaceholder")}
-                value={notion}
-                onChange={(e) => setNotion(e.target.value)}
-                onKeyDown={submitOnCmdEnter(run)}
-              />
-            </div>
+          <TextArea
+            label={t("exercise.notionLabel")}
+            placeholder={t("exercise.notionPlaceholder")}
+            rows={3}
+            value={notion}
+            onChange={(e) => setNotion(e.target.value)}
+            onKeyDown={submitOnCmdEnter(run)}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <CourseSelect value={course} onChange={selectCourse} config={config} />
+            <TextField
+              label={t("ask.chapterLabel")}
+              hint={t("ask.chapterHint")}
+              placeholder={t("ask.chapterPlaceholder")}
+              value={chapter}
+              onChange={(e) => setChapter(e.target.value)}
+            />
+          </div>
+          <div className="flex justify-end">
             <Button onClick={run} loading={loading} disabled={!canGenerate}>
               {t("exercise.generate")}
             </Button>

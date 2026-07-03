@@ -19,6 +19,8 @@ export interface AskRequest {
   chapter?: string | null;
   /** When set, the turn is attached to this conversation thread. */
   session_id?: number | null;
+  /** Locale code ('en'/'fr'/'nl') to force the default answer language. */
+  language?: string | null;
 }
 
 /** A conversation thread (session) for a student. `title` may be unset. */
@@ -265,6 +267,7 @@ export async function ask(
   if (body.course) payload.course = body.course;
   if (body.chapter) payload.chapter = body.chapter;
   if (body.session_id != null) payload.session_id = body.session_id;
+  if (body.language) payload.language = body.language;
   return request<AskResponse>(
     "/ask",
     { method: "POST", headers: buildHeaders(config, true), body: JSON.stringify(payload) },
@@ -277,6 +280,10 @@ export interface AskStreamDone {
   sources: string[];
   citations: Citation[];
   refused: boolean;
+  // The fully assembled answer, cleaned server-side (e.g. a trailing refusal
+  // sentence the model wrongly appended is stripped). Optional so an older
+  // backend that does not send it still works — callers fall back to the buffer.
+  answer?: string;
 }
 
 /**
@@ -302,6 +309,7 @@ export async function askStream(
   if (body.course) payload.course = body.course;
   if (body.chapter) payload.chapter = body.chapter;
   if (body.session_id != null) payload.session_id = body.session_id;
+  if (body.language) payload.language = body.language;
 
   const url = `${resolveBaseUrl(config)}/ask/stream`;
   let response: Response;
@@ -342,6 +350,7 @@ export async function askStream(
       sources?: number | string[];
       citations?: Citation[];
       refused?: boolean;
+      answer?: string;
     };
     try {
       event = JSON.parse(data);
@@ -357,6 +366,7 @@ export async function askStream(
         sources: Array.isArray(event.sources) ? event.sources : [],
         citations: event.citations ?? [],
         refused: event.refused ?? false,
+        answer: typeof event.answer === "string" ? event.answer : undefined,
       });
     }
   };
@@ -394,18 +404,26 @@ export async function reexplain(
   );
 }
 
-/** Generate a course-grounded exercise on a notion. */
+/**
+ * Generate a course-grounded exercise from a free-form request. `course` and
+ * `chapter` optionally scope retrieval and are only sent when truthy.
+ */
 export async function exercise(
   studentId: string,
   notion: string,
   config?: ConnectionConfig,
+  course?: string | null,
+  chapter?: string | null,
 ): Promise<ExerciseResponse> {
+  const payload: Record<string, unknown> = { student_id: studentId, notion };
+  if (course) payload.course = course;
+  if (chapter) payload.chapter = chapter;
   return request<ExerciseResponse>(
     "/exercise",
     {
       method: "POST",
       headers: buildHeaders(config, true),
-      body: JSON.stringify({ student_id: studentId, notion }),
+      body: JSON.stringify(payload),
     },
     config,
   );
@@ -429,19 +447,27 @@ export async function grade(
   );
 }
 
-/** Generate a course-grounded quiz of `n` questions on a notion. */
+/**
+ * Generate a course-grounded quiz of `n` questions from a free-form request.
+ * `course` and `chapter` optionally scope retrieval and are only sent when truthy.
+ */
 export async function quiz(
   studentId: string,
   notion: string,
   n: number,
   config?: ConnectionConfig,
+  course?: string | null,
+  chapter?: string | null,
 ): Promise<QuizResponse> {
+  const payload: Record<string, unknown> = { student_id: studentId, notion, n };
+  if (course) payload.course = course;
+  if (chapter) payload.chapter = chapter;
   return request<QuizResponse>(
     "/quiz",
     {
       method: "POST",
       headers: buildHeaders(config, true),
-      body: JSON.stringify({ student_id: studentId, notion, n }),
+      body: JSON.stringify(payload),
     },
     config,
   );

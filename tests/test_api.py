@@ -49,7 +49,7 @@ def test_health_returns_ok(client):
 def test_ask_returns_grounded_answer_and_sources(client, monkeypatch):
     captured = {}
 
-    def fake_answer(question, *, k=5, course=None, chapter=None):
+    def fake_answer(question, *, k=5, course=None, chapter=None, language=None):
         captured["question"] = question
         captured["k"] = k
         return {
@@ -81,7 +81,7 @@ def test_ask_returns_grounded_answer_and_sources(client, monkeypatch):
 def test_ask_threads_course_and_chapter_to_answer(client, monkeypatch):
     captured = {}
 
-    def fake_answer(question, *, k=5, course=None, chapter=None):
+    def fake_answer(question, *, k=5, course=None, chapter=None, language=None):
         captured["course"] = course
         captured["chapter"] = chapter
         return {"answer": "ok (Course, p.1)", "refused": False, "sources": [], "raw": "ok"}
@@ -105,7 +105,7 @@ def test_ask_threads_course_and_chapter_to_answer(client, monkeypatch):
 def test_ask_defaults_course_and_chapter_to_none(client, monkeypatch):
     captured = {}
 
-    def fake_answer(question, *, k=5, course=None, chapter=None):
+    def fake_answer(question, *, k=5, course=None, chapter=None, language=None):
         captured["course"] = course
         captured["chapter"] = chapter
         return {"answer": "ok", "refused": False, "sources": [], "raw": "ok"}
@@ -121,7 +121,7 @@ def test_ask_defaults_course_and_chapter_to_none(client, monkeypatch):
 def test_ask_uses_default_k(client, monkeypatch):
     captured = {}
 
-    def fake_answer(question, *, k=5, course=None, chapter=None):
+    def fake_answer(question, *, k=5, course=None, chapter=None, language=None):
         captured["k"] = k
         return {"answer": "ok", "refused": False, "sources": [], "raw": "ok"}
 
@@ -133,7 +133,7 @@ def test_ask_uses_default_k(client, monkeypatch):
 
 
 def test_ask_surfaces_refusal(client, monkeypatch):
-    def fake_answer(question, *, k=5, course=None, chapter=None):
+    def fake_answer(question, *, k=5, course=None, chapter=None, language=None):
         return {
             "answer": "This is not covered in the course material.",
             "refused": True,
@@ -151,7 +151,7 @@ def test_ask_surfaces_refusal(client, monkeypatch):
 
 
 def test_ask_persists_user_and_assistant_messages(client, monkeypatch):
-    def fake_answer(question, *, k=5, course=None, chapter=None):
+    def fake_answer(question, *, k=5, course=None, chapter=None, language=None):
         return {
             "answer": "Grounded reply (Course, p.3)",
             "refused": False,
@@ -173,7 +173,7 @@ def test_ask_persists_user_and_assistant_messages(client, monkeypatch):
 def test_history_is_chronological_across_turns(client, monkeypatch):
     counter = {"n": 0}
 
-    def fake_answer(question, *, k=5, course=None, chapter=None):
+    def fake_answer(question, *, k=5, course=None, chapter=None, language=None):
         counter["n"] += 1
         return {
             "answer": f"answer-{counter['n']}",
@@ -195,7 +195,7 @@ def test_history_is_chronological_across_turns(client, monkeypatch):
 
 
 def test_history_respects_limit(client, monkeypatch):
-    def fake_answer(question, *, k=5, course=None, chapter=None):
+    def fake_answer(question, *, k=5, course=None, chapter=None, language=None):
         return {"answer": "a", "refused": False, "sources": [], "raw": "a"}
 
     monkeypatch.setattr(api_main, "answer", fake_answer)
@@ -229,7 +229,7 @@ def test_clear_history_removes_all_turns(client, monkeypatch):
 
 
 def test_student_get_or_create_reuses_same_student(client, monkeypatch):
-    def fake_answer(question, *, k=5, course=None, chapter=None):
+    def fake_answer(question, *, k=5, course=None, chapter=None, language=None):
         return {"answer": "ok", "refused": False, "sources": [], "raw": "ok"}
 
     monkeypatch.setattr(api_main, "answer", fake_answer)
@@ -257,13 +257,24 @@ def test_exercise_returns_problem_without_solution(client, monkeypatch):
 
     monkeypatch.setattr(api_main, "generate", fake_generate)
 
-    response = client.post("/exercise", json={"student_id": "s1", "notion": "integrals"})
+    response = client.post(
+        "/exercise",
+        json={
+            "student_id": "s1",
+            "notion": "integrals",
+            "course": "Algebra",
+            "chapter": "Ch.2",
+        },
+    )
     assert response.status_code == 200
     body = response.json()
     assert body == {"problem": "Compute X.", "refused": False, "id": None}
     assert captured["message"] == "integrals"
     # The student id is threaded to the node so it can persist the exercise.
     assert captured["state"]["student_id"] == "s1"
+    # The course/chapter scope is threaded into the node's state for retrieval.
+    assert captured["state"]["course"] == "Algebra"
+    assert captured["state"]["chapter"] == "Ch.2"
     # The reference solution must never leak to the client.
     assert "solution" not in body
 
@@ -384,7 +395,7 @@ def _parse_sse(text):
 def test_ask_stream_streams_tokens_then_sources(client, monkeypatch):
     captured = {}
 
-    def fake_stream_answer(question, *, k=5, course=None, chapter=None):
+    def fake_stream_answer(question, *, k=5, course=None, chapter=None, language=None):
         captured["question"] = question
         captured["k"] = k
         yield {"type": "token", "text": "A wavelet "}
@@ -407,18 +418,20 @@ def test_ask_stream_streams_tokens_then_sources(client, monkeypatch):
     events = _parse_sse(response.text)
     assert events[0] == {"type": "token", "text": "A wavelet "}
     assert events[1] == {"type": "token", "text": "is X [1]."}
-    # The final sources event omits the internal assembled "answer" field.
+    # The final sources event forwards the server-cleaned assembled answer so
+    # the client can replace the raw token buffer with it.
     assert events[-1] == {
         "type": "sources",
         "sources": ["(Course, p.11)"],
         "citations": [],
         "refused": False,
+        "answer": "A wavelet is X (Course, p.11).",
     }
     assert captured == {"question": "What is a wavelet?", "k": 3}
 
 
 def test_ask_stream_persists_history_after_completion(client, monkeypatch):
-    def fake_stream_answer(question, *, k=5, course=None, chapter=None):
+    def fake_stream_answer(question, *, k=5, course=None, chapter=None, language=None):
         yield {"type": "token", "text": "Grounded reply "}
         yield {"type": "token", "text": "[1]"}
         yield {
@@ -445,7 +458,7 @@ def test_ask_stream_persists_history_after_completion(client, monkeypatch):
 def test_ask_stream_surfaces_refusal(client, monkeypatch):
     refusal = "This is not covered in the course material."
 
-    def fake_stream_answer(question, *, k=5, course=None, chapter=None):
+    def fake_stream_answer(question, *, k=5, course=None, chapter=None, language=None):
         yield {"type": "token", "text": refusal}
         yield {"type": "sources", "sources": [], "refused": True, "answer": refusal}
 
@@ -455,7 +468,13 @@ def test_ask_stream_surfaces_refusal(client, monkeypatch):
     assert response.status_code == 200
     events = _parse_sse(response.text)
     assert events[0] == {"type": "token", "text": refusal}
-    assert events[-1] == {"type": "sources", "sources": [], "citations": [], "refused": True}
+    assert events[-1] == {
+        "type": "sources",
+        "sources": [],
+        "citations": [],
+        "refused": True,
+        "answer": refusal,
+    }
 
     # The refusal text is persisted as the assistant turn.
     history = client.get("/history/s1").json()
@@ -465,7 +484,7 @@ def test_ask_stream_surfaces_refusal(client, monkeypatch):
 def test_ask_stream_threads_course_and_chapter(client, monkeypatch):
     captured = {}
 
-    def fake_stream_answer(question, *, k=5, course=None, chapter=None):
+    def fake_stream_answer(question, *, k=5, course=None, chapter=None, language=None):
         captured["course"] = course
         captured["chapter"] = chapter
         yield {"type": "sources", "sources": [], "refused": False, "answer": "ok"}
@@ -492,7 +511,7 @@ def test_ask_stream_threads_course_and_chapter(client, monkeypatch):
 def _seed_conversation(client, monkeypatch, student_id, question="Define X?"):
     """Run one /ask so the student has a prior tutor answer to re-explain."""
 
-    def fake_answer(question, *, k=5, course=None, chapter=None):
+    def fake_answer(question, *, k=5, course=None, chapter=None, language=None):
         return {
             "answer": "X is a formal structure (Course, p.3)",
             "refused": False,
@@ -688,8 +707,9 @@ def test_grade_without_exercise_id_is_not_persisted(client, monkeypatch):
 def test_quiz_returns_questions_without_solutions(client, monkeypatch):
     captured = {}
 
-    def fake_generate_quiz(notion, n, student_id):
+    def fake_generate_quiz(notion, n, student_id, *, course=None, chapter=None):
         captured["args"] = (notion, n, student_id)
+        captured["scope"] = (course, chapter)
         return {
             "quiz_id": 1,
             "notion": notion,
@@ -702,7 +722,16 @@ def test_quiz_returns_questions_without_solutions(client, monkeypatch):
 
     monkeypatch.setattr(api_main, "generate_quiz", fake_generate_quiz)
 
-    response = client.post("/quiz", json={"student_id": "s1", "notion": "groups", "n": 2})
+    response = client.post(
+        "/quiz",
+        json={
+            "student_id": "s1",
+            "notion": "groups",
+            "n": 2,
+            "course": "Algebra",
+            "chapter": "Ch.2",
+        },
+    )
     assert response.status_code == 200
     body = response.json()
     assert body == {
@@ -713,6 +742,8 @@ def test_quiz_returns_questions_without_solutions(client, monkeypatch):
     }
     # The notion, count and student id reached the node.
     assert captured["args"] == ("groups", 2, "s1")
+    # The course/chapter scope was threaded through to retrieval.
+    assert captured["scope"] == ("Algebra", "Ch.2")
     # No reference solution field is present on any question.
     assert all("solution" not in q for q in body["questions"])
 
@@ -720,7 +751,7 @@ def test_quiz_returns_questions_without_solutions(client, monkeypatch):
 def test_quiz_defaults_question_count(client, monkeypatch):
     captured = {}
 
-    def fake_generate_quiz(notion, n, student_id):
+    def fake_generate_quiz(notion, n, student_id, *, course=None, chapter=None):
         captured["n"] = n
         return {"quiz_id": 1, "notion": notion, "questions": [], "refused": False}
 
@@ -734,7 +765,7 @@ def test_quiz_surfaces_refusal(client, monkeypatch):
     monkeypatch.setattr(
         api_main,
         "generate_quiz",
-        lambda notion, n, student_id: {
+        lambda notion, n, student_id, *, course=None, chapter=None: {
             "quiz_id": None,
             "notion": notion,
             "questions": [],
@@ -866,7 +897,7 @@ def _stub_nodes(monkeypatch):
     monkeypatch.setattr(
         api_main,
         "answer",
-        lambda question, *, k=5, course=None, chapter=None: {
+        lambda question, *, k=5, course=None, chapter=None, language=None: {
             "answer": "ok",
             "refused": False,
             "sources": [],
@@ -874,7 +905,7 @@ def _stub_nodes(monkeypatch):
         },
     )
 
-    def _fake_stream_answer(question, *, k=5, course=None, chapter=None):
+    def _fake_stream_answer(question, *, k=5, course=None, chapter=None, language=None):
         yield {"type": "sources", "sources": [], "refused": False, "answer": "ok"}
 
     monkeypatch.setattr(api_main, "stream_answer", _fake_stream_answer)
@@ -899,7 +930,7 @@ def _stub_nodes(monkeypatch):
     monkeypatch.setattr(
         api_main,
         "generate_quiz",
-        lambda notion, n, student_id: {
+        lambda notion, n, student_id, *, course=None, chapter=None: {
             "quiz_id": 1,
             "notion": notion,
             "questions": [{"id": 1, "problem": "Q?"}],

@@ -241,8 +241,9 @@ const en = {
   // Exercise panel
   "exercise.title": "Generate an exercise",
   "exercise.description": "A practice problem grounded in the course, using its notation.",
-  "exercise.notionLabel": "Notion to practice",
-  "exercise.notionPlaceholder": "e.g. continuous wavelet transform",
+  "exercise.notionLabel": "What exercise do you want?",
+  "exercise.notionPlaceholder":
+    "e.g. a medium-difficulty problem on the wavelet transform, with a full worked solution",
   "exercise.generate": "Generate",
   "exercise.resultTitle": "Exercise",
   "exercise.empty.title": "No exercise yet",
@@ -267,8 +268,9 @@ const en = {
   "quiz.title": "Generate a quiz",
   "quiz.description":
     "A set of practice questions grounded in the course, using its notation.",
-  "quiz.notionLabel": "Notion to quiz on",
-  "quiz.notionPlaceholder": "e.g. continuous wavelet transform",
+  "quiz.notionLabel": "What should the quiz cover?",
+  "quiz.notionPlaceholder":
+    "e.g. short questions on the wavelet transform, from its definition to a small calculation",
   "quiz.questions": "Questions",
   "quiz.generate": "Generate",
   "quiz.resultTitle": "Quiz",
@@ -401,8 +403,8 @@ const en = {
   "doc.empty.description": "Upload a file above to make it searchable in the tutor.",
   "doc.pageCount": "{count} page(s)",
   "doc.uncategorized": "Uncategorized",
-  "doc.delete.course": "Delete course",
-  "doc.delete.chapter": "Delete",
+  "doc.delete.course": "Delete entire course",
+  "doc.delete.chapter": "Delete chapter",
   "doc.delete.confirm": "Delete “{target}” from the index? This cannot be undone.",
   "doc.delete.success": "Removed {count} item(s) from “{target}”.",
   "doc.progress.starting": "Preparing…",
@@ -669,8 +671,9 @@ const fr: Record<TranslationKey, string> = {
   "exercise.title": "Générer un exercice",
   "exercise.description":
     "Un problème d'entraînement ancré dans le cours, utilisant sa notation.",
-  "exercise.notionLabel": "Notion à travailler",
-  "exercise.notionPlaceholder": "ex. transformée en ondelettes continue",
+  "exercise.notionLabel": "Quel exercice veux-tu ?",
+  "exercise.notionPlaceholder":
+    "ex. un problème de difficulté moyenne sur la transformée en ondelettes, avec une solution détaillée",
   "exercise.generate": "Générer",
   "exercise.resultTitle": "Exercice",
   "exercise.empty.title": "Pas encore d'exercice",
@@ -697,8 +700,9 @@ const fr: Record<TranslationKey, string> = {
   "quiz.title": "Générer un quiz",
   "quiz.description":
     "Un ensemble de questions d'entraînement ancrées dans le cours, utilisant sa notation.",
-  "quiz.notionLabel": "Notion à tester",
-  "quiz.notionPlaceholder": "ex. transformée en ondelettes continue",
+  "quiz.notionLabel": "Sur quoi doit porter le quiz ?",
+  "quiz.notionPlaceholder":
+    "ex. des questions courtes sur la transformée en ondelettes, de sa définition à un petit calcul",
   "quiz.questions": "Questions",
   "quiz.generate": "Générer",
   "quiz.resultTitle": "Quiz",
@@ -833,8 +837,8 @@ const fr: Record<TranslationKey, string> = {
   "doc.empty.description": "Importez un fichier ci-dessus pour le rendre consultable dans le tuteur.",
   "doc.pageCount": "{count} page(s)",
   "doc.uncategorized": "Sans catégorie",
-  "doc.delete.course": "Supprimer le cours",
-  "doc.delete.chapter": "Supprimer",
+  "doc.delete.course": "Supprimer tout le cours",
+  "doc.delete.chapter": "Supprimer le chapitre",
   "doc.delete.confirm": "Supprimer « {target} » de l’index ? Cette action est irréversible.",
   "doc.delete.success": "{count} élément(s) retiré(s) de « {target} ».",
   "doc.progress.starting": "Préparation…",
@@ -1086,8 +1090,9 @@ const nl: Record<TranslationKey, string> = {
   // Exercise panel
   "exercise.title": "Genereer een oefening",
   "exercise.description": "Een oefenprobleem verankerd in de cursus, met diens notatie.",
-  "exercise.notionLabel": "Te oefenen begrip",
-  "exercise.notionPlaceholder": "bijv. continue wavelettransformatie",
+  "exercise.notionLabel": "Welke oefening wil je?",
+  "exercise.notionPlaceholder":
+    "bijv. een oefening van gemiddelde moeilijkheid over de wavelettransformatie, met een volledige uitgewerkte oplossing",
   "exercise.generate": "Genereren",
   "exercise.resultTitle": "Oefening",
   "exercise.empty.title": "Nog geen oefening",
@@ -1112,8 +1117,9 @@ const nl: Record<TranslationKey, string> = {
   // Quiz panel
   "quiz.title": "Genereer een quiz",
   "quiz.description": "Een reeks oefenvragen verankerd in de cursus, met diens notatie.",
-  "quiz.notionLabel": "Begrip om over te quizzen",
-  "quiz.notionPlaceholder": "bijv. continue wavelettransformatie",
+  "quiz.notionLabel": "Waarover moet de quiz gaan?",
+  "quiz.notionPlaceholder":
+    "bijv. korte vragen over de wavelettransformatie, van de definitie tot een kleine berekening",
   "quiz.questions": "Vragen",
   "quiz.generate": "Genereren",
   "quiz.resultTitle": "Quiz",
@@ -1246,8 +1252,8 @@ const nl: Record<TranslationKey, string> = {
   "doc.empty.description": "Upload hierboven een bestand om het doorzoekbaar te maken in de tutor.",
   "doc.pageCount": "{count} pagina('s)",
   "doc.uncategorized": "Niet-gecategoriseerd",
-  "doc.delete.course": "Vak verwijderen",
-  "doc.delete.chapter": "Verwijderen",
+  "doc.delete.course": "Volledig vak verwijderen",
+  "doc.delete.chapter": "Hoofdstuk verwijderen",
   "doc.delete.confirm": "“{target}” uit de index verwijderen? Dit kan niet ongedaan worden gemaakt.",
   "doc.delete.success": "{count} item(s) verwijderd uit “{target}”.",
   "doc.progress.starting": "Voorbereiden…",
