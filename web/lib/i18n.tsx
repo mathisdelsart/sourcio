@@ -156,6 +156,8 @@ const en = {
   "auth.cardTitle": "Sign in to your tutor",
   "auth.cardSubtitle": "Ask questions and get answers grounded in your own courses.",
   "auth.close": "Close",
+  "auth.showPassword": "Show password",
+  "auth.hidePassword": "Hide password",
 
   // Blocking sign-in gate (shown when the backend enforces authentication).
   "gate.title": "Sign in to continue",
@@ -632,6 +634,8 @@ const fr: Record<TranslationKey, string> = {
   "auth.cardSubtitle":
     "Posez vos questions et obtenez des réponses ancrées dans vos propres cours.",
   "auth.close": "Fermer",
+  "auth.showPassword": "Afficher le mot de passe",
+  "auth.hidePassword": "Masquer le mot de passe",
 
   // Blocking sign-in gate (shown when the backend enforces authentication).
   "gate.title": "Connectez-vous pour continuer",
@@ -1108,6 +1112,8 @@ const nl: Record<TranslationKey, string> = {
   "auth.cardTitle": "Log in bij je tutor",
   "auth.cardSubtitle": "Stel vragen en krijg antwoorden op basis van je eigen cursussen.",
   "auth.close": "Sluiten",
+  "auth.showPassword": "Wachtwoord tonen",
+  "auth.hidePassword": "Wachtwoord verbergen",
 
   // Blocking sign-in gate (shown when the backend enforces authentication).
   "gate.title": "Log in om verder te gaan",

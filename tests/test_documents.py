@@ -526,17 +526,90 @@ def test_list_documents_scopes_scroll_by_owner(monkeypatch):
     assert _CapturingScroll.last_filter is None
 
 
-def test_delete_documents_owner_is_mine_only(monkeypatch):
-    from qdrant_client.models import FieldCondition, Filter
+def test_delete_documents_owner_scopes_mine_or_shared(monkeypatch):
+    from qdrant_client.models import Filter
 
     _use_client(monkeypatch, _DeleteClient)
     documents_mod.delete_documents("Wavelets", None, "uA")
     conds = _DeleteClient.last_count_filter.must
-    # course + a MINE-ONLY owner condition: an exact FieldCondition match, never
-    # a nested shared/legacy OR filter, so shared/other points are never deleted.
-    owner_conds = [c for c in conds if isinstance(c, FieldCondition) and c.key == "owner"]
-    assert len(owner_conds) == 1 and owner_conds[0].match.value == "uA"
-    assert all(not isinstance(c, Filter) for c in conds)
+    # course + a "mine OR unset" owner sub-filter (a nested Filter whose `should`
+    # holds two branches: owner == mine, and owner unset/legacy), so the caller can
+    # delete what they can see, not just their own points.
+    owner_filters = [c for c in conds if isinstance(c, Filter)]
+    assert len(owner_filters) == 1
+    assert owner_filters[0].should is not None and len(owner_filters[0].should) == 2
+
+
+class _FilterEvalClient:
+    """A fake Qdrant client that actually evaluates delete/count filters.
+
+    Holds a fixed set of point payloads and honours the ``course`` +
+    "mine OR unset" owner scope built by :func:`delete_documents`, so the delete
+    *scope* (not just the filter shape) can be asserted end to end.
+    """
+
+    points: list[dict] = []
+    deleted: list[dict] = []
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    @staticmethod
+    def _cond_matches(cond, payload: dict) -> bool:
+        from qdrant_client.models import FieldCondition, Filter, IsEmptyCondition
+
+        if isinstance(cond, Filter):  # nested OR (should)
+            return any(_FilterEvalClient._cond_matches(c, payload) for c in (cond.should or []))
+        if isinstance(cond, IsEmptyCondition):
+            return payload.get(cond.is_empty.key) is None
+        if isinstance(cond, FieldCondition):
+            return payload.get(cond.key) == cond.match.value
+        return False
+
+    @classmethod
+    def _matching(cls, count_filter) -> list[dict]:
+        return [
+            p for p in cls.points if all(cls._cond_matches(c, p) for c in (count_filter.must or []))
+        ]
+
+    def count(self, *, collection_name, count_filter, exact):  # noqa: ARG002
+        return SimpleNamespace(count=len(self._matching(count_filter)))
+
+    def delete(self, *, collection_name, points_selector):  # noqa: ARG002
+        type(self).deleted = self._matching(points_selector.filter)
+
+
+def test_delete_documents_removes_owner_less_legacy_course(monkeypatch):
+    _FilterEvalClient.points = [
+        {"course": "Wavelets", "owner": None},
+        {"course": "Wavelets", "owner": None},
+    ]
+    _use_client(monkeypatch, _FilterEvalClient)
+    # A user (uA) can delete a course whose points have no owner (legacy corpus).
+    assert documents_mod.delete_documents("Wavelets", None, "uA") == 2
+    assert len(_FilterEvalClient.deleted) == 2
+
+
+def test_delete_documents_removes_callers_own_course(monkeypatch):
+    _FilterEvalClient.points = [
+        {"course": "Wavelets", "owner": "uA"},
+        {"course": "Wavelets", "owner": "uA"},
+        {"course": "Wavelets", "owner": "uA"},
+    ]
+    _use_client(monkeypatch, _FilterEvalClient)
+    assert documents_mod.delete_documents("Wavelets", None, "uA") == 3
+    assert len(_FilterEvalClient.deleted) == 3
+
+
+def test_delete_documents_leaves_another_accounts_owned_course(monkeypatch):
+    _FilterEvalClient.points = [
+        {"course": "Wavelets", "owner": "uB"},
+        {"course": "Wavelets", "owner": "uB"},
+    ]
+    _use_client(monkeypatch, _FilterEvalClient)
+    # uA must not be able to delete uB's OWNED points: nothing matches, 0 removed.
+    assert documents_mod.delete_documents("Wavelets", None, "uA") == 0
+    assert _FilterEvalClient.deleted == []
 
 
 # --- /documents routes -------------------------------------------------------

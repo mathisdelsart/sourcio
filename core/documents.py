@@ -479,13 +479,17 @@ def delete_documents(course: str, chapter: str | None = None, owner: str | None 
 
     Builds a payload filter on ``course`` (plus ``chapter`` when given), counts
     the matching points, then deletes them with that filter. When ``owner`` is
-    given the deletion is scoped to ``owner``'s OWN points only (an exact
-    ``owner`` match, never the shared/legacy branch), so an account can never
-    delete the shared corpus or another account's material. Returns the number of
-    points removed; a missing collection or any error yields ``0`` rather than
-    raising, so the endpoint degrades gracefully.
+    given the deletion is scoped to what that account can *see* — its own points
+    OR owner-less (shared/legacy) points — via :func:`owner_scope_filter`, the
+    same "mine OR unset" rule used for reads. A user can therefore delete the
+    legacy/CLI-ingested corpus they see and their own uploads, but never another
+    account's *owned* material. Returns the number of points removed; a missing
+    collection or any error yields ``0`` rather than raising, so the endpoint
+    degrades gracefully.
     """
     from qdrant_client.models import FieldCondition, Filter, FilterSelector, MatchValue
+
+    from core.retrieval import owner_scope_filter
 
     settings = get_settings()
     client = _client()
@@ -495,9 +499,10 @@ def delete_documents(course: str, chapter: str | None = None, owner: str | None 
     if chapter is not None:
         conditions.append(FieldCondition(key="chapter", match=MatchValue(value=chapter)))
     if owner is not None:
-        # Mine-only: an exact owner match (not the shared/legacy OR branch), so a
-        # user can never delete owner-less (shared) points or another account's.
-        conditions.append(FieldCondition(key="owner", match=MatchValue(value=owner)))
+        # Delete what the caller can see: "mine OR unset (shared/legacy)", the same
+        # scope used for reads. Another account's OWNED points never match, so they
+        # can never be deleted from here.
+        conditions.append(owner_scope_filter(owner))
     payload_filter = Filter(must=conditions)
 
     try:

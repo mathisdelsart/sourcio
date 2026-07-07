@@ -1,7 +1,7 @@
 import { forwardRef, useId } from "react";
 import { cn } from "@/lib/cn";
 
-const baseField =
+export const baseField =
   "w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 " +
   "transition-colors focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 " +
   "disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400 " +
@@ -15,7 +15,7 @@ interface FieldShellProps {
   children: React.ReactNode;
 }
 
-function FieldShell({ label, hint, id, children }: FieldShellProps) {
+export function FieldShell({ label, hint, id, children }: FieldShellProps) {
   return (
     <div className="space-y-1.5">
       {label && (
