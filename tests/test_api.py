@@ -555,6 +555,157 @@ def test_ask_stream_threads_course_and_chapter(client, monkeypatch):
     assert captured == {"course": "Algebra", "chapter": "Ch.2"}
 
 
+# --- /ask/async + /ask/jobs (background answer job) --------------------------
+
+
+def _wait_for_ask_job(client, job_id, student_id, *, timeout=5.0):
+    """Poll the ask-job endpoint until the worker thread reaches a terminal status."""
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        response = client.get(f"/ask/jobs/{job_id}", params={"student_id": student_id})
+        assert response.status_code == 200
+        job = response.json()
+        if job["status"] in ("done", "error"):
+            return job
+        time.sleep(0.02)
+    raise AssertionError(f"ask job {job_id} did not finish within {timeout}s")
+
+
+def test_ask_async_returns_job_and_reaches_done(client, monkeypatch):
+    captured = {}
+
+    def fake_stream_answer(question, *, k=5, course=None, chapter=None, owner=None, language=None):
+        captured["question"] = question
+        captured["k"] = k
+        yield {"type": "stage", "stage": "retrieving"}
+        yield {"type": "stage", "stage": "reading", "sources": 2}
+        yield {"type": "token", "text": "A wavelet "}
+        yield {"type": "token", "text": "is X [1]."}
+        yield {
+            "type": "sources",
+            "sources": ["(Course, p.11)"],
+            "citations": [{"n": 1, "id": "c1", "label": "(Course, p.11)"}],
+            "refused": False,
+            "answer": "A wavelet is X [1].",
+        }
+
+    monkeypatch.setattr(api_main, "stream_answer", fake_stream_answer)
+
+    response = client.post(
+        "/ask/async", json={"student_id": "s1", "question": "What is a wavelet?", "k": 3}
+    )
+    assert response.status_code == 202
+    job_id = response.json()["job_id"]
+
+    job = _wait_for_ask_job(client, job_id, "s1")
+    assert job["status"] == "done"
+    assert job["answer"] == "A wavelet is X [1]."
+    assert job["refused"] is False
+    assert job["sources"] == ["(Course, p.11)"]
+    assert job["citations"] == [{"n": 1, "id": "c1", "label": "(Course, p.11)"}]
+    assert captured == {"question": "What is a wavelet?", "k": 3}
+
+
+def test_ask_job_returns_partial_then_final(client, monkeypatch):
+    import threading
+
+    release = threading.Event()
+
+    def fake_stream_answer(question, *, k=5, course=None, chapter=None, owner=None, language=None):
+        yield {"type": "token", "text": "partial "}
+        # Block so the test can observe the partial state before completion.
+        release.wait(timeout=5)
+        yield {"type": "token", "text": "done [1]"}
+        yield {
+            "type": "sources",
+            "sources": ["(Course, p.1)"],
+            "citations": [],
+            "refused": False,
+            "answer": "partial done [1]",
+        }
+
+    monkeypatch.setattr(api_main, "stream_answer", fake_stream_answer)
+
+    job_id = client.post("/ask/async", json={"student_id": "s1", "question": "Q?"}).json()["job_id"]
+
+    # Poll until the first token has been recorded (worker is blocked on release).
+    import time
+
+    partial = None
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        job = client.get("/ask/jobs/" + job_id, params={"student_id": "s1"}).json()
+        if job["status"] == "running" and job["answer"].startswith("partial"):
+            partial = job
+            break
+        time.sleep(0.02)
+    assert partial is not None
+    assert partial["answer"] == "partial "
+    assert partial["stage"] == "writing"
+
+    # Let the worker finish; the final record carries the assembled answer.
+    release.set()
+    final = _wait_for_ask_job(client, job_id, "s1")
+    assert final["answer"] == "partial done [1]"
+    assert final["sources"] == ["(Course, p.1)"]
+
+
+def test_ask_async_persists_history_after_completion(client, monkeypatch):
+    def fake_stream_answer(question, *, k=5, course=None, chapter=None, owner=None, language=None):
+        yield {"type": "token", "text": "Grounded reply [1]"}
+        yield {
+            "type": "sources",
+            "sources": ["(Course, p.3)"],
+            "citations": [],
+            "refused": False,
+            "answer": "Grounded reply (Course, p.3)",
+        }
+
+    monkeypatch.setattr(api_main, "stream_answer", fake_stream_answer)
+
+    job_id = client.post(
+        "/ask/async", json={"student_id": "alice", "question": "Define X?"}
+    ).json()["job_id"]
+    _wait_for_ask_job(client, job_id, "alice")
+
+    history = client.get("/history/alice").json()
+    assert [(t["role"], t["content"]) for t in history] == [
+        ("user", "Define X?"),
+        ("assistant", "Grounded reply (Course, p.3)"),
+    ]
+
+
+def test_ask_job_unknown_id_404(client):
+    response = client.get("/ask/jobs/does-not-exist", params={"student_id": "s1"})
+    assert response.status_code == 404
+
+
+def test_ask_job_foreign_owner_is_404(client, monkeypatch):
+    # Anonymous flow: a job created for one student id is invisible to another id
+    # (owner mismatch), so it 404s rather than leaking the answer.
+    def fake_stream_answer(question, *, k=5, course=None, chapter=None, owner=None, language=None):
+        yield {"type": "token", "text": "secret [1]"}
+        yield {
+            "type": "sources",
+            "sources": ["(Course, p.1)"],
+            "citations": [],
+            "refused": False,
+            "answer": "secret [1]",
+        }
+
+    monkeypatch.setattr(api_main, "stream_answer", fake_stream_answer)
+
+    job_id = client.post("/ask/async", json={"student_id": "owner-a", "question": "q"}).json()[
+        "job_id"
+    ]
+    _wait_for_ask_job(client, job_id, "owner-a")
+
+    foreign = client.get("/ask/jobs/" + job_id, params={"student_id": "owner-b"})
+    assert foreign.status_code == 404
+
+
 # --- /reexplain --------------------------------------------------------------
 
 
@@ -1191,6 +1342,7 @@ def test_health_open_without_api_key(client, monkeypatch):
     [
         ("post", "/ask", {"student_id": "s1", "question": "q"}),
         ("post", "/ask/stream", {"student_id": "s1", "question": "q"}),
+        ("post", "/ask/async", {"student_id": "s1", "question": "q"}),
         ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),
@@ -1211,6 +1363,7 @@ def test_protected_endpoint_rejects_missing_key(client, monkeypatch, method, pat
     [
         ("post", "/ask", {"student_id": "s1", "question": "q"}),
         ("post", "/ask/stream", {"student_id": "s1", "question": "q"}),
+        ("post", "/ask/async", {"student_id": "s1", "question": "q"}),
         ("post", "/reexplain", {"student_id": "s1", "level": "beginner"}),
         ("post", "/exercise", {"student_id": "s1", "notion": "n"}),
         ("post", "/grade", {"student_id": "s1", "message": "m"}),

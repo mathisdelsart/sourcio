@@ -7,6 +7,7 @@ changing ``database_url`` in the settings.
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -19,6 +20,14 @@ from db.models import Base, Exercise, Grade, Message, Student
 # Bound on first use by ``get_session`` / ``configure_session_factory``.
 SessionLocal = sessionmaker(class_=Session, expire_on_commit=False)
 
+# Serialize all DB session usage process-wide. SQLite is single-writer, and with
+# background worker threads (ingestion / answer jobs) writing while request
+# handlers read, concurrent statements on a shared SQLite connection (notably the
+# in-memory StaticPool used in tests) raise "cannot commit transaction - SQL
+# statements in progress". A re-entrant lock held for each short-lived session
+# prevents that interleave (and is safe if a session is nested on one thread).
+_db_lock = threading.RLock()
+
 
 def _connect_args_for(database_url: str) -> dict:
     """Return driver ``connect_args`` appropriate for the given URL.
@@ -29,7 +38,10 @@ def _connect_args_for(database_url: str) -> dict:
     empty dict is returned for everything else (e.g. ``postgresql+psycopg://``).
     """
     if database_url.startswith("sqlite"):
-        return {"check_same_thread": False}
+        # check_same_thread=False: share a connection across threads (the app is
+        # multithreaded). timeout: wait on a busy file lock instead of failing
+        # immediately, so a background worker's write doesn't error a concurrent read.
+        return {"check_same_thread": False, "timeout": 30}
     return {}
 
 
@@ -64,14 +76,15 @@ def get_session(engine: Engine | None = None) -> Iterator[Session]:
     ``configure_session_factory``).
     """
     session = SessionLocal(bind=engine) if engine is not None else SessionLocal()
-    try:
-        yield session
-        session.commit()
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+    with _db_lock:
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
 
 def get_or_create_student(session: Session, external_id: str) -> Student:

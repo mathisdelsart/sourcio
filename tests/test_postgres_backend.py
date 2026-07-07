@@ -17,9 +17,9 @@ PG_URL = "postgresql+psycopg://user:pass@localhost:5432/grounded"
 
 
 def test_connect_args_check_same_thread_is_sqlite_only():
-    # SQLite (file and in-memory) receives the threading flag...
-    assert _connect_args_for("sqlite:///./app.db") == {"check_same_thread": False}
-    assert _connect_args_for("sqlite:///:memory:") == {"check_same_thread": False}
+    # SQLite (file and in-memory) receives the threading flag + a busy timeout...
+    assert _connect_args_for("sqlite:///./app.db") == {"check_same_thread": False, "timeout": 30}
+    assert _connect_args_for("sqlite:///:memory:") == {"check_same_thread": False, "timeout": 30}
     # ...and PostgreSQL never does (the flag is unknown to psycopg).
     assert _connect_args_for(PG_URL) == {}
     assert "check_same_thread" not in _connect_args_for(PG_URL)
