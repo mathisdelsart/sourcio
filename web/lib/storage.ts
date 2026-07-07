@@ -11,6 +11,7 @@ export const KEYS = {
   course: "grounded-rag:course",
   sessionId: "grounded-rag:session_id",
   sourcesMax: "grounded-rag:sources_max",
+  activeAskJob: "grounded-rag:active_ask_job",
 } as const;
 
 /** Read a string from localStorage, returning `fallback` when unavailable. */

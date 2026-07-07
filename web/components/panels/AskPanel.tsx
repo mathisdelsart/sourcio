@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  ApiError,
   ask,
-  askStream,
+  askAsync,
+  getAskJob,
   reexplain,
   reexplainStream,
   type AskResponse,
@@ -54,6 +56,35 @@ interface AskPanelProps {
 const SOURCES_MAX_MIN = 1;
 const SOURCES_MAX_MAX = 50;
 
+/** How often (ms) to poll the background answer job while it runs. */
+const ASK_POLL_INTERVAL = 700;
+
+/** What we persist about a running ask so a refresh can re-attach to it. */
+interface ActiveAskJob {
+  job_id: string;
+  question: string;
+  studentId: string;
+}
+
+function loadActiveAskJob(): ActiveAskJob | null {
+  const raw = readLocal(KEYS.activeAskJob);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as ActiveAskJob;
+    return parsed && typeof parsed.job_id === "string" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveActiveAskJob(job: ActiveAskJob): void {
+  writeLocal(KEYS.activeAskJob, JSON.stringify(job));
+}
+
+function clearActiveAskJob(): void {
+  writeLocal(KEYS.activeAskJob, "");
+}
+
 export function AskPanel({
   studentId,
   config,
@@ -87,6 +118,11 @@ export function AskPanel({
   // Real progress stage from the stream, with the source count once retrieved.
   const [stage, setStage] = useState<"retrieving" | "reading" | null>(null);
   const [sourceCount, setSourceCount] = useState<number | null>(null);
+  // The background answer job currently being polled; null when none is active.
+  // Set on ask and on mount (resume) — it is what drives the polling effect.
+  const [askJobId, setAskJobId] = useState<string | null>(null);
+  // Guards the one-shot resume so it fires once, as soon as the student id is known.
+  const resumedRef = useRef(false);
 
   const [reexplained, setReexplained] = useState<string | null>(null);
   const [level, setLevel] = useState<Level>("beginner");
@@ -120,45 +156,108 @@ export function AskPanel({
       language: locale,
     };
     try {
-      let buffer = "";
-      await askStream(
-        req,
-        (text) => {
-          buffer += text;
-          setStreaming(buffer);
-        },
-        (done) => {
-          setLastAnswer({
-            // Prefer the server-cleaned final answer (e.g. a trailing refusal
-            // the model wrongly appended is stripped); fall back to the raw
-            // token buffer for an older backend that does not send it.
-            answer: done.answer ?? buffer,
-            refused: done.refused,
-            sources: done.sources,
-            citations: done.citations,
-          });
-        },
-        config,
-        (s, n) => {
-          setStage(s === "reading" ? "reading" : "retrieving");
-          if (typeof n === "number") setSourceCount(n);
-        },
-      );
+      // Start a background answer: it keeps running server-side even if the user
+      // navigates away or refreshes. Persist the job so a refresh re-attaches to
+      // it, then hand off to the polling effect (which clears `loading`).
+      const { job_id } = await askAsync(req, config);
+      saveActiveAskJob({ job_id, question: req.question, studentId });
+      setAskJobId(job_id);
     } catch {
-      // Streaming failed (e.g. proxy buffering, older backend): fall back to the
-      // non-streaming endpoint so the user still gets a complete answer.
+      // The async path failed (e.g. older backend without /ask/async): fall back
+      // to the non-streaming endpoint so the user still gets a complete answer.
       try {
         const result = await ask(req, config);
         setLastAnswer(result);
       } catch (err) {
         toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
+      } finally {
+        setStreaming(null);
+        setStage(null);
+        setLoading(false);
       }
-    } finally {
+    }
+  }
+
+  // Resume a background answer left running by a previous visit (started before a
+  // refresh/navigation). Fires once, as soon as the student id is known, and
+  // restores the question so citations/export keep working. The polling effect
+  // below then re-renders the in-progress or completed answer.
+  useEffect(() => {
+    if (resumedRef.current || !studentId) return;
+    resumedRef.current = true;
+    const active = loadActiveAskJob();
+    if (active && active.studentId === studentId) {
+      if (active.question) setQuestion(active.question);
+      setLoading(true);
+      setStreaming("");
+      setStage("retrieving");
+      setSourceCount(null);
+      setAskJobId(active.job_id);
+    }
+  }, [studentId]);
+
+  // Poll the background answer job once one is active. This is the single place
+  // the answer UI is fed, whether the job was just started or resumed after a
+  // refresh, so both paths render identically. On a terminal status it renders
+  // the final answer (or an error toast), stops, and clears the persisted job. A
+  // 404 means the server restarted or pruned the job: clear it and stop.
+  useEffect(() => {
+    if (!askJobId) return;
+    let cancelled = false;
+
+    const stop = () => {
+      clearActiveAskJob();
+      setAskJobId(null);
       setStreaming(null);
       setStage(null);
       setLoading(false);
-    }
-  }
+    };
+
+    const poll = async () => {
+      try {
+        const job = await getAskJob(askJobId, studentId, config);
+        if (cancelled) return;
+        if (job.status === "running") {
+          if (job.answer && job.answer.length > 0) {
+            // Tokens have started: show the growing answer text.
+            setStreaming(job.answer);
+          } else {
+            // Still retrieving/reading: show the staged progress indicator.
+            setStreaming("");
+            setStage(job.stage === "reading" ? "reading" : "retrieving");
+            if (typeof job.source_count === "number") setSourceCount(job.source_count);
+          }
+        } else if (job.status === "done") {
+          setLastAnswer({
+            answer: job.answer,
+            refused: job.refused,
+            sources: job.sources,
+            citations: job.citations,
+          });
+          stop();
+        } else {
+          // status === "error"
+          toast.push(job.message || t("common.requestFailed"), "error");
+          stop();
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 404) {
+          // Server restarted or job pruned/expired: give up quietly.
+          stop();
+        }
+        // Other (transient) errors: keep polling on the next tick.
+      }
+    };
+
+    poll();
+    const id = window.setInterval(poll, ASK_POLL_INTERVAL);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askJobId, studentId, config]);
 
   async function runReexplain() {
     setReLoading(true);

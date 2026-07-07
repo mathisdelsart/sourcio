@@ -484,6 +484,80 @@ export async function askStream(
   if (buffer.trim()) handleEvent(buffer);
 }
 
+/** The id returned when an async ask is accepted and answering starts in the background. */
+export interface AskJobStart {
+  job_id: string;
+}
+
+/**
+ * A background answer job's record. It carries the current `stage` and the
+ * partial-or-final `answer` (grown token-by-token while running) plus the final
+ * `refused`/`sources`/`citations` once done, so a client that reconnects after a
+ * refresh re-renders the in-progress or completed answer.
+ */
+export interface AskJob {
+  job_id: string;
+  status: "running" | "done" | "error";
+  stage?: "retrieving" | "reading" | "writing" | null;
+  answer: string;
+  refused: boolean;
+  sources: string[];
+  citations?: Citation[];
+  question?: string;
+  /** Number of retrieved sources, set once the "reading" stage begins. */
+  source_count?: number | null;
+  message?: string | null;
+}
+
+/**
+ * Start answering a question as a background job (POST /ask/async).
+ *
+ * The server resolves ownership, spawns a background answer and returns
+ * `{ job_id }` immediately, so answering is not tied to this request: the caller
+ * polls {@link getAskJob} to follow progress and survives a page refresh by
+ * re-attaching to the same `job_id`. Throws an `ApiError` on failure so callers
+ * can fall back to the non-streaming {@link ask}.
+ */
+export async function askAsync(
+  body: AskRequest,
+  config?: ConnectionConfig,
+): Promise<AskJobStart> {
+  const payload: AskRequest = {
+    student_id: body.student_id,
+    question: body.question,
+    k: body.k ?? 5,
+  };
+  if (body.course) payload.course = body.course;
+  if (body.chapter) payload.chapter = body.chapter;
+  if (body.session_id != null) payload.session_id = body.session_id;
+  if (body.language) payload.language = body.language;
+  return request<AskJobStart>(
+    "/ask/async",
+    { method: "POST", headers: buildHeaders(config, true), body: JSON.stringify(payload) },
+    config,
+  );
+}
+
+/**
+ * Fetch a background answer job's current record (404 -> `ApiError` status 404).
+ *
+ * `studentId` is the owner the job was created for; the server only returns the
+ * job to its owner, so it must match. A 404 means the job is unknown, pruned, or
+ * belongs to someone else.
+ */
+export async function getAskJob(
+  jobId: string,
+  studentId: string,
+  config?: ConnectionConfig,
+): Promise<AskJob> {
+  const query = `?student_id=${encodeURIComponent(studentId)}`;
+  return request<AskJob>(
+    `/ask/jobs/${encodeURIComponent(jobId)}${query}`,
+    { method: "GET", headers: buildHeaders(config) },
+    config,
+  );
+}
+
 /** Re-explain the student's last tutor answer at the requested level. */
 export async function reexplain(
   studentId: string,

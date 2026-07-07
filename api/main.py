@@ -92,7 +92,14 @@ from core.documents import (
     stored_file_path,
     stream_ingest,
 )
-from core.jobs import create_job, get_job, list_jobs, update_job
+from core.jobs import (
+    create_answer_job,
+    create_job,
+    get_answer_job,
+    get_job,
+    list_jobs,
+    update_job,
+)
 from core.scheduling import MAX_QUALITY, MIN_QUALITY, schedule
 from core.sources import get_source
 from db.models import Exercise, Feedback, Grade, Quiz, QuizQuestion, Review, Student
@@ -1082,6 +1089,124 @@ def ask_stream(request: AskRequest, user: UserOut | None = DataUser) -> Streamin
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+def _run_answer_job(job_id: str, request: AskRequest, user: UserOut | None) -> None:
+    """Drive ``stream_answer`` on a daemon thread, mirroring state into the job.
+
+    Each token grows the job's partial ``answer`` (so a client that reconnects
+    sees what has been produced so far, still growing); each stage event updates
+    ``stage``; the final event stores the cleaned ``answer``, ``refused`` flag,
+    ``sources`` and ``citations``. The turn is persisted as conversation history
+    on completion, exactly like ``_stream_ask_events``. A failure marks the job
+    ``error`` (and does not persist a partial turn).
+    """
+    parts: list[str] = []
+    final_answer = REFUSAL_FALLBACK
+    refused = False
+    sources: list[str] = []
+    citations: list[dict[str, Any]] = []
+    try:
+        for event in stream_answer(
+            request.question,
+            k=request.k,
+            course=request.course,
+            chapter=request.chapter,
+            owner=request.student_id,
+            language=request.language,
+        ):
+            etype = event.get("type")
+            if etype == "token":
+                parts.append(event.get("text", ""))
+                # Once tokens flow the model is "writing"; expose the growing text.
+                update_job(job_id, {"stage": "writing", "answer": "".join(parts)})
+            elif etype == "stage":
+                patch: dict[str, Any] = {"stage": event.get("stage", "retrieving")}
+                if isinstance(event.get("sources"), int):
+                    patch["source_count"] = event["sources"]
+                update_job(job_id, patch)
+            elif etype == "sources":
+                final_answer = event.get("answer", final_answer)
+                refused = bool(event.get("refused", False))
+                sources = event.get("sources", [])
+                citations = event.get("citations", [])
+
+        with get_session(_engine) as session:
+            student = _resolve_student(session, request.student_id, user)
+            thread_id = _resolve_session_id(session, student.id, request.session_id)
+            add_message(
+                session,
+                student_id=student.id,
+                role="user",
+                content=request.question,
+                session_id=thread_id,
+            )
+            add_message(
+                session,
+                student_id=student.id,
+                role="assistant",
+                content=final_answer,
+                session_id=thread_id,
+            )
+        update_job(
+            job_id,
+            {
+                "status": "done",
+                "stage": "writing",
+                "answer": final_answer,
+                "refused": refused,
+                "sources": sources,
+                "citations": citations,
+            },
+        )
+    except Exception as exc:  # pragma: no cover - defensive; answer guards itself
+        update_job(job_id, {"status": "error", "message": str(exc)})
+
+
+@app.post(
+    "/ask/async",
+    dependencies=[Depends(require_api_key)],
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def ask_async(request: AskRequest, user: UserOut | None = DataUser) -> dict[str, str]:
+    """Start answering a question as a background job and return its id.
+
+    Mirrors ``/ask`` (same request model, auth, ownership and history persistence)
+    but the answer runs on a daemon thread instead of being tied to the request:
+    a browser refresh or navigation no longer cancels it. Ownership is resolved up
+    front (a foreign student id is rejected with 403 before any work), then
+    ``{"job_id": ...}`` is returned immediately (HTTP 202). The client polls
+    ``GET /ask/jobs/{job_id}`` to follow — or, after a refresh, re-attach to — the
+    running answer. ``/ask`` and ``/ask/stream`` stay available. The job registry
+    is in-process — see the multi-worker caveat in ``core.jobs``.
+    """
+    with get_session(_engine) as session:
+        _resolve_student(session, request.student_id, user)
+    job_id = create_answer_job(request.student_id, request.question)
+    threading.Thread(target=_run_answer_job, args=(job_id, request, user), daemon=True).start()
+    return {"job_id": job_id}
+
+
+@app.get("/ask/jobs/{job_id}", dependencies=[Depends(require_api_key)])
+def ask_job(
+    job_id: str,
+    student_id: str,
+    user: UserOut | None = DataUser,
+) -> dict[str, Any]:
+    """Return one background answer job's record, or 404 if unknown/foreign.
+
+    ``student_id`` is the owner the job was created for; the caller must present
+    it. When authenticated, passing another account's student id is rejected with
+    403 (via ``_scoped_read_owner``); otherwise a mismatched owner yields 404, so
+    a user can only read their own answer job. The record carries ``status``,
+    ``stage``, the partial-or-final ``answer``, ``refused``, ``sources`` and
+    ``citations``.
+    """
+    owner = _scoped_read_owner(student_id, user)
+    job = get_answer_job(job_id, owner)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
+    return job
 
 
 NOTHING_TO_REEXPLAIN = "There is no previous answer to re-explain yet. Ask a question first."

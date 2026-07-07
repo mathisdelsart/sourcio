@@ -276,3 +276,61 @@ def test_logged_in_user_cannot_review_another_users_exercise(client, monkeypatch
         headers={"Authorization": f"Bearer {token_b}"},
     )
     assert forbidden.status_code == 403
+
+
+# --- background answer jobs (/ask/async, /ask/jobs) --------------------------
+
+
+def _wait_for_ask_job(client, job_id, student_id, token=None, *, timeout=5.0):
+    """Poll the ask-job endpoint until the worker thread reaches a terminal status."""
+    import time
+
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        response = client.get(
+            f"/ask/jobs/{job_id}", params={"student_id": student_id}, headers=headers
+        )
+        assert response.status_code == 200
+        job = response.json()
+        if job["status"] in ("done", "error"):
+            return job
+        time.sleep(0.02)
+    raise AssertionError(f"ask job {job_id} did not finish within {timeout}s")
+
+
+def test_foreign_caller_cannot_read_another_users_ask_job(client, monkeypatch):
+    # A background answer job is owner-scoped: a second logged-in user cannot poll
+    # a job started for another account's student, even with the right id.
+    def fake_stream_answer(question, *, k=5, course=None, chapter=None, owner=None, language=None):
+        yield {"type": "token", "text": "grounded [1]"}
+        yield {
+            "type": "sources",
+            "sources": ["(Course, p.1)"],
+            "citations": [{"n": 1, "id": "c1", "label": "(Course, p.1)"}],
+            "refused": False,
+            "answer": "grounded [1]",
+        }
+
+    monkeypatch.setattr(api_main, "stream_answer", fake_stream_answer)
+
+    token_a = _token(client, "joba")
+    started = client.post(
+        "/ask/async",
+        json={"student_id": "joba-owned", "question": "q"},
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert started.status_code == 202
+    job_id = started.json()["job_id"]
+    # Owner reads it (and it finishes fine).
+    finished = _wait_for_ask_job(client, job_id, "joba-owned", token_a)
+    assert finished["status"] == "done"
+
+    # User B, presenting A's student id, is rejected with 403 before any lookup.
+    token_b = _token(client, "jobb")
+    forbidden = client.get(
+        f"/ask/jobs/{job_id}",
+        params={"student_id": "joba-owned"},
+        headers={"Authorization": f"Bearer {token_b}"},
+    )
+    assert forbidden.status_code == 403

@@ -1,4 +1,4 @@
-"""In-memory, thread-safe registry of background document-ingestion jobs.
+"""In-memory, thread-safe registry of background jobs (ingestion and answers).
 
 Ingesting a document (extract -> chunk -> embed -> index) can take minutes for a
 large PDF, and must not be tied to the lifetime of the upload HTTP request: a
@@ -6,6 +6,14 @@ browser refresh or navigation would otherwise abort the request and stop the
 server mid-ingest. The upload endpoint therefore spawns a daemon thread that
 runs the ingest and reports progress here, while the client polls a status
 endpoint to follow — or, after a refresh, re-attach to — the running job.
+
+The same problem applies to answering a question: a slow LLM answer streamed over
+SSE is cancelled the instant the browser navigates away or refreshes. So an "Ask"
+runs as a background *answer* job too — a daemon thread drains ``stream_answer``
+into the record (accumulated partial text + current stage, then the final answer,
+sources and citations) while the client polls to follow or re-attach after a
+refresh. Answer jobs are owner-scoped (:func:`get_answer_job` verifies the caller
+owns the job) so one user can never read another's answer.
 
 The registry is a module-level ``dict`` guarded by a single ``threading.Lock``.
 This is correct for the app's single-process deployment (the Makefile runs one
@@ -76,6 +84,7 @@ def create_job(course: str, chapter: str | None, filename: str) -> str:
     job_id = uuid.uuid4().hex
     record: dict[str, Any] = {
         "job_id": job_id,
+        "kind": "ingest",
         "status": "running",
         "type": "start",
         "course": course,
@@ -121,10 +130,64 @@ def get_job(job_id: str) -> dict[str, Any] | None:
 
 
 def list_jobs() -> list[dict[str, Any]]:
-    """Return copies of all current job records (newest first)."""
+    """Return copies of the current ingestion job records (newest first).
+
+    Only ``kind == "ingest"`` records are listed, so answer jobs (which are
+    owner-scoped and read one at a time) never leak into the documents view.
+    """
     with _lock:
         return sorted(
-            (dict(record) for record in _jobs.values()),
+            (dict(record) for record in _jobs.values() if record.get("kind") == "ingest"),
             key=lambda r: r["created_at"],
             reverse=True,
         )
+
+
+def create_answer_job(owner: str | None, question: str) -> str:
+    """Register a new background answer job and return its opaque id.
+
+    The record starts in ``"running"`` at the ``"retrieving"`` stage with an empty
+    ``answer`` so a client polling immediately sees a coherent "starting" state.
+    ``owner`` is the requesting student id; :func:`get_answer_job` requires the
+    caller to present the same owner, so one user cannot read another's answer.
+    Old finished jobs are pruned on creation to keep the registry bounded.
+    """
+    job_id = uuid.uuid4().hex
+    record: dict[str, Any] = {
+        "job_id": job_id,
+        "kind": "answer",
+        "owner": owner,
+        "question": question,
+        "status": "running",
+        "stage": "retrieving",
+        # Partial text, grown token-by-token by the worker; final text on done.
+        "answer": "",
+        "refused": False,
+        "sources": [],
+        "citations": [],
+        # Count of retrieved sources, surfaced once the "reading" stage begins.
+        "source_count": None,
+        "message": None,
+        "created_at": _now_iso(),
+        "finished_at": None,
+    }
+    with _lock:
+        _prune_locked()
+        _jobs[job_id] = record
+    return job_id
+
+
+def get_answer_job(job_id: str, owner: str | None) -> dict[str, Any] | None:
+    """Return a copy of an answer job, or ``None`` if unknown/pruned/foreign.
+
+    Returns ``None`` (so the API replies 404) when the id is unknown or pruned,
+    the record is not an answer job, or ``owner`` does not match the id the job
+    was created for — a user can only read their own answer job.
+    """
+    with _lock:
+        record = _jobs.get(job_id)
+        if record is None or record.get("kind") != "answer":
+            return None
+        if record.get("owner") != owner:
+            return None
+        return dict(record)
