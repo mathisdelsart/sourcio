@@ -1296,3 +1296,154 @@ def test_enqueue_review_resets_existing_notion_to_due(client):
 
     after = client.get("/reviews/due", params={"student_id": "s1"})
     assert "wavelets" in [item["notion"] for item in after.json()]
+
+
+# --- activity ref_id and review endpoints ------------------------------------
+
+
+def _mock_exercise_nodes(monkeypatch):
+    """Patch retrieval + LLMs so the real generate/grade nodes run offline."""
+    monkeypatch.setattr("core.retrieval.retrieve", lambda *a, **k: _make_retrieved("Group axioms."))
+    monkeypatch.setattr(
+        "agent.nodes.generate.get_llm",
+        lambda role="default": _FakeLLM("EXERCISE:\nProve closure.\n\nSOLUTION:\nBy axiom 1."),
+    )
+    monkeypatch.setattr(
+        "agent.nodes.grade.get_llm",
+        lambda role="default": _FakeLLM('{"score": 90, "feedback": "Well argued."}'),
+    )
+
+
+def _mock_quiz_nodes(monkeypatch):
+    """Patch retrieval + LLMs so the real quiz/grade nodes run offline."""
+    monkeypatch.setattr("core.retrieval.retrieve", lambda *a, **k: _make_retrieved("Group axioms."))
+    monkeypatch.setattr(
+        "agent.nodes.quiz.get_llm",
+        lambda role="default": _FakeLLM(
+            '[{"problem": "Prove closure.", "solution": "By axiom 1."},'
+            ' {"problem": "Prove identity.", "solution": "Element e."}]'
+        ),
+    )
+    monkeypatch.setattr(
+        "agent.nodes.grade.get_llm",
+        lambda role="default": _FakeLLM('{"score": 80, "feedback": "Mostly right."}'),
+    )
+
+
+def test_exercise_activity_carries_ref_id_in_history(client, monkeypatch):
+    # The recorded activity turn links back to the persisted exercise via ref_id.
+    _mock_exercise_nodes(monkeypatch)
+    ex = client.post("/exercise", json={"student_id": "refx", "notion": "groups"}).json()
+    rows = client.get("/history/refx").json()
+    assert len(rows) == 1
+    assert rows[0]["role"] == "exercise"
+    assert rows[0]["ref_id"] == ex["id"]
+
+
+def test_quiz_activity_carries_ref_id_in_history(client, monkeypatch):
+    _mock_quiz_nodes(monkeypatch)
+    quiz = client.post("/quiz", json={"student_id": "refq", "notion": "groups", "n": 2}).json()
+    rows = client.get("/history/refq").json()
+    assert len(rows) == 1
+    assert rows[0]["role"] == "quiz"
+    assert rows[0]["ref_id"] == quiz["quiz_id"]
+
+
+def test_plain_qa_history_has_null_ref_id(client, monkeypatch):
+    # A plain question/answer turn is not an activity item: ref_id stays null.
+    def fake_answer(question, *, k=5, course=None, chapter=None, language=None):
+        return {"answer": "a", "refused": False, "sources": [], "raw": "a"}
+
+    monkeypatch.setattr(api_main, "answer", fake_answer)
+    client.post("/ask", json={"student_id": "plain", "question": "q"})
+    rows = client.get("/history/plain").json()
+    assert rows and all(row["ref_id"] is None for row in rows)
+
+
+def test_exercise_review_returns_full_content_and_grade(client, monkeypatch):
+    _mock_exercise_nodes(monkeypatch)
+    ex = client.post("/exercise", json={"student_id": "revx", "notion": "groups"}).json()
+    exercise_id = ex["id"]
+
+    # Grade an answer so the review carries the student's answer + verdict.
+    client.post(
+        "/grade",
+        json={
+            "student_id": "revx",
+            "message": "Closure holds by axiom 1.",
+            "exercise": {"id": exercise_id, "solution": "By axiom 1."},
+        },
+    )
+
+    review = client.get(f"/exercise/{exercise_id}/review", params={"student_id": "revx"})
+    assert review.status_code == 200
+    body = review.json()
+    assert body["problem"] == "Prove closure."
+    # The reference solution IS returned for after-the-fact review.
+    assert body["reference_solution"] == "By axiom 1."
+    assert body["grade"]["answer"] == "Closure holds by axiom 1."
+    assert body["grade"]["score"] == 90
+    assert body["grade"]["feedback"] == "Well argued."
+
+
+def test_exercise_review_without_grade_returns_null_grade(client, monkeypatch):
+    _mock_exercise_nodes(monkeypatch)
+    ex = client.post("/exercise", json={"student_id": "revx2", "notion": "groups"}).json()
+    review = client.get(f"/exercise/{ex['id']}/review", params={"student_id": "revx2"}).json()
+    assert review["reference_solution"] == "By axiom 1."
+    assert review["grade"] is None
+
+
+def test_exercise_review_unknown_exercise_is_404(client):
+    resp = client.get("/exercise/999/review", params={"student_id": "nobody"})
+    assert resp.status_code == 404
+
+
+def test_exercise_review_foreign_student_is_404(client, monkeypatch):
+    # An anonymous caller asking for another student's exercise gets 404: the
+    # exercise does not belong to the queried student.
+    _mock_exercise_nodes(monkeypatch)
+    ex = client.post("/exercise", json={"student_id": "ownerx", "notion": "groups"}).json()
+    resp = client.get(f"/exercise/{ex['id']}/review", params={"student_id": "strangerx"})
+    assert resp.status_code == 404
+
+
+def test_quiz_review_returns_questions_with_solutions_and_grades(client, monkeypatch):
+    _mock_quiz_nodes(monkeypatch)
+    quiz = client.post("/quiz", json={"student_id": "revq", "notion": "groups", "n": 2}).json()
+    quiz_id = quiz["quiz_id"]
+    first_qid = quiz["questions"][0]["id"]
+
+    # Grade only the first question; the second stays unanswered.
+    client.post(
+        f"/quiz/{quiz_id}/grade",
+        json={"student_id": "revq", "question_id": first_qid, "answer": "Closure holds."},
+    )
+
+    review = client.get(f"/quiz/{quiz_id}/review", params={"student_id": "revq"})
+    assert review.status_code == 200
+    body = review.json()
+    assert body["notion"] == "groups"
+    assert [q["position"] for q in body["questions"]] == [0, 1]
+    # Reference solutions ARE returned for review.
+    assert {q["reference_solution"] for q in body["questions"]} == {"By axiom 1.", "Element e."}
+    graded = body["questions"][0]
+    assert graded["answer"] == "Closure holds."
+    assert graded["score"] == 80
+    assert graded["feedback"] == "Mostly right."
+    ungraded = body["questions"][1]
+    assert ungraded["answer"] is None
+    assert ungraded["score"] is None
+    assert ungraded["feedback"] is None
+
+
+def test_quiz_review_unknown_quiz_is_404(client):
+    resp = client.get("/quiz/999/review", params={"student_id": "nobody"})
+    assert resp.status_code == 404
+
+
+def test_quiz_review_foreign_student_is_404(client, monkeypatch):
+    _mock_quiz_nodes(monkeypatch)
+    quiz = client.post("/quiz", json={"student_id": "ownerq", "notion": "groups", "n": 2}).json()
+    resp = client.get(f"/quiz/{quiz['quiz_id']}/review", params={"student_id": "strangerq"})
+    assert resp.status_code == 404

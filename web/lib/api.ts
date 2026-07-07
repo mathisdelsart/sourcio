@@ -110,6 +110,39 @@ export interface HistoryItem {
   role: string;
   content: string;
   created_at: string;
+  /** Id of the linked exercise/quiz for activity turns; null for plain Q&A. */
+  ref_id?: number | null;
+}
+
+/** The latest grade on an exercise, surfaced for after-the-fact review. */
+export interface ExerciseGradeReview {
+  answer: string;
+  score: number;
+  feedback: string;
+  created_at: string;
+}
+
+/** A generated exercise reviewed after the fact (reference solution included). */
+export interface ExerciseReview {
+  problem: string;
+  reference_solution: string;
+  grade: ExerciseGradeReview | null;
+}
+
+/** One quiz question reviewed after the fact, with the student's latest grade. */
+export interface QuizQuestionReview {
+  position: number;
+  problem: string;
+  reference_solution: string;
+  answer: string | null;
+  score: number | null;
+  feedback: string | null;
+}
+
+/** A generated quiz reviewed after the fact (reference solutions included). */
+export interface QuizReview {
+  notion: string;
+  questions: QuizQuestionReview[];
 }
 
 /** Spaced-repetition recall quality, from 0 (forgot) to 5 (perfect). */
@@ -676,6 +709,32 @@ export async function me(config?: ConnectionConfig): Promise<AuthUser> {
 export async function getSource(id: string, config?: ConnectionConfig): Promise<SourceChunk> {
   return request<SourceChunk>(
     `/source/${encodeURIComponent(id)}`,
+    { method: "GET", headers: buildHeaders(config) },
+    config,
+  );
+}
+
+/** Fetch a generated exercise's full content (with solution) and latest grade. */
+export async function getExerciseReview(
+  id: number,
+  studentId: string,
+  config?: ConnectionConfig,
+): Promise<ExerciseReview> {
+  return request<ExerciseReview>(
+    `/exercise/${id}/review?student_id=${encodeURIComponent(studentId)}`,
+    { method: "GET", headers: buildHeaders(config) },
+    config,
+  );
+}
+
+/** Fetch a quiz's full content (with solutions) and per-question grades. */
+export async function getQuizReview(
+  id: number,
+  studentId: string,
+  config?: ConnectionConfig,
+): Promise<QuizReview> {
+  return request<QuizReview>(
+    `/quiz/${id}/review?student_id=${encodeURIComponent(studentId)}`,
     { method: "GET", headers: buildHeaders(config) },
     config,
   );

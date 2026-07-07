@@ -9,6 +9,8 @@ Endpoints:
     POST /grade             grade a student's answer
     POST /quiz              generate a grounded multi-question quiz (no solutions)
     POST /quiz/{id}/grade   grade one quiz answer against its stored reference
+    GET  /exercise/{id}/review  full exercise (with solution) + latest grade, for review
+    GET  /quiz/{id}/review  full quiz (with solutions) + per-question grades, for review
     GET  /courses           list the distinct courses indexed in Qdrant
     GET  /documents         inventory of indexed material by course and chapter
     POST /documents/upload  ingest an uploaded file under a course/chapter
@@ -90,7 +92,7 @@ from core.documents import (
 )
 from core.scheduling import MAX_QUALITY, MIN_QUALITY, schedule
 from core.sources import get_source
-from db.models import Feedback, Review, Student
+from db.models import Exercise, Feedback, Grade, Quiz, QuizQuestion, Review, Student
 from db.models import Message as MessageModel
 from db.models import Session as SessionModel
 from db.session import (
@@ -318,14 +320,21 @@ ROLE_QUIZ = "quiz"
 
 
 def _record_activity(
-    external_id: str, user: UserOut | None, session_id: int | None, *, role: str, content: str
+    external_id: str,
+    user: UserOut | None,
+    session_id: int | None,
+    *,
+    role: str,
+    content: str,
+    ref_id: int | None = None,
 ) -> None:
     """Persist one activity item (exercise/quiz) as a message, like /ask does.
 
     The student is resolved (and ownership enforced) exactly as for a question,
     and the item is attached to the active thread when ``session_id`` names one
     of the student's threads. Kept concise on purpose: callers pass a short
-    summary, never a full JSON blob.
+    summary, never a full JSON blob. ``ref_id`` links the turn back to the
+    persisted exercise/quiz so the history can fetch the full item for review.
     """
     with get_session(_engine) as session:
         student = _resolve_student(session, external_id, user)
@@ -336,6 +345,7 @@ def _record_activity(
             role=role,
             content=content,
             session_id=thread_id,
+            ref_id=ref_id,
         )
 
 
@@ -527,11 +537,17 @@ class QuizSummaryResponse(BaseModel):
 
 
 class HistoryItem(BaseModel):
-    """A single persisted conversation turn."""
+    """A single persisted conversation turn.
+
+    ``ref_id`` links an activity turn (exercise/quiz) back to its domain object
+    so the UI can fetch the full item for review; it is ``None`` for plain Q&A
+    turns.
+    """
 
     role: str
     content: str
     created_at: str
+    ref_id: int | None = None
 
 
 class CoursesResponse(BaseModel):
@@ -580,6 +596,54 @@ class SourceResponse(BaseModel):
     chapter: str | None = None
     page: int
     text: str
+
+
+class ExerciseGradeReview(BaseModel):
+    """The graded verdict on an exercise, surfaced for after-the-fact review."""
+
+    answer: str
+    score: float
+    feedback: str
+    created_at: str
+
+
+class ExerciseReviewResponse(BaseModel):
+    """A generated exercise reviewed after the fact.
+
+    The reference solution IS returned here (unlike ``/exercise``): review is
+    after-the-fact, so the student is meant to see the model answer. ``grade`` is
+    the latest verdict on the exercise, or ``None`` if it was never graded.
+    """
+
+    problem: str
+    reference_solution: str
+    grade: ExerciseGradeReview | None = None
+
+
+class QuizQuestionReview(BaseModel):
+    """One quiz question reviewed after the fact, with its reference solution.
+
+    ``answer``/``score``/``feedback`` come from the latest grade on the question
+    and are ``None`` when it was never answered.
+    """
+
+    position: int
+    problem: str
+    reference_solution: str
+    answer: str | None = None
+    score: float | None = None
+    feedback: str | None = None
+
+
+class QuizReviewResponse(BaseModel):
+    """A generated quiz reviewed after the fact.
+
+    Reference solutions ARE returned (unlike ``/quiz``): review is after-the-fact.
+    Questions are ordered by position.
+    """
+
+    notion: str
+    questions: list[QuizQuestionReview]
 
 
 class SessionCreateRequest(BaseModel):
@@ -1036,6 +1100,7 @@ def exercise(request: ExerciseRequest, user: UserOut | None = DataUser) -> dict[
             request.session_id,
             role=ROLE_EXERCISE,
             content=built["problem"],
+            ref_id=built.get("id"),
         )
     return {"problem": built["problem"], "refused": built["refused"], "id": built.get("id")}
 
@@ -1094,6 +1159,7 @@ def quiz(request: QuizRequest, user: UserOut | None = DataUser) -> dict[str, Any
             request.session_id,
             role=ROLE_QUIZ,
             content=summary,
+            ref_id=result.get("quiz_id"),
         )
     return result
 
@@ -1149,6 +1215,109 @@ def quiz_grade_all(
         _resolve_student(session, request.student_id, user)
     answers = [{"question_id": a.question_id, "answer": a.answer} for a in request.answers]
     return summarize_quiz(quiz_id, answers, request.student_id, request.rigor)
+
+
+@app.get(
+    "/exercise/{exercise_id}/review",
+    response_model=ExerciseReviewResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def exercise_review(
+    exercise_id: int, student_id: str, user: UserOut | None = DataUser
+) -> dict[str, Any]:
+    """Return a generated exercise's full content for after-the-fact review.
+
+    Unlike ``/exercise``, the reference solution is returned: review happens once
+    the exercise is done, so the student is meant to see the model answer. The
+    latest grade on the exercise (if any) is included so the student can see their
+    answer, score and feedback. Ownership is enforced: the exercise must belong to
+    ``student_id`` and, when authenticated, that student must belong to the caller
+    (403 otherwise). An unknown or unowned exercise yields 404.
+    """
+    with get_session(_engine) as session:
+        student = _student_for_read(session, student_id, user)
+        ex = None
+        if student is not None:
+            ex = session.scalar(
+                select(Exercise).where(
+                    Exercise.id == exercise_id, Exercise.student_id == student.id
+                )
+            )
+        if ex is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Exercise not found for this student.",
+            )
+        latest = session.scalar(
+            select(Grade)
+            .where(Grade.exercise_id == ex.id)
+            .order_by(Grade.created_at.desc(), Grade.id.desc())
+        )
+        grade_payload = None
+        if latest is not None:
+            grade_payload = {
+                "answer": latest.answer,
+                "score": latest.score,
+                "feedback": latest.feedback,
+                "created_at": latest.created_at.isoformat() if latest.created_at else "",
+            }
+        return {
+            "problem": ex.problem,
+            "reference_solution": ex.reference_solution,
+            "grade": grade_payload,
+        }
+
+
+@app.get(
+    "/quiz/{quiz_id}/review",
+    response_model=QuizReviewResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def quiz_review(quiz_id: int, student_id: str, user: UserOut | None = DataUser) -> dict[str, Any]:
+    """Return a quiz's full content for after-the-fact review.
+
+    Unlike ``/quiz``, each question's reference solution is returned, together
+    with the student's latest answer, score and feedback per question (``None``
+    when unanswered). Questions are ordered by position. Ownership is enforced:
+    the quiz must belong to ``student_id`` and, when authenticated, that student
+    must belong to the caller (403 otherwise). An unknown or unowned quiz yields
+    404.
+    """
+    with get_session(_engine) as session:
+        student = _student_for_read(session, student_id, user)
+        quiz_row = None
+        if student is not None:
+            quiz_row = session.scalar(
+                select(Quiz).where(Quiz.id == quiz_id, Quiz.student_id == student.id)
+            )
+        if quiz_row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Quiz not found for this student.",
+            )
+        questions = session.scalars(
+            select(QuizQuestion)
+            .where(QuizQuestion.quiz_id == quiz_row.id)
+            .order_by(QuizQuestion.position.asc(), QuizQuestion.id.asc())
+        )
+        reviewed: list[dict[str, Any]] = []
+        for q in questions:
+            latest = session.scalar(
+                select(Grade)
+                .where(Grade.quiz_question_id == q.id)
+                .order_by(Grade.created_at.desc(), Grade.id.desc())
+            )
+            reviewed.append(
+                {
+                    "position": q.position,
+                    "problem": q.problem,
+                    "reference_solution": q.reference_solution,
+                    "answer": latest.answer if latest is not None else None,
+                    "score": latest.score if latest is not None else None,
+                    "feedback": latest.feedback if latest is not None else None,
+                }
+            )
+        return {"notion": quiz_row.notion, "questions": reviewed}
 
 
 @app.get(
@@ -1275,7 +1444,7 @@ def source(chunk_id: str) -> dict[str, Any]:
 )
 def history(
     student_id: str, limit: int = 20, user: UserOut | None = DataUser
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """Return the student's most recent turns in chronological order.
 
     An unknown student yields an empty history rather than an error. In
@@ -1291,6 +1460,7 @@ def history(
                 "role": row.role,
                 "content": row.content,
                 "created_at": row.created_at.isoformat() if row.created_at else "",
+                "ref_id": row.ref_id,
             }
             for row in rows
         ]
@@ -1393,7 +1563,7 @@ def list_sessions(student_id: str, user: UserOut | None = DataUser) -> list[dict
 )
 def session_messages(
     student_id: str, session_id: int, user: UserOut | None = DataUser
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """Return the messages of one thread in chronological order.
 
     Yields 404 when the thread does not exist or does not belong to the student,
@@ -1424,6 +1594,7 @@ def session_messages(
                 "role": row.role,
                 "content": row.content,
                 "created_at": row.created_at.isoformat() if row.created_at else "",
+                "ref_id": row.ref_id,
             }
             for row in rows
         ]

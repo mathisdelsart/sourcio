@@ -156,3 +156,20 @@ def test_user_display_name_upgrade_and_downgrade(database_url: str) -> None:
         assert "display_name" not in user_cols
     finally:
         engine.dispose()
+
+
+def test_message_ref_id_upgrade_and_downgrade(database_url: str) -> None:
+    """The 0009 migration adds ``messages.ref_id``, and ``downgrade`` drops it."""
+    cfg = _make_config(database_url)
+    command.upgrade(cfg, "head")
+
+    engine = create_engine(database_url, future=True)
+    try:
+        message_cols = {c["name"] for c in inspect(engine).get_columns("messages")}
+        assert "ref_id" in message_cols
+
+        command.downgrade(cfg, "0008")
+        message_cols = {c["name"] for c in inspect(engine).get_columns("messages")}
+        assert "ref_id" not in message_cols
+    finally:
+        engine.dispose()

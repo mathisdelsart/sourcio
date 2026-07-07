@@ -139,13 +139,23 @@ def add_message(
     role: str,
     content: str,
     session_id: int | None = None,
+    ref_id: int | None = None,
 ) -> Message:
     """Append a conversation message and return the flushed instance.
 
     ``session_id`` optionally attaches the turn to a conversation thread. It
     defaults to ``None`` (unthreaded), so existing callers are unaffected.
+    ``ref_id`` optionally links an activity turn to its domain object (an
+    exercise or quiz id) so the history can fetch the full item for review; it
+    defaults to ``None`` for plain Q&A turns.
     """
-    message = Message(student_id=student_id, role=role, content=content, session_id=session_id)
+    message = Message(
+        student_id=student_id,
+        role=role,
+        content=content,
+        session_id=session_id,
+        ref_id=ref_id,
+    )
     session.add(message)
     session.flush()
     return message

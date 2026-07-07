@@ -219,3 +219,28 @@ def test_ask_with_broken_bearer_is_rejected(client):
         headers={"Authorization": "Bearer not.a.jwt"},
     )
     assert response.status_code == 401
+
+
+def test_logged_in_user_cannot_review_another_users_exercise(client, monkeypatch):
+    # Review is ownership-gated like the other read routes: user A generates an
+    # exercise, user B is forbidden from reviewing it (403), even with auth off.
+    monkeypatch.setattr(
+        api_main,
+        "generate",
+        lambda state: {"exercise": {"problem": "p", "solution": "s", "refused": False, "id": 1}},
+    )
+    token_a = _token(client, "exa@example.com")
+    token_b = _token(client, "exb@example.com")
+    ex = client.post(
+        "/exercise",
+        json={"student_id": "exa-owned", "notion": "groups"},
+        headers={"Authorization": f"Bearer {token_a}"},
+    ).json()
+    # Owner can review (200 or 404 if the stubbed node did not persist a row);
+    # the foreign user is always forbidden before any lookup.
+    forbidden = client.get(
+        f"/exercise/{ex['id'] or 1}/review",
+        params={"student_id": "exa-owned"},
+        headers={"Authorization": f"Bearer {token_b}"},
+    )
+    assert forbidden.status_code == 403

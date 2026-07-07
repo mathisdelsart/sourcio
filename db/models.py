@@ -213,6 +213,12 @@ class Message(Base):
     )
     role: Mapped[str] = mapped_column(String(32))
     content: Mapped[str] = mapped_column(Text)
+    # Optional id of the domain object an activity turn refers to (an exercise id
+    # for ``role="exercise"``, a quiz id for ``role="quiz"``), so the history can
+    # link back and fetch the full item for review. Nullable and unconstrained:
+    # plain Q&A turns leave it ``None`` and it is not a foreign key so a deleted
+    # exercise/quiz simply yields a 404 on review rather than breaking history.
+    ref_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     student: Mapped[Student] = relationship(back_populates="messages")
