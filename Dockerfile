@@ -40,6 +40,11 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.12.*"
 #      - langchain-groq -> the free hosted Groq LLM provider (LLM_PROVIDER=groq)
 #      - psycopg[binary] -> the Postgres driver, for a managed DATABASE_URL
 #        (postgresql+psycopg://...); harmless when the default SQLite is used
+#      - bcrypt + pyjwt -> auth (password hashing + JWT access tokens); imported
+#        at startup by api.auth, so the API will not boot without them
+#      - python-multipart -> FastAPI multipart parsing for POST /documents/upload
+#      - pymupdf -> PDF text extraction for uploaded course PDFs (the online
+#        upload path, not just the offline CLI)
 #      - `api`    -> FastAPI, uvicorn, sqlalchemy (the web layer)
 #      - `agent`  -> langgraph (the explain/generate/grade/reexplain nodes)
 #      - `obs`    -> langfuse (optional tracing; tiny, keeps observability working)
@@ -50,13 +55,18 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.12.*"
 #        lean. torch is already present from the CPU index above, so this resolves
 #        against it instead of re-downloading the CUDA build.
 #    NOT installed: `ui` (Streamlit, served separately), `local` (Ollama client,
-#    only for fully-local runs), `ingestion` (PyMuPDF, offline-only), `migrations`
-#    (the API creates tables via SQLAlchemy on startup, not Alembic).
+#    only for fully-local runs), `migrations` (the API creates tables via
+#    SQLAlchemy on startup, not Alembic). Image PDF pages still need a vision LLM
+#    (OPENAI_API_KEY); text PDFs and .md/.txt work with the deps above.
 RUN pip install \
     "langchain>=0.3" \
     "langchain-core>=1.4" \
     "langchain-openai>=0.2" \
     "langchain-groq>=0.2" \
+    "bcrypt>=4.0" \
+    "pyjwt>=2.8" \
+    "python-multipart>=0.0.9" \
+    "pymupdf>=1.24" \
     "pydantic-settings>=2.5" \
     "python-dotenv>=1.0" \
     "qdrant-client>=1.12" \
