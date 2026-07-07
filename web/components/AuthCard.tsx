@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { login, me, register, type AuthUser, type ConnectionConfig } from "@/lib/api";
 import { Button } from "@/components/Button";
 import { Card, CardBody } from "@/components/Card";
-import { TextField } from "@/components/TextField";
+import { TextField, FieldShell, baseField } from "@/components/TextField";
 import { BrandMark } from "@/components/Logo";
 import { useToast } from "@/components/Toast";
 import { useT } from "@/lib/i18n";
@@ -35,17 +35,28 @@ type Mode = "login" | "register";
 export function AuthCard({ config, onLogin, onSuccess, onClose, className }: AuthCardProps) {
   const toast = useToast();
   const { t } = useT();
+  const passwordId = useId();
   const [mode, setMode] = useState<Mode>("login");
   const [emailInput, setEmailInput] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  // Submit failures render INLINE in the card (a page toast would sit behind the
+  // modal, invisible). Cleared whenever the user edits a field or switches mode.
+  const [error, setError] = useState<string | null>(null);
 
   const canSubmit = emailInput.trim().length > 0 && password.length > 0 && !loading;
+
+  function switchMode(next: Mode) {
+    setMode(next);
+    setError(null);
+  }
 
   async function submit() {
     if (!canSubmit) return;
     setLoading(true);
+    setError(null);
     try {
       const trimmedEmail = emailInput.trim();
       if (mode === "register") {
@@ -62,7 +73,7 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
       );
       onSuccess?.();
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : t("auth.failed"), "error");
+      setError(err instanceof Error ? err.message : t("auth.failed"));
     } finally {
       setLoading(false);
     }
@@ -103,7 +114,7 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
               <button
                 key={m}
                 type="button"
-                onClick={() => setMode(m)}
+                onClick={() => switchMode(m)}
                 aria-pressed={mode === m}
                 className={cn(
                   "flex-1 rounded-lg px-3 py-2 font-medium transition-all",
@@ -124,7 +135,10 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
             autoComplete="email"
             placeholder="you@example.com"
             value={emailInput}
-            onChange={(e) => setEmailInput(e.target.value)}
+            onChange={(e) => {
+              setEmailInput(e.target.value);
+              setError(null);
+            }}
           />
 
           {mode === "register" && (
@@ -134,22 +148,73 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
               autoComplete="nickname"
               placeholder={t("auth.displayNamePlaceholder")}
               value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              onChange={(e) => {
+                setDisplayName(e.target.value);
+                setError(null);
+              }}
             />
           )}
 
-          <TextField
+          {/* Password field is inline (not <TextField/>) so it can host a trailing
+              show/hide toggle inside the input. */}
+          <FieldShell
             label={t("auth.password")}
-            type="password"
-            autoComplete={mode === "register" ? "new-password" : "current-password"}
-            placeholder="••••••••"
             hint={mode === "register" ? t("auth.passwordHint") : undefined}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submit();
-            }}
-          />
+            id={passwordId}
+          >
+            <div className="relative">
+              <input
+                id={passwordId}
+                type={showPassword ? "text" : "password"}
+                autoComplete={mode === "register" ? "new-password" : "current-password"}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submit();
+                }}
+                className={cn(baseField, "pr-11")}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+                aria-pressed={showPassword}
+                className={cn(
+                  "absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg",
+                  "text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-200",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+                )}
+              >
+                {showPassword ? (
+                  // Eye with a slash: password is currently visible.
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 3l18 18" />
+                    <path d="M10.58 10.58a2 2 0 002.83 2.83" />
+                    <path d="M9.36 5.18A9.46 9.46 0 0112 5c5 0 9 4.5 9 7a12.3 12.3 0 01-2.16 3.19M6.61 6.61A12.9 12.9 0 003 12c0 2.5 4 7 9 7a9.3 9.3 0 004.24-1" />
+                  </svg>
+                ) : (
+                  // Open eye: password is currently hidden.
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </FieldShell>
+
+          {error && (
+            <p
+              role="alert"
+              className="rounded-lg bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-700 dark:bg-red-950/40 dark:text-red-300"
+            >
+              {error}
+            </p>
+          )}
 
           <Button
             className="mt-1 h-11 w-full rounded-xl text-sm"

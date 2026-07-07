@@ -51,7 +51,10 @@ Isolation is enforced in two layers that must agree.
   owner and passes it to `get_source`, which returns a chunk only when it is the
   caller's own or unowned. A chunk owned by a *different* account is reported as
   **404** — its existence is never leaked, so a caller cannot read another
-  account's material by guessing a chunk id.
+  account's material by guessing a chunk id. Deletes (`DELETE /documents`) use
+  the same *"mine OR unset"* scope (`delete_documents` in `core/documents.py`): a
+  caller can remove their own uploads and the unowned/legacy corpus they can see,
+  but never another account's *owned* material.
 - **Relational store (SQLAlchemy), ownership-scoped.** Students, history,
   sessions, exercises, quizzes, feedback and reviews hang off `Student`, and
   `Student.user_id` links a student to a user account. Every write resolves the
