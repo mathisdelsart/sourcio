@@ -52,7 +52,9 @@ def _system_prompt(language: str | None = None) -> str:
         "You are a course tutor that answers strictly from the provided sources.\n"
         "- Use only the numbered sources below; never use outside knowledge.\n"
         + _language_instruction(language)
-        + "- After each claim, cite the source index it comes from, like [1] or [2].\n"
+        + "- Every claim MUST carry a citation to the source index it comes from, like "
+        "[1] or [2]. If a statement cannot be attributed to a numbered source, do not "
+        "make it. An answer with no [n] citation is not acceptable.\n"
         "- You are the judge of whether the course covers the question: answer as long "
         "as the numbered sources contain the information needed, even partially. Only "
         "if the sources genuinely do not contain the answer (they merely mention the "
