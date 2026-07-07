@@ -210,6 +210,13 @@ class Settings(BaseSettings):
     ollama_chat_model: str = "llama3.1"
     ollama_vision_model: str = "llama3.2-vision"
 
+    # Default Anthropic chat model used when a caller supplies their own Anthropic
+    # key (prefix `sk-ant-`) and the role has no explicit Anthropic `LLM_<ROLE>`
+    # override. A current, cost-effective Claude model; override via
+    # ANTHROPIC_CHAT_MODEL. langchain-anthropic reads the per-call key from the
+    # `api_key` passed to `init_chat_model` (see `get_llm`).
+    anthropic_chat_model: str = "claude-haiku-4-5"
+
     @property
     def effective_rate_limit_per_minute(self) -> int:
         """Resolve the rate limit actually enforced by the middleware.
@@ -352,6 +359,33 @@ def _resolve_openai_model(role: str) -> str:
     return "gpt-4o-mini"
 
 
+def _is_anthropic_model(model: str) -> bool:
+    """Return whether a resolved model string names an Anthropic (Claude) model.
+
+    `init_chat_model` understands an `anthropic:` provider prefix; a bare Claude
+    id (e.g. `claude-haiku-4-5`) is also treated as Anthropic.
+    """
+    return model.startswith("anthropic:") or "claude" in model
+
+
+def _resolve_anthropic_model(role: str) -> str:
+    """Resolve the Anthropic model string for a role when a caller supplies an Anthropic key.
+
+    A visitor's own Anthropic key (prefix `sk-ant-`) overrides the global provider
+    for this one call, so the role must resolve to an Anthropic model regardless of
+    `LLM_PROVIDER`. An explicit `LLM_<ROLE>` override is honoured only when it names
+    an Anthropic/Claude model; otherwise the `anthropic_chat_model` default is used.
+    The result is returned with an explicit `anthropic:` prefix so `init_chat_model`
+    routes it to ChatAnthropic (and the per-call key to it).
+    """
+    override = os.getenv(f"LLM_{role.upper()}")
+    if override and _is_anthropic_model(override):
+        model = override
+    else:
+        model = get_settings().anthropic_chat_model
+    return model if model.startswith("anthropic:") else f"anthropic:{model}"
+
+
 def get_llm(role: str = "default", api_key: str | None = None):
     """Build a chat model for the given role, selected by the `LLM_<ROLE>` env var.
 
@@ -361,16 +395,24 @@ def get_llm(role: str = "default", api_key: str | None = None):
     non-vision roles to a free-tier Groq-hosted model. Uses `temperature=0` for
     reproducibility.
 
-    `api_key` is an optional per-call OpenAI key. When it is a non-empty string it
-    switches THIS call to OpenAI regardless of the global provider: the role
-    resolves to its OpenAI model (the `LLM_<ROLE>` value when that names an OpenAI
-    model, else the OpenAI default `gpt-4o-mini`) and the key authenticates the
-    model instead of the process `OPENAI_API_KEY`. This lets a visitor use — and
-    pay for — a premium OpenAI model everywhere (Ask, exercises, quizzes, grading,
-    the router, PDF extraction) while the free Groq/Ollama models remain the
-    default when no key is supplied. The key is passed straight into
-    `init_chat_model` and lives only on the returned model instance for the
-    duration of this call; it is never cached globally, stored or logged. When
+    `api_key` is an optional per-call key that may be an OpenAI OR an Anthropic key,
+    auto-detected from its prefix. When it is a non-empty string it switches THIS
+    call to that provider regardless of the global provider:
+
+    * a key starting with `sk-ant-` routes to Anthropic — the role resolves to its
+      Anthropic model (the `LLM_<ROLE>` value when that names a Claude model, else
+      the `anthropic_chat_model` default) and the key authenticates ChatAnthropic;
+    * any other key routes to OpenAI — the role resolves to its OpenAI model (the
+      `LLM_<ROLE>` value when that names an OpenAI model, else the OpenAI default
+      `gpt-4o-mini`) and the key authenticates the model instead of the process
+      `OPENAI_API_KEY`.
+
+    This lets a visitor use — and pay for — a premium model everywhere (Ask,
+    exercises, quizzes, grading, the router, PDF extraction) on their own credit,
+    while the free Groq/Ollama models remain the default when no key is supplied.
+    The key is passed straight into `init_chat_model` (which maps it to the
+    provider SDK's credential) and lives only on the returned model instance for
+    the duration of this call; it is never cached globally, stored or logged. When
     `api_key` is None/empty the resolution is unchanged (Groq/Ollama/OpenAI per
     env), so the free path is byte-identical.
     """
@@ -381,11 +423,16 @@ def get_llm(role: str = "default", api_key: str | None = None):
     configure_cache()
 
     if api_key:
-        # A caller's own key overrides the global provider for this call: resolve
-        # to the role's OpenAI model and authenticate it with that key. The key is
-        # mapped by `init_chat_model` to the provider SDK's credential (ChatOpenAI's
-        # `openai_api_key`) and never leaves the returned instance.
-        model = _resolve_openai_model(role)
+        # A caller's own key overrides the global provider for this call. Detect the
+        # provider from the key prefix: `sk-ant-` -> Anthropic, otherwise OpenAI.
+        # Resolve to that provider's model for the role and authenticate it with the
+        # key. The key is mapped by `init_chat_model` to the provider SDK's
+        # credential (ChatOpenAI's `openai_api_key` / ChatAnthropic's `anthropic_api_key`)
+        # and never leaves the returned instance.
+        if api_key.startswith("sk-ant-"):
+            model = _resolve_anthropic_model(role)
+        else:
+            model = _resolve_openai_model(role)
         provider_kwargs: dict = {"api_key": api_key}
     else:
         model, provider_kwargs = _resolve_model(role)

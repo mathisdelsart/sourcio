@@ -268,6 +268,63 @@ def test_get_llm_key_honours_openai_per_role_override(monkeypatch):
     assert captured["kwargs"].get("api_key") == "sk-test"
 
 
+def test_get_llm_anthropic_key_forces_anthropic_model(monkeypatch):
+    # An `sk-ant-` key is auto-detected and routes THIS call to Anthropic: the role
+    # resolves to the anthropic_chat_model default (prefixed `anthropic:`) and the
+    # key is forwarded to init_chat_model (which maps it to ChatAnthropic).
+    monkeypatch.delenv("LLM_EXPLAIN", raising=False)
+    _fresh_settings(monkeypatch, LLM_PROVIDER="groq")
+
+    captured = {}
+
+    def fake_init(model, **kwargs):
+        captured["model"] = model
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr(config, "init_chat_model", fake_init)
+    config.get_llm("explain", api_key="sk-ant-xxx")
+    assert captured["model"].startswith("anthropic:")
+    assert captured["model"] == f"anthropic:{get_settings().anthropic_chat_model}"
+    assert captured["kwargs"].get("api_key") == "sk-ant-xxx"
+    assert captured["kwargs"].get("temperature") == 0
+
+
+def test_get_llm_anthropic_key_honours_claude_per_role_override(monkeypatch):
+    # An explicit LLM_<ROLE> naming a claude model is honored under an sk-ant- key.
+    _fresh_settings(monkeypatch, LLM_PROVIDER="groq", LLM_EXPLAIN="anthropic:claude-opus-4-8")
+
+    captured = {}
+
+    def fake_init(model, **kwargs):
+        captured["model"] = model
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr(config, "init_chat_model", fake_init)
+    config.get_llm("explain", api_key="sk-ant-xxx")
+    assert captured["model"] == "anthropic:claude-opus-4-8"
+    assert captured["kwargs"].get("api_key") == "sk-ant-xxx"
+
+
+def test_get_llm_openai_key_still_forces_openai(monkeypatch):
+    # A non-`sk-ant-` key keeps the existing OpenAI behavior (byte-identical).
+    monkeypatch.delenv("LLM_EXPLAIN", raising=False)
+    _fresh_settings(monkeypatch, LLM_PROVIDER="groq")
+
+    captured = {}
+
+    def fake_init(model, **kwargs):
+        captured["model"] = model
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr(config, "init_chat_model", fake_init)
+    config.get_llm("explain", api_key="sk-xxx")
+    assert captured["model"] == "gpt-4o-mini"
+    assert captured["kwargs"].get("api_key") == "sk-xxx"
+
+
 def test_get_llm_no_key_leaves_groq_resolution_unchanged(monkeypatch):
     # Without a key the resolution is byte-identical to before: the free Groq
     # model, no api_key kwarg. This is the default free path.

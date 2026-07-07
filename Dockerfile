@@ -38,6 +38,8 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.12.*"
 #    actually needs at runtime are installed (justification):
 #      - base deps (langchain, langchain-openai, qdrant-client, pydantic-settings)
 #      - langchain-groq -> the free hosted Groq LLM provider (LLM_PROVIDER=groq)
+#      - langchain-anthropic -> ChatAnthropic, so a visitor's own Anthropic key
+#        (a `sk-ant-` key on the X-OpenAI-Key header) drives a premium Claude model
 #      - psycopg[binary] -> the Postgres driver, for a managed DATABASE_URL
 #        (postgresql+psycopg://...); harmless when the default SQLite is used
 #      - bcrypt + pyjwt -> auth (password hashing + JWT access tokens); imported
@@ -63,6 +65,7 @@ RUN pip install \
     "langchain-core>=1.4" \
     "langchain-openai>=0.2" \
     "langchain-groq>=0.2" \
+    "langchain-anthropic>=0.3" \
     "bcrypt>=4.0" \
     "pyjwt>=2.8" \
     "python-multipart>=0.0.9" \
