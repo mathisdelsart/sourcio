@@ -45,14 +45,19 @@ class Settings(BaseSettings):
     # Multilingual embeddings (documents and questions are in French).
     embedding_model: str = "BAAI/bge-m3"
 
-    # Retrieval threshold — a coarse floor only: it drops near-zero, clearly
-    # unrelated matches, but the authoritative "is the answer actually in the
-    # course?" decision is made by the grounded LLM, which refuses when the
-    # retrieved passages do not contain the answer. A high absolute threshold
-    # wrongly refused relevant-but-low-scoring content (e.g. a short, vaguely
-    # phrased question against a one-page document), so the floor is kept low and
-    # the LLM judges. Override with SIMILARITY_THRESHOLD to tighten/loosen.
-    similarity_threshold: float = 0.25
+    # Retrieval threshold on the dense (bge-m3 cosine) score — the primary,
+    # model-independent grounding gate. Calibration on the course corpus found a
+    # clean separation between in-course questions (~0.57-0.68) and out-of-course
+    # ones (~0.28-0.43), with 100% separation around 0.50. The floor is therefore
+    # set at 0.5: an off-course question retrieves nothing above it, so the
+    # pipeline refuses deterministically instead of relying on a (possibly weak)
+    # LLM to notice it is off-topic. This gates every surface (ask, exercise,
+    # quiz) since they share retrieve(). If a genuine in-course question is
+    # wrongly refused on a different corpus, re-run `python -m eval.calibrate` and
+    # override via SIMILARITY_THRESHOLD; lowering it trades grounding safety for
+    # recall. The LLM refusal and the no-citation guard remain as secondary
+    # backstops on top of this floor.
+    similarity_threshold: float = 0.5
 
     # Cross-encoder reranker (opt-in precision boost, no re-ingestion needed).
     # "" disables it (dense path unchanged); a model name (e.g.
