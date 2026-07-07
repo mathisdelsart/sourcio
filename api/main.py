@@ -444,6 +444,9 @@ class ExerciseRequest(BaseModel):
     notion: str
     course: str | None = None
     chapter: str | None = None
+    # Optional locale code ('en'/'fr'/'nl') to force the exercise's language;
+    # None keeps the model writing in the request's own language.
+    language: str | None = None
     # Optional thread to attach the resulting activity item to, like /ask. When
     # None (or not owned by the student) the item stays in the flat history.
     session_id: int | None = None
@@ -493,6 +496,9 @@ class QuizRequest(BaseModel):
     n: int = Field(default=3, ge=1, le=10)
     course: str | None = None
     chapter: str | None = None
+    # Optional locale code ('en'/'fr'/'nl') to force the quiz's language; None
+    # keeps the model writing in the request's own language.
+    language: str | None = None
     # Optional thread to attach the resulting activity item to, like /ask. When
     # None (or not owned by the student) the item stays in the flat history.
     session_id: int | None = None
@@ -1113,6 +1119,7 @@ def exercise(request: ExerciseRequest, user: UserOut | None = DataUser) -> dict[
             "student_id": request.student_id,
             "course": request.course,
             "chapter": request.chapter,
+            "language": request.language,
         }
     )
     # generate always populates "exercise" (a built exercise or a refusal).
@@ -1174,6 +1181,7 @@ def quiz(request: QuizRequest, user: UserOut | None = DataUser) -> dict[str, Any
         request.student_id,
         course=request.course,
         chapter=request.chapter,
+        language=request.language,
     )
     # Record a concise activity turn (the notion + question count), never the full
     # quiz JSON. Skip on refusal: an uncovered notion produces no questions.

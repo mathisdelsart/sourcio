@@ -23,7 +23,7 @@ import re
 from typing import Any
 
 from agent.state import Rigor
-from core.answer import REFUSAL
+from core.answer import REFUSAL, _language_instruction
 from core.config import get_llm
 from core.obs import get_callbacks
 from ingestion.schema import format_numbered_sources
@@ -32,6 +32,9 @@ from ingestion.schema import format_numbered_sources
 # grade node's default so quiz and exercise grading behave identically.
 DEFAULT_RIGOR: Rigor = "standard"
 
+# Base instructions; the output-language directive is injected per request by
+# ``_system_prompt`` so the quiz follows the UI language, not the source one. A
+# ``{lang}`` slot sits between the bullets and the format section.
 _SYSTEM = (
     "You are a course tutor who writes short practice quizzes on the requested"
     " notion using ONLY the numbered sources below.\n"
@@ -52,10 +55,16 @@ _SYSTEM = (
     "- Write all mathematics in LaTeX: inline as $...$ and display as $$...$$.\n"
     "- For each question also provide a complete reference solution, grounded in"
     " the sources.\n"
+    "{lang}"
     "Reply with JSON only: a list of objects "
     '[{{"problem": "<question>", "solution": "<reference solution>"}}, ...] '
     "with {n} item(s)."
 )
+
+
+def _system_prompt(n: int, language: str | None) -> str:
+    """Assemble the quiz system prompt with the count and language injected."""
+    return _SYSTEM.format(n=n, lang=_language_instruction(language, subject="the quiz"))
 
 
 def _parse_questions(raw: str, n: int) -> list[dict[str, str]]:
@@ -141,13 +150,16 @@ def generate_quiz(
     *,
     course: str | None = None,
     chapter: str | None = None,
+    language: str | None = None,
 ) -> dict[str, Any]:
     """Generate a course-grounded quiz of ``n`` questions on ``notion``.
 
     Retrieves chunks for ``notion`` and builds the questions only from them.
     ``course`` and ``chapter`` optionally scope retrieval to a single course
     (and chapter) so the quiz stays on the requested material; when both are
-    None the whole collection is searched. Returns a refusal (``refused=True``,
+    None the whole collection is searched. ``language`` (a locale code) forces
+    the quiz's prose into that language regardless of the source language.
+    Returns a refusal (``refused=True``,
     empty ``questions``) when nothing relevant is found or the model produces no
     usable question, never inventing content. On success the quiz and its
     questions are persisted (best-effort) and the return exposes problems only —
@@ -162,7 +174,7 @@ def generate_quiz(
     if not results:
         return {"quiz_id": None, "notion": notion, "questions": [], "refused": True}
 
-    system = _SYSTEM.format(n=n)
+    system = _system_prompt(n, language)
     prompt = f"Sources:\n{format_numbered_sources(results)}\n\nNotion: {notion}"
     raw = get_llm("generate").invoke([("system", system), ("human", prompt)]).content.strip()
 

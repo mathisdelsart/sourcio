@@ -552,6 +552,8 @@ export async function reexplainStream(
 /**
  * Generate a course-grounded exercise from a free-form request. `course` and
  * `chapter` optionally scope retrieval and are only sent when truthy.
+ * `language` (a locale code) forces the exercise's language and is only sent
+ * when truthy.
  */
 export async function exercise(
   studentId: string,
@@ -560,11 +562,13 @@ export async function exercise(
   course?: string | null,
   chapter?: string | null,
   sessionId?: number | null,
+  language?: string | null,
 ): Promise<ExerciseResponse> {
   const payload: Record<string, unknown> = { student_id: studentId, notion };
   if (course) payload.course = course;
   if (chapter) payload.chapter = chapter;
   if (sessionId != null) payload.session_id = sessionId;
+  if (language) payload.language = language;
   return request<ExerciseResponse>(
     "/exercise",
     {
@@ -598,6 +602,8 @@ export async function grade(
 /**
  * Generate a course-grounded quiz of `n` questions from a free-form request.
  * `course` and `chapter` optionally scope retrieval and are only sent when truthy.
+ * `language` (a locale code) forces the quiz's language and is only sent when
+ * truthy.
  */
 export async function quiz(
   studentId: string,
@@ -607,11 +613,13 @@ export async function quiz(
   course?: string | null,
   chapter?: string | null,
   sessionId?: number | null,
+  language?: string | null,
 ): Promise<QuizResponse> {
   const payload: Record<string, unknown> = { student_id: studentId, notion, n };
   if (course) payload.course = course;
   if (chapter) payload.chapter = chapter;
   if (sessionId != null) payload.session_id = sessionId;
+  if (language) payload.language = language;
   return request<QuizResponse>(
     "/quiz",
     {

@@ -71,6 +71,25 @@ def _patch_retrieve(monkeypatch, results, captured: dict | None = None) -> None:
     monkeypatch.setattr("core.retrieval.retrieve", _retrieve)
 
 
+def test_generate_quiz_threads_language_into_prompt(engine, monkeypatch):
+    # A French UI request must inject the French output-language directive so the
+    # quiz is written in French even though the sources are in English.
+    captured: dict = {}
+
+    class _CapturingLLM:
+        def invoke(self, messages, config=None):
+            captured["system"] = messages[0][1]
+            return _FakeMessage(_TWO_QUESTIONS)
+
+    _patch_retrieve(monkeypatch, _make_retrieved("Group axioms."))
+    monkeypatch.setattr("agent.nodes.quiz.get_llm", lambda role="default": _CapturingLLM())
+
+    generate_quiz("groups", 2, "zoe", language="fr")
+
+    assert "Write the quiz in French" in captured["system"]
+    assert "even if the sources are written in another language" in captured["system"]
+
+
 def test_generate_quiz_persists_quiz_and_questions(engine, monkeypatch):
     _patch_retrieve(monkeypatch, _make_retrieved("Group axioms."))
     _patch_llm(monkeypatch, _TWO_QUESTIONS)

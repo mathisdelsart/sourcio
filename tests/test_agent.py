@@ -273,6 +273,18 @@ def test_generate_node_scopes_retrieval_by_course_and_chapter(fake_llm, fake_ret
     assert out["exercise"]["course"] == "ELEC2885"
 
 
+def test_generate_node_threads_language_into_prompt(fake_llm, fake_retrieve):
+    # A French UI request must inject the French output-language directive so the
+    # exercise is written in French even though the sources are in English.
+    fake_retrieve["results"] = [_retrieved(3, "Approximation space V_j.")]
+    fake_llm["reply"] = "EXERCISE:\nDo this.\n\nSOLUTION:\nThe answer."
+    generate({"message": "the approximation space", "language": "fr"})
+
+    system_msg = fake_llm["last"].calls[0][0][1]
+    assert "Write the exercise in French" in system_msg
+    assert "even if the sources are written in another language" in system_msg
+
+
 def test_generate_node_refuses_when_nothing_retrieved(fake_llm, fake_retrieve):
     fake_retrieve["results"] = []  # nothing relevant in the course
     out = generate({"message": "rough-set equivalence relations"})

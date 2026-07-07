@@ -58,6 +58,7 @@ class TutorState(TypedDict, total=False):
     rigor: Rigor  # optional marking strictness for grading
     course: str | None  # optional course filter scoping grounded retrieval
     chapter: str | None  # optional chapter filter scoping grounded retrieval
+    language: str | None  # optional locale code ('en'/'fr'/'nl') for the output language
     retrieved: list[Any]  # citations/sources backing the last explanation
     answer: str  # grounded explanation (explain / reexplain output)
     exercise: dict[str, Any]  # generated exercise + reference solution

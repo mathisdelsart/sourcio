@@ -130,6 +130,67 @@ def test_answer_refuses_when_whole_output_is_refusal(monkeypatch):
     assert out["answer"] == answer_mod.REFUSAL
 
 
+def test_answer_refuses_when_model_answers_without_any_citation(monkeypatch):
+    # Retrieval hit, but the model wrote a plausible answer with zero [n] markers
+    # (e.g. answered from its own knowledge on an uncovered topic). The grounding
+    # guard must convert this into a refusal so no ungrounded answer leaks.
+    results = [_retrieved(11, text="A wavelet is localized.")]
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
+    reply = SimpleNamespace(content="The Wavelet Transform decomposes a signal into scales.")
+    monkeypatch.setattr(
+        answer_mod,
+        "get_llm",
+        lambda role: SimpleNamespace(invoke=lambda messages, config=None: reply),
+    )
+
+    out = answer_mod.answer("what is the wavelet transform?")
+
+    assert out["refused"] is True
+    assert out["answer"] == answer_mod.REFUSAL
+    assert out["citations"] == []
+    assert out["sources"] == []
+    assert out["retrieved"] == []
+
+
+def test_answer_keeps_grounded_answer_with_citation(monkeypatch):
+    # A citation-bearing answer is unaffected by the grounding guard.
+    results = [_retrieved(11, text="A wavelet is localized.")]
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
+    reply = SimpleNamespace(content="A wavelet is localized [1].")
+    monkeypatch.setattr(
+        answer_mod,
+        "get_llm",
+        lambda role: SimpleNamespace(invoke=lambda messages, config=None: reply),
+    )
+
+    out = answer_mod.answer("what is a wavelet?")
+
+    assert out["refused"] is False
+    assert out["answer"] == "A wavelet is localized [1]."
+    assert out["sources"] == ["(Wavelet Transform, p.11)"]
+
+
+def test_stream_answer_refuses_when_no_citation(monkeypatch):
+    # Streaming path: the model streamed a plausible but uncited answer; the final
+    # event must be a refusal so the UI shows the refusal, not the streamed text.
+    results = [_retrieved(11, text="A wavelet is localized.")]
+    monkeypatch.setattr(answer_mod, "retrieve", lambda *a, **k: results)
+    monkeypatch.setattr(
+        answer_mod,
+        "get_llm",
+        lambda role: _fake_stream_llm(["The Wavelet Transform ", "decomposes a signal."]),
+    )
+
+    events = list(answer_mod.stream_answer("what is the wavelet transform?"))
+    final = events[-1]
+
+    assert final["type"] == "sources"
+    assert final["refused"] is True
+    assert final["answer"] == answer_mod.REFUSAL
+    assert final["sources"] == []
+    assert final["citations"] == []
+
+
 def test_answer_language_injects_french_instruction(monkeypatch):
     # language='fr' must put the French default-language directive in the prompt.
     captured: list = []
@@ -145,7 +206,8 @@ def test_answer_language_injects_french_instruction(monkeypatch):
     answer_mod.answer("qu'est-ce qu'une ondelette ?", language="fr")
 
     system_prompt = captured[0][0][1]
-    assert "Answer in French by default" in system_prompt
+    assert "Write the answer in French" in system_prompt
+    assert "even if the sources are written in another language" in system_prompt
 
 
 def test_stream_answer_strips_trailing_refusal(monkeypatch):

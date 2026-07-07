@@ -48,7 +48,7 @@ const COUNTS = [3, 5, 7] as const;
 
 export function QuizPanel({ studentId, config, sessionId }: QuizPanelProps) {
   const toast = useToast();
-  const { t } = useT();
+  const { t, locale } = useT();
   const [notion, setNotion] = useState("");
   // Course/chapter scope retrieval so the quiz stays on the requested topic.
   // Lazy-init the course from localStorage so a choice is shared across tabs.
@@ -112,6 +112,8 @@ export function QuizPanel({ studentId, config, sessionId }: QuizPanelProps) {
         course.trim() || null,
         chapter.trim() || null,
         sessionId,
+        // Force the quiz to default to the current UI language.
+        locale,
       );
       setResult(data);
     } catch (err) {

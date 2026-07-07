@@ -13,12 +13,14 @@ NOT refuse merely because the material is non-mathematical.
 
 from agent.persistence import persist_exercise
 from agent.state import TutorState
-from core.answer import REFUSAL
+from core.answer import REFUSAL, _language_instruction
 from core.config import get_llm
 from core.obs import get_callbacks
 from ingestion.schema import format_numbered_sources
 
-_SYSTEM = (
+# Base instructions; the output-language directive is injected per request by
+# ``_system_prompt`` so an exercise follows the UI language, not the source one.
+_SYSTEM_HEAD = (
     "You are a course tutor who writes practice exercises on the requested topic "
     "using ONLY the numbered sources below.\n"
     "- Build an exercise as long as the numbered sources contain information "
@@ -39,9 +41,17 @@ _SYSTEM = (
     "- When the material is mathematical, write mathematics in LaTeX: inline as "
     "$...$ and display as $$...$$.\n"
     "- Then provide a complete reference solution, also grounded in the sources.\n"
+)
+
+_SYSTEM_FORMAT = (
     "Format your reply exactly as:\n"
     "EXERCISE:\n<the exercise>\n\nSOLUTION:\n<the reference solution>"
 )
+
+
+def _system_prompt(language: str | None = None) -> str:
+    """Assemble the exercise system prompt with the language directive injected."""
+    return _SYSTEM_HEAD + _language_instruction(language, subject="the exercise") + _SYSTEM_FORMAT
 
 
 def _split(raw: str) -> tuple[str, str]:
@@ -81,7 +91,7 @@ def generate(state: TutorState) -> TutorState:
     raw = (
         get_llm("generate")
         .invoke(
-            [("system", _SYSTEM), ("human", prompt)],
+            [("system", _system_prompt(state.get("language"))), ("human", prompt)],
             config={"callbacks": get_callbacks()},
         )
         .content.strip()

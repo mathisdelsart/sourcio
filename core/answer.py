@@ -20,24 +20,29 @@ REFUSAL = "This is not covered in the course material."
 _LANGUAGE_NAMES = {"en": "English", "fr": "French", "nl": "Dutch"}
 
 
-def _language_instruction(language: str | None) -> str:
-    """Build the answer-language bullet for the system prompt.
+def _language_instruction(language: str | None, *, subject: str = "the answer") -> str:
+    """Build the output-language directive for a grounding system prompt.
 
-    With no explicit ``language`` we keep the original behavior: answer in the
-    question's own language. With a locale code ('en'/'fr'/'nl') we set that as
-    the default while still deferring to the question when it is written in, or
-    explicitly asks for, another language.
+    ``subject`` names what must be written ("the answer", "the exercise", "the
+    quiz"), so the same directive is reusable across the answer, exercise and
+    quiz prompts. With no explicit ``language`` we keep the original behavior:
+    write in the request's own language. With a locale code ('en'/'fr'/'nl') we
+    make that language the strong default that overrides the sources' language,
+    while still deferring to an explicit request for another language. The
+    wording is deliberately forceful so a weak local model does not default to
+    the (usually English) source language.
     """
     if language is None:
         return (
-            "- Reply in the same language as the question, unless it explicitly "
-            "asks for another language.\n"
+            f"- Write {subject} in the same language as the request, unless it "
+            "explicitly asks for another language.\n"
         )
     name = _LANGUAGE_NAMES.get(language, "English")
     return (
-        f"- Answer in {name} by default. However, if the question is written in a "
-        "different language, or explicitly asks for another language, answer in "
-        "that language instead.\n"
+        f"- Write {subject} in {name}, even if the sources are written in another "
+        "language, unless the request explicitly asks for another language. Only "
+        "the prose is translated: keep all mathematics, notation and symbols "
+        "exactly as they appear in the sources.\n"
     )
 
 
@@ -212,6 +217,20 @@ def answer(
     cleaned = _strip_filler_lead_ins(_strip_trailing_refusal(raw))
     # Only list the sources the answer truly relies on, not every retrieved chunk.
     citations = _citations(cleaned, results)
+    # Grounding guard (citation-by-construction): a non-refusal answer that cites
+    # zero sources is not defensible from the course material, so a weak model may
+    # have answered from its own knowledge. Refuse rather than leak an ungrounded
+    # answer. A genuine refusal is already returned above (raw == REFUSAL), so this
+    # only ever converts a NON-refusal, no-citation answer.
+    if not citations:
+        return {
+            "answer": REFUSAL,
+            "refused": True,
+            "sources": [],
+            "citations": [],
+            "raw": raw,
+            "retrieved": [],
+        }
     return {
         # Keep the inline [n] markers: the UI pairs them with the numbered legend.
         "answer": cleaned,
@@ -299,6 +318,18 @@ def stream_answer(
     # while keeping the inline [n] markers for the numbered legend.
     cleaned = _strip_filler_lead_ins(_strip_trailing_refusal(raw))
     citations = _citations(cleaned, results)
+    # Grounding guard (same as answer()): if the assembled answer cites no source
+    # yet was not an explicit refusal, it is ungrounded — emit the refusal as the
+    # final event so the UI shows the refusal, not the streamed ungrounded text.
+    if not citations:
+        yield {
+            "type": "sources",
+            "sources": [],
+            "citations": [],
+            "refused": True,
+            "answer": REFUSAL,
+        }
+        return
     yield {
         "type": "sources",
         "sources": [c["label"] for c in citations],
