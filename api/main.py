@@ -276,6 +276,22 @@ DataUser = Depends(get_data_user)
 STUDENT_FOREIGN = "This student belongs to another account."
 
 
+def _iso_utc(dt: datetime | None) -> str:
+    """Serialize a timestamp as a timezone-aware UTC ISO string.
+
+    SQLite stores ``func.now()`` as a naive UTC value, so a bare ``isoformat()``
+    emits no offset and the browser parses it as local time (showing the wrong
+    clock). Tagging naive datetimes as UTC lets the frontend convert to the
+    user's local timezone; already-aware datetimes (e.g. PostgreSQL, or Python
+    ``datetime.now(UTC)``) are left unchanged.
+    """
+    if dt is None:
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.isoformat()
+
+
 def _resolve_student(session: Any, external_id: str, user: UserOut | None) -> Student:
     """Get-or-create the student and, when authenticated, claim/enforce ownership.
 
@@ -893,7 +909,7 @@ def my_students(current_user: UserOut = CurrentUser) -> list[dict[str, Any]]:
             {
                 "id": row.id,
                 "external_id": row.external_id,
-                "created_at": row.created_at.isoformat() if row.created_at else "",
+                "created_at": _iso_utc(row.created_at),
             }
             for row in rows
         ]
@@ -1319,7 +1335,7 @@ def exercise_review(
                 "answer": latest.answer,
                 "score": latest.score,
                 "feedback": latest.feedback,
-                "created_at": latest.created_at.isoformat() if latest.created_at else "",
+                "created_at": _iso_utc(latest.created_at),
             }
         return {
             "problem": ex.problem,
@@ -1592,7 +1608,7 @@ def history(
             {
                 "role": row.role,
                 "content": row.content,
-                "created_at": row.created_at.isoformat() if row.created_at else "",
+                "created_at": _iso_utc(row.created_at),
                 "ref_id": row.ref_id,
             }
             for row in rows
@@ -1655,7 +1671,7 @@ def create_session(
         return {
             "id": thread.id,
             "title": thread.title,
-            "created_at": thread.created_at.isoformat() if thread.created_at else "",
+            "created_at": _iso_utc(thread.created_at),
         }
 
 
@@ -1683,7 +1699,7 @@ def list_sessions(student_id: str, user: UserOut | None = DataUser) -> list[dict
             {
                 "id": row.id,
                 "title": row.title,
-                "created_at": row.created_at.isoformat() if row.created_at else "",
+                "created_at": _iso_utc(row.created_at),
             }
             for row in rows
         ]
@@ -1726,7 +1742,7 @@ def session_messages(
             {
                 "role": row.role,
                 "content": row.content,
-                "created_at": row.created_at.isoformat() if row.created_at else "",
+                "created_at": _iso_utc(row.created_at),
                 "ref_id": row.ref_id,
             }
             for row in rows
@@ -1878,7 +1894,7 @@ def record_review(request: ReviewRequest, user: UserOut | None = DataUser) -> di
             "notion": row.notion,
             "ease": row.ease,
             "interval_days": row.interval_days,
-            "due_at": due_at.isoformat(),
+            "due_at": _iso_utc(due_at),
         }
 
 
@@ -1920,7 +1936,7 @@ def enqueue_review(
             "notion": row.notion,
             "ease": row.ease,
             "interval_days": row.interval_days,
-            "due_at": now.isoformat(),
+            "due_at": _iso_utc(now),
         }
 
 
@@ -1953,7 +1969,7 @@ def due_reviews(student_id: str, user: UserOut | None = DataUser) -> list[dict[s
                 "notion": row.notion,
                 "ease": row.ease,
                 "interval_days": row.interval_days,
-                "due_at": row.due_at.isoformat() if row.due_at else "",
+                "due_at": _iso_utc(row.due_at),
             }
             for row in rows
         ]
