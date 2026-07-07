@@ -28,6 +28,14 @@ function rowKey(course: string, chapter: string | null): string {
   return `${course}::${chapter ?? ""}`;
 }
 
+/** Client-side extension guard; the backend stays the final arbiter. */
+const ACCEPTED_EXTENSIONS = [".pdf", ".md", ".txt"];
+
+function isSupportedFile(name: string): boolean {
+  const lower = name.toLowerCase();
+  return ACCEPTED_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
 /** Format seconds as m:ss (or s when under a minute). */
 function fmtTime(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
@@ -50,7 +58,26 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
   // Live ingestion progress; null when no upload is running.
   const [progress, setProgress] = useState<DocumentProgress | null>(null);
   const [uploading, setUploading] = useState(false);
+  // True while a file is being dragged over the dropzone (drives the accent styling).
+  const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Set the file into the shared state used by the button flow, rejecting
+  // obviously unsupported types with a gentle message.
+  const acceptFile = useCallback(
+    (candidate: File | null) => {
+      if (!candidate) {
+        setFile(null);
+        return;
+      }
+      if (!isSupportedFile(candidate.name)) {
+        toast.push(t("doc.upload.unsupported"), "error");
+        return;
+      }
+      setFile(candidate);
+    },
+    [toast, t],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -175,16 +202,68 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
               <label htmlFor="doc-file" className="block text-sm font-medium text-zinc-700">
                 {t("doc.upload.file")}
               </label>
+
+              {/* Drag-and-drop zone; clicking or Enter/Space opens the native picker. */}
+              <div
+                role="button"
+                tabIndex={uploading ? -1 : 0}
+                aria-label={t("doc.upload.dropzoneAria")}
+                aria-disabled={uploading}
+                onClick={() => {
+                  if (!uploading) fileInputRef.current?.click();
+                }}
+                onKeyDown={(e) => {
+                  if (uploading) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    fileInputRef.current?.click();
+                  }
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (!uploading) setDragging(true);
+                }}
+                onDragLeave={(e) => {
+                  // Ignore leave events fired when moving between child elements.
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                    setDragging(false);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  if (uploading) return;
+                  acceptFile(e.dataTransfer.files?.[0] ?? null);
+                }}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2",
+                  uploading
+                    ? "cursor-not-allowed border-zinc-200 opacity-60"
+                    : dragging
+                      ? "cursor-copy border-brand-500 bg-brand-50"
+                      : "cursor-pointer border-zinc-300 hover:border-brand-400 hover:bg-brand-50/40",
+                )}
+              >
+                <UploadIcon />
+                <p className="text-sm font-medium text-zinc-700">{t("doc.upload.dropzone")}</p>
+                {file ? (
+                  <p className="text-xs font-medium text-brand-700">
+                    {t("doc.upload.selectedFile", { name: file.name })}
+                  </p>
+                ) : (
+                  <p className="text-xs text-zinc-500">{t("doc.upload.fileHint")}</p>
+                )}
+              </div>
+
               <input
                 id="doc-file"
                 ref={fileInputRef}
                 type="file"
                 accept=".pdf,.md,.txt"
                 disabled={uploading}
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => acceptFile(e.target.files?.[0] ?? null)}
                 className="block w-full text-sm text-zinc-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3.5 file:py-2 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100"
               />
-              <p className="text-xs text-zinc-500">{t("doc.upload.fileHint")}</p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <div className="flex-1">
@@ -354,6 +433,16 @@ function CheckIcon() {
   return (
     <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
       <path d="m5 12 5 5L20 6" />
+    </svg>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" className="h-6 w-6 text-brand-500" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M17 8l-5-5-5 5" />
+      <path d="M12 3v12" />
     </svg>
   );
 }
