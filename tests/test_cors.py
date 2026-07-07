@@ -41,3 +41,40 @@ def test_disallowed_origin_is_not_echoed():
     response = client.get("/health", headers={"Origin": "http://evil.example.com"})
     assert response.status_code == 200
     assert response.headers.get("access-control-allow-origin") != "http://evil.example.com"
+
+
+# --- CORS on error responses -------------------------------------------------
+# A 500 is produced by Starlette's ServerErrorMiddleware, which runs *outside*
+# the CORSMiddleware, so the error handler must re-attach CORS headers itself;
+# otherwise the browser masks the real status/message as an unreachable backend.
+
+# raise_server_exceptions=False lets the app's 500 handler run instead of the
+# test client re-raising the error.
+error_client = TestClient(app, raise_server_exceptions=False)
+
+
+def test_500_carries_cors_header_for_allowed_origin(monkeypatch):
+    import api.main as api_main
+
+    def boom():
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(api_main, "list_courses", boom)
+    response = error_client.get("/courses", headers={"Origin": ALLOWED})
+
+    assert response.status_code == 500
+    assert response.headers.get("access-control-allow-origin") == ALLOWED
+    assert response.headers.get("access-control-allow-credentials") == "true"
+
+
+def test_500_does_not_echo_disallowed_origin(monkeypatch):
+    import api.main as api_main
+
+    def boom():
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(api_main, "list_courses", boom)
+    response = error_client.get("/courses", headers={"Origin": "http://evil.example.com"})
+
+    assert response.status_code == 500
+    assert response.headers.get("access-control-allow-origin") != "http://evil.example.com"

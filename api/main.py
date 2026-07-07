@@ -170,6 +170,28 @@ if _cors_origins:
     )
 
 
+def _cors_headers_for(request: Request) -> dict[str, str]:
+    """CORS headers to echo on an error response for an allowed origin.
+
+    Starlette's ``ServerErrorMiddleware`` (which runs the 500 handler below) sits
+    *outside* the ``CORSMiddleware``, so a 500 response would otherwise carry no
+    ``Access-Control-Allow-Origin`` header and the browser would report a generic
+    "could not reach the backend" instead of surfacing the real status/message.
+    We mirror the middleware's decision here: echo the request ``Origin`` only
+    when it is in the configured ``cors_origins`` (never a blanket ``*``), and set
+    ``Access-Control-Allow-Credentials`` to match ``allow_credentials=True``.
+    Returns an empty dict when CORS is disabled or the origin is not allowed.
+    """
+    origin = request.headers.get("origin")
+    if not origin or origin not in _cors_origins:
+        return {}
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+        "Vary": "Origin",
+    }
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Return a consistent JSON body for unhandled (500) errors, leaking nothing.
@@ -195,7 +217,12 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         request.url.path,
         exc_info=exc,
     )
-    headers = {REQUEST_ID_HEADER: request_id} if request_id else None
+    # This 500 response bypasses both RequestIdMiddleware's header wrapper and the
+    # CORSMiddleware, so re-attach the request id and the CORS headers here; without
+    # the latter the browser masks the real error as an unreachable-backend failure.
+    headers = _cors_headers_for(request)
+    if request_id:
+        headers[REQUEST_ID_HEADER] = request_id
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={

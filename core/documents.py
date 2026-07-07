@@ -40,6 +40,15 @@ _SCROLL_MAX_POINTS = 100_000
 # Overridable for tests/deploys; gitignored.
 UPLOADS_DIR = os.environ.get("DOCUMENTS_DIR", "uploads")
 
+# User-facing message when an upload is neither a PDF nor a supported text file.
+# Surfaced as a clean ``error`` event / raised error instead of a raw fitz crash.
+UNSUPPORTED_FILE_MESSAGE = "Unsupported file type — upload a PDF, .md or .txt"
+
+
+def _is_pdf_file(path: str) -> bool:
+    """Return whether ``path`` has a ``.pdf`` extension (case-insensitive)."""
+    return os.path.splitext(path)[1].lower() == ".pdf"
+
 
 def _slug(value: str) -> str:
     """Filesystem-safe slug for a course directory name."""
@@ -227,16 +236,29 @@ def _indexed_pages(course: str, document: str | None = None) -> set[int]:
 def _load_pages(path: str, course: str) -> list[Page]:
     """Extract pages from an uploaded file, routing by extension.
 
-    ``.md``/``.txt`` go through the prose loader (no model, no network); anything
-    else is treated as a PDF and routed through the math-aware vision pipeline.
-    ``extract_pdf`` is imported lazily so the heavy PDF dependency (PyMuPDF) stays
-    optional and a stubbed test never triggers it.
+    ``.md``/``.txt`` go through the prose loader (no model, no network); ``.pdf``
+    is routed through the math-aware pipeline in **hybrid** mode, so plain-text
+    pages (e.g. a prose PDF) are extracted for free and deterministically with
+    PyMuPDF while only genuinely math/figure-heavy pages reach the vision model.
+    A clearly-unsupported extension raises a clean :class:`ValueError` rather than
+    letting a raw fitz error escape. ``extract_pdf`` is imported lazily so the
+    heavy PDF dependency (PyMuPDF) stays optional and a stubbed test never triggers
+    it.
     """
     if is_text_file(path):
         return load_text_file(path, course)
+    if not _is_pdf_file(path):
+        raise ValueError(UNSUPPORTED_FILE_MESSAGE)
     from ingestion.extract import extract_pdf
 
-    return extract_pdf(path, course)
+    try:
+        return extract_pdf(path, course, hybrid=True)
+    except ValueError:
+        raise
+    except Exception as exc:
+        # A corrupt/unreadable PDF (fitz.open failure) surfaces as a clean error
+        # rather than an opaque low-level exception.
+        raise ValueError(f"Could not read the PDF: {exc}") from exc
 
 
 def _stamp_pages(pages: list[Page], chapter: str | None, document: str) -> None:
@@ -353,21 +375,44 @@ def stream_ingest(
         }
         return
 
+    # A clearly-unsupported extension (not a PDF, and not caught above as text)
+    # is reported cleanly up front rather than failing later with a raw fitz error.
+    if not _is_pdf_file(path):
+        yield {
+            "type": "error",
+            "message": UNSUPPORTED_FILE_MESSAGE,
+            "done": 0,
+            "total": 0,
+            "indexed": 0,
+            "elapsed": round(time.time() - started, 1),
+        }
+        return
+
     from ingestion.extract import extract_pdf
     from ingestion.run import _pdf_page_count
 
-    total = _pdf_page_count(path)
-    already = _indexed_pages(course, document)
-    todo = [p for p in range(1, total + 1) if p not in already]
-    skipped = total - len(todo)  # pages already indexed for THIS document
-    done = skipped  # count already-indexed pages as done for the bar
+    total = 0
+    done = 0
     indexed = 0
-    yield {"type": "start", "total": total, "skipped": skipped}
-
+    skipped = 0
     try:
+        # Inside the try so a non-PDF / corrupt file (fitz.open failure) surfaces
+        # as a clean error event instead of an unhandled exception breaking the
+        # SSE stream mid-flight.
+        total = _pdf_page_count(path)
+        already = _indexed_pages(course, document)
+        todo = [p for p in range(1, total + 1) if p not in already]
+        skipped = total - len(todo)  # pages already indexed for THIS document
+        done = skipped  # count already-indexed pages as done for the bar
+        yield {"type": "start", "total": total, "skipped": skipped}
+
         for start in range(0, len(todo), batch_size):
             batch = todo[start : start + batch_size]
-            pages = extract_pdf(path, course, pages=batch)
+            # hybrid=True: plain-text pages are extracted for free with PyMuPDF
+            # (deterministic, no model), so a text PDF indexes even when the
+            # configured vision model is weak/absent; only math/figure-heavy pages
+            # reach the vision model.
+            pages = extract_pdf(path, course, pages=batch, hybrid=True)
             _stamp_pages(pages, chapter, document)
             chunks = chunk_pages(pages)
             if chunks:
