@@ -332,6 +332,26 @@ export async function getCourses(
   return Array.isArray(data.courses) ? data.courses : [];
 }
 
+/**
+ * List the distinct chapters of `course`, sorted. Empty when the course has none
+ * or nothing is indexed. When `studentId` is given the list is strictly scoped to
+ * that account's own material; without it the read is fail-closed (empty).
+ */
+export async function getChapters(
+  course: string,
+  studentId?: string | null,
+  config?: ConnectionConfig,
+): Promise<string[]> {
+  const params = new URLSearchParams({ course });
+  if (studentId) params.set("student_id", studentId);
+  const data = await request<{ chapters?: string[] }>(
+    `/chapters?${params.toString()}`,
+    { method: "GET", headers: buildHeaders(config) },
+    config,
+  );
+  return Array.isArray(data.chapters) ? data.chapters : [];
+}
+
 /** Ask a grounded question. `course`/`chapter` are only sent when truthy. */
 export async function ask(
   body: AskRequest,

@@ -14,6 +14,7 @@ import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { TextField, TextArea } from "@/components/TextField";
 import { CourseSelect } from "@/components/CourseSelect";
+import { ChapterSelect } from "@/components/ChapterSelect";
 import { Markdown } from "@/components/Markdown";
 import { CitationChip } from "@/components/CitationChip";
 import { Spinner } from "@/components/Spinner";
@@ -231,12 +232,12 @@ export function AskPanel({
               loading={coursesLoading}
               error={coursesError}
             />
-            <TextField
-              label={t("ask.chapterLabel")}
-              hint={t("ask.chapterHint")}
-              placeholder={t("ask.chapterPlaceholder")}
+            <ChapterSelect
+              course={course}
+              studentId={studentId}
+              config={config}
               value={chapter}
-              onChange={(e) => setChapter(e.target.value)}
+              onChange={setChapter}
             />
             <TextField
               label={t("ask.maxSources")}

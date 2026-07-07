@@ -13,8 +13,9 @@ import {
 } from "@/lib/api";
 import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
-import { TextField, TextArea } from "@/components/TextField";
+import { TextArea } from "@/components/TextField";
 import { CourseSelect } from "@/components/CourseSelect";
+import { ChapterSelect } from "@/components/ChapterSelect";
 import { RigorSelector } from "@/components/RigorSelector";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, NoCoursesState, RefusalBanner } from "@/components/States";
@@ -230,12 +231,12 @@ export function QuizPanel({
               loading={coursesLoading}
               error={coursesError}
             />
-            <TextField
-              label={t("ask.chapterLabel")}
-              hint={t("ask.chapterHint")}
-              placeholder={t("ask.chapterPlaceholder")}
+            <ChapterSelect
+              course={course}
+              studentId={studentId}
+              config={config}
               value={chapter}
-              onChange={(e) => setChapter(e.target.value)}
+              onChange={setChapter}
             />
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
