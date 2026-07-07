@@ -16,6 +16,65 @@ import pytest
 import core.documents as documents_mod
 from ingestion.schema import Page
 
+# --- core.jobs: the in-memory background-job registry ------------------------
+
+
+def test_jobs_create_update_get_and_terminal_stamp():
+    import core.jobs as jobs_mod
+
+    job_id = jobs_mod.create_job("Wavelets", "Intro", "notes.pdf")
+    record = jobs_mod.get_job(job_id)
+    assert record is not None
+    assert record["job_id"] == job_id
+    assert record["status"] == "running"
+    assert record["course"] == "Wavelets"
+    assert record["chapter"] == "Intro"
+    assert record["filename"] == "notes.pdf"
+    assert record["finished_at"] is None
+
+    jobs_mod.update_job(job_id, {"type": "progress", "done": 1, "total": 3, "indexed": 1})
+    record = jobs_mod.get_job(job_id)
+    assert record is not None
+    assert record["done"] == 1 and record["total"] == 3
+    assert record["finished_at"] is None  # still running
+
+    jobs_mod.update_job(job_id, {"type": "done", "indexed": 3, "reason": "indexed"})
+    jobs_mod.update_job(job_id, {"status": "done"})
+    record = jobs_mod.get_job(job_id)
+    assert record is not None
+    assert record["status"] == "done"
+    assert record["finished_at"] is not None
+
+    # get returns a copy: mutating it must not leak back into the registry.
+    record["indexed"] = 999
+    assert jobs_mod.get_job(job_id)["indexed"] == 3
+
+
+def test_jobs_update_unknown_id_is_noop():
+    import core.jobs as jobs_mod
+
+    jobs_mod.update_job("nope", {"status": "done"})  # must not raise
+    assert jobs_mod.get_job("nope") is None
+
+
+def test_jobs_prune_drops_stale_finished_jobs(monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    import core.jobs as jobs_mod
+
+    old_id = jobs_mod.create_job("Old", None, "old.pdf")
+    jobs_mod.update_job(old_id, {"status": "done"})
+    # Backdate its completion beyond the retention window.
+    stale = datetime.now(UTC) - jobs_mod._RETENTION - timedelta(minutes=1)
+    with jobs_mod._lock:
+        jobs_mod._jobs[old_id]["finished_at"] = stale.isoformat()
+
+    # Creating a new job prunes stale finished ones.
+    new_id = jobs_mod.create_job("New", None, "new.pdf")
+    assert jobs_mod.get_job(old_id) is None
+    assert jobs_mod.get_job(new_id) is not None
+
+
 # --- list_documents: grouping by course and chapter --------------------------
 
 
@@ -448,19 +507,23 @@ def test_documents_route_empty(client, monkeypatch):
     assert response.json() == []
 
 
-def _sse_events(text: str) -> list[dict]:
-    """Parse the JSON payloads from an SSE response body."""
-    import json
+def _wait_for_job(client, job_id: str, *, timeout: float = 5.0) -> dict:
+    """Poll the job endpoint until the ingest thread reaches a terminal status."""
+    import time
 
-    out = []
-    for line in text.splitlines():
-        if line.startswith("data:"):
-            out.append(json.loads(line[5:].strip()))
-    return out
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        response = client.get(f"/documents/jobs/{job_id}")
+        assert response.status_code == 200
+        job = response.json()
+        if job["status"] in ("done", "error"):
+            return job
+        time.sleep(0.02)
+    raise AssertionError(f"job {job_id} did not finish within {timeout}s")
 
 
 @requires_api
-def test_upload_route_streams_progress(client, monkeypatch):
+def test_upload_route_returns_job_and_finishes(client, monkeypatch):
     seen: dict = {}
 
     def fake_save(data, course, filename):
@@ -472,7 +535,14 @@ def test_upload_route_streams_progress(client, monkeypatch):
         seen["chapter"] = chapter
         yield {"type": "start", "total": 2, "skipped": 0}
         yield {"type": "progress", "done": 2, "total": 2, "indexed": 2, "elapsed": 0.1}
-        yield {"type": "done", "indexed": 2, "total": 2, "elapsed": 0.1}
+        yield {
+            "type": "done",
+            "indexed": 2,
+            "skipped": 0,
+            "total": 2,
+            "reason": "indexed",
+            "elapsed": 0.1,
+        }
 
     monkeypatch.setattr(api_main, "save_upload", fake_save)
     monkeypatch.setattr(api_main, "stream_ingest", fake_stream)
@@ -482,11 +552,19 @@ def test_upload_route_streams_progress(client, monkeypatch):
         files={"file": ("notes.md", b"hello world", "text/markdown")},
         data={"course": "Wavelets", "chapter": "Intro"},
     )
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/event-stream")
-    events = _sse_events(response.text)
-    assert events[0]["type"] == "start"
-    assert events[-1] == {"type": "done", "indexed": 2, "total": 2, "elapsed": 0.1}
+    assert response.status_code == 202
+    job_id = response.json()["job_id"]
+    assert isinstance(job_id, str) and job_id
+
+    job = _wait_for_job(client, job_id)
+    assert job["status"] == "done"
+    assert job["indexed"] == 2
+    assert job["total"] == 2
+    assert job["reason"] == "indexed"
+    assert job["type"] == "done"
+    assert job["course"] == "Wavelets"
+    assert job["filename"] == "notes.md"
+    assert job["finished_at"]
     assert seen["bytes"] == b"hello world"
     assert seen["course"] == "Wavelets"
     assert seen["chapter"] == "Intro"
@@ -498,7 +576,7 @@ def test_upload_route_blank_chapter_becomes_null(client, monkeypatch):
 
     def fake_stream(path, course, chapter=None, **kwargs):  # noqa: ARG001
         seen["chapter"] = chapter
-        yield {"type": "done", "indexed": 0, "total": 0, "elapsed": 0.0}
+        yield {"type": "done", "indexed": 0, "total": 0, "reason": "empty", "elapsed": 0.0}
 
     monkeypatch.setattr(api_main, "save_upload", lambda *a, **k: "/tmp/x.txt")
     monkeypatch.setattr(api_main, "stream_ingest", fake_stream)
@@ -507,8 +585,53 @@ def test_upload_route_blank_chapter_becomes_null(client, monkeypatch):
         files={"file": ("notes.txt", b"content", "text/plain")},
         data={"course": "Wavelets", "chapter": "   "},
     )
-    assert response.status_code == 200
+    assert response.status_code == 202
+    _wait_for_job(client, response.json()["job_id"])
     assert seen["chapter"] is None
+
+
+@requires_api
+def test_upload_route_error_event_marks_job_error(client, monkeypatch):
+    def fake_stream(path, course, chapter=None, **kwargs):  # noqa: ARG001
+        yield {"type": "start", "total": 3, "skipped": 0}
+        yield {"type": "error", "message": "boom", "done": 0, "total": 3, "indexed": 0}
+
+    monkeypatch.setattr(api_main, "save_upload", lambda *a, **k: "/tmp/x.pdf")
+    monkeypatch.setattr(api_main, "stream_ingest", fake_stream)
+    response = client.post(
+        "/documents/upload",
+        files={"file": ("notes.pdf", b"%PDF", "application/pdf")},
+        data={"course": "Wavelets"},
+    )
+    assert response.status_code == 202
+    job = _wait_for_job(client, response.json()["job_id"])
+    assert job["status"] == "error"
+    assert job["message"] == "boom"
+
+
+@requires_api
+def test_job_route_unknown_id_404(client):
+    response = client.get("/documents/jobs/does-not-exist")
+    assert response.status_code == 404
+
+
+@requires_api
+def test_jobs_list_includes_started_job(client, monkeypatch):
+    def fake_stream(path, course, chapter=None, **kwargs):  # noqa: ARG001
+        yield {"type": "done", "indexed": 1, "total": 1, "reason": "indexed", "elapsed": 0.0}
+
+    monkeypatch.setattr(api_main, "save_upload", lambda *a, **k: "/tmp/x.txt")
+    monkeypatch.setattr(api_main, "stream_ingest", fake_stream)
+    response = client.post(
+        "/documents/upload",
+        files={"file": ("a.txt", b"x", "text/plain")},
+        data={"course": "Wavelets"},
+    )
+    job_id = response.json()["job_id"]
+    _wait_for_job(client, job_id)
+    listed = client.get("/documents/jobs")
+    assert listed.status_code == 200
+    assert any(j["job_id"] == job_id for j in listed.json())
 
 
 @requires_api

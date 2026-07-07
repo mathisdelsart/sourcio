@@ -943,6 +943,26 @@ export interface DocumentProgress {
   reason?: "indexed" | "already_indexed" | "empty";
 }
 
+/** The id returned when an upload is accepted and ingestion starts in the background. */
+export interface StartUploadResult {
+  job_id: string;
+}
+
+/**
+ * A background ingestion job's record. It carries the same progress shape as a
+ * {@link DocumentProgress} event (so the progress bar renders unchanged) plus a
+ * `status` lifecycle field the client polls on to know when to stop.
+ */
+export type DocumentJob = DocumentProgress & {
+  job_id: string;
+  status: "running" | "done" | "error";
+  course?: string;
+  chapter?: string | null;
+  filename?: string;
+  created_at?: string;
+  finished_at?: string | null;
+};
+
 /** How many indexed points a delete request removed. */
 export interface DocumentDeleteResult {
   deleted: number;
@@ -958,20 +978,21 @@ export async function listDocuments(config?: ConnectionConfig): Promise<Document
 }
 
 /**
- * Upload a file and ingest it under `course`/`chapter`, streaming progress.
+ * Start ingesting a file under `course`/`chapter` as a background job.
  *
  * The body is `multipart/form-data` (Content-Type left unset so the browser adds
- * the boundary). `onEvent` is called for each ingestion event (`start`,
- * `progress`, `done`, `error`) so the UI can show a live progress bar. Throws an
- * `ApiError` if the request cannot be reached or returns a non-2xx status.
+ * the boundary). The server persists the file, spawns a background ingest and
+ * returns `{ job_id }` immediately, so ingestion is not tied to this request:
+ * the caller polls {@link getJob} to follow progress and survives a page refresh
+ * by re-attaching to the same `job_id`. Throws an `ApiError` if the request
+ * cannot be reached or returns a non-2xx status.
  */
-export async function uploadDocument(
+export async function startUpload(
   file: File,
   course: string,
   chapter: string | null,
-  onEvent: (event: DocumentProgress) => void,
   config?: ConnectionConfig,
-): Promise<void> {
+): Promise<StartUploadResult> {
   const form = new FormData();
   form.append("file", file);
   form.append("course", course);
@@ -987,34 +1008,16 @@ export async function uploadDocument(
     );
   }
   if (!response.ok) throw new ApiError(await readError(response), response.status);
-  if (!response.body) throw new ApiError("Streaming is not supported by this response.", response.status);
+  return (await response.json()) as StartUploadResult;
+}
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  const handle = (raw: string) => {
-    const data = raw
-      .split("\n")
-      .filter((line) => line.startsWith("data:"))
-      .map((line) => line.slice(5).trim())
-      .join("");
-    if (!data) return;
-    try {
-      onEvent(JSON.parse(data) as DocumentProgress);
-    } catch {
-      // ignore malformed frames
-    }
-  };
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let sep: number;
-    while ((sep = buffer.indexOf("\n\n")) !== -1) {
-      handle(buffer.slice(0, sep));
-      buffer = buffer.slice(sep + 2);
-    }
-  }
+/** Fetch a background ingestion job's current record (404 -> `ApiError` status 404). */
+export async function getJob(jobId: string, config?: ConnectionConfig): Promise<DocumentJob> {
+  return request<DocumentJob>(
+    `/documents/jobs/${encodeURIComponent(jobId)}`,
+    { method: "GET", headers: buildHeaders(config) },
+    config,
+  );
 }
 
 /** Fetch a stored original file as a Blob (sends auth headers, unlike a plain link). */

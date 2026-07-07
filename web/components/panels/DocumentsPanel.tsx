@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ApiError,
   deleteDocument,
   fetchDocumentFile,
+  getJob,
   listDocuments,
-  uploadDocument,
+  startUpload,
   type ConnectionConfig,
   type DocumentCourse,
   type DocumentProgress,
@@ -32,6 +34,30 @@ interface DocumentsPanelProps {
 
 function rowKey(course: string, chapter: string | null): string {
   return `${course}::${chapter ?? ""}`;
+}
+
+/**
+ * localStorage key holding the currently running upload, so a page refresh or
+ * navigation can re-attach to the background server job instead of losing it.
+ */
+const ACTIVE_JOB_KEY = "activeUploadJob";
+
+/** What we persist about a running upload: the job id plus a label for the UI. */
+interface ActiveJob {
+  job_id: string;
+  course: string;
+  filename: string;
+}
+
+function loadActiveJob(): ActiveJob | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_JOB_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ActiveJob;
+    return parsed && typeof parsed.job_id === "string" ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Client-side extension guard; the backend stays the final arbiter. */
@@ -64,6 +90,9 @@ export function DocumentsPanel({ config, onCoursesChanged }: DocumentsPanelProps
   // Live ingestion progress; null when no upload is running.
   const [progress, setProgress] = useState<DocumentProgress | null>(null);
   const [uploading, setUploading] = useState(false);
+  // The background job being polled; null when none is active. Set on upload and
+  // on mount (resume) — it is what drives the polling effect below.
+  const [activeJob, setActiveJob] = useState<ActiveJob | null>(null);
   // True while a file is being dragged over the dropzone (drives the accent styling).
   const [dragging, setDragging] = useState(false);
   // Live elapsed seconds, ticked by a client interval so the clock counts up
@@ -101,8 +130,61 @@ export function DocumentsPanel({ config, onCoursesChanged }: DocumentsPanelProps
 
   useEffect(() => {
     load();
+    // On mount, re-attach to a background job left running by a previous visit
+    // (started before a refresh/navigation). The polling effect takes over.
+    const resumed = loadActiveJob();
+    if (resumed) setActiveJob(resumed);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Poll the background ingestion job once one is active. This is the single
+  // place progress is fed, whether the job was just started or resumed after a
+  // refresh, so both paths render identically. On a terminal status it stops,
+  // clears the persisted job, and refreshes the inventory + course selectors. A
+  // 404 means the server restarted or pruned the job: clear it and just reload.
+  useEffect(() => {
+    if (!activeJob) return;
+    setUploading(true);
+    let cancelled = false;
+
+    const finish = (clear: boolean) => {
+      if (clear) localStorage.removeItem(ACTIVE_JOB_KEY);
+      setUploading(false);
+      setActiveJob(null);
+    };
+
+    const poll = async () => {
+      try {
+        const job = await getJob(activeJob.job_id, config);
+        if (cancelled) return;
+        setProgress(job);
+        if (job.status === "done" || job.status === "error") {
+          finish(true);
+          if (job.status === "done") {
+            await load();
+            // A new course may now be indexed: let the parent refresh its pickers.
+            onCoursesChanged?.();
+          }
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 404) {
+          // Server restarted or job pruned: drop it and reconcile the inventory.
+          setProgress(null);
+          finish(true);
+          await load();
+        }
+        // Other (transient) errors: keep polling on the next tick.
+      }
+    };
+
+    poll();
+    const id = window.setInterval(poll, 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [activeJob, config, load, onCoursesChanged]);
 
   // Live elapsed clock: while an upload is running, anchor a monotonic start
   // timestamp and tick every second, so the elapsed time counts up smoothly on
@@ -122,26 +204,21 @@ export function DocumentsPanel({ config, onCoursesChanged }: DocumentsPanelProps
     setUploading(true);
     setProgress({ type: "start" });
     try {
-      await uploadDocument(
-        file,
-        course.trim(),
-        chapter.trim() || null,
-        (event) => setProgress(event),
-        config,
-      );
+      const { job_id } = await startUpload(file, course.trim(), chapter.trim() || null, config);
+      // Persist the job so a refresh/navigation re-attaches to it, then hand off
+      // to the polling effect. Clearing the inputs frees the user to do other
+      // things (or queue nothing) while ingestion runs server-side.
+      const job: ActiveJob = { job_id, course: course.trim(), filename: file.name };
+      localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify(job));
+      setActiveJob(job);
       setFile(null);
       setChapter("");
       if (fileInputRef.current) fileInputRef.current.value = "";
-      await load();
-      // A new course may have been indexed: let the parent refresh the course
-      // selectors so it appears without a manual page refresh.
-      onCoursesChanged?.();
     } catch (err) {
       setProgress({
         type: "error",
         message: err instanceof Error ? err.message : t("common.requestFailed"),
       });
-    } finally {
       setUploading(false);
     }
   }

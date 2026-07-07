@@ -36,6 +36,7 @@ import hmac
 import json
 import logging
 import os
+import threading
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
@@ -90,6 +91,7 @@ from core.documents import (
     stored_file_path,
     stream_ingest,
 )
+from core.jobs import create_job, get_job, list_jobs, update_job
 from core.scheduling import MAX_QUALITY, MIN_QUALITY, schedule
 from core.sources import get_source
 from db.models import Exercise, Feedback, Grade, Quiz, QuizQuestion, Review, Student
@@ -1389,38 +1391,76 @@ def documents() -> list[dict[str, Any]]:
     return list_documents()
 
 
-@app.post("/documents/upload", dependencies=[Depends(require_api_key)])
+@app.post(
+    "/documents/upload",
+    dependencies=[Depends(require_api_key)],
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def upload_document(
     file: Annotated[UploadFile, File()],
     course: Annotated[str, Form()],
     chapter: Annotated[str | None, Form()] = None,
-) -> StreamingResponse:
-    """Ingest an uploaded file, streaming ingestion progress as Server-Sent Events.
+) -> dict[str, str]:
+    """Start ingesting an uploaded file as a background job and return its id.
 
     The original file is stored under ``uploads/<course>/`` so it can be re-opened
-    later, then ingested incrementally: ``.md``/``.txt`` via the prose loader,
-    anything else via the math-aware PDF vision path. Each SSE ``data:`` line is a
-    JSON event from ``core.documents.stream_ingest`` — ``start`` (with the total
-    page count and how many were already indexed and thus skipped), one
-    ``progress`` per batch (pages done, indexed count, elapsed seconds), then a
-    final ``done`` (carrying ``indexed``/``skipped`` and a ``reason`` so a true 0
-    is reported honestly) or ``error``. Each document is scoped by its own
-    identity, so a second file in the same course indexes independently; only
-    re-uploading the same document skips already-indexed pages (never re-paying
-    the vision model), and each batch is indexed as it is extracted, so a failure
-    keeps the pages done so far.
+    later, then ingested incrementally on a daemon thread: ``.md``/``.txt`` via the
+    prose loader, anything else via the math-aware PDF vision path. The request
+    returns ``{"job_id": ...}`` immediately (HTTP 202) instead of streaming, so
+    ingestion is not tied to the request lifetime — a browser refresh or
+    navigation no longer aborts the ingest. The client polls
+    ``GET /documents/jobs/{job_id}`` to follow (or, after a refresh, re-attach to)
+    progress; the job record carries the same ``start``/``progress``/``done``/
+    ``error`` shape as ``stream_ingest`` plus a ``status`` lifecycle field.
+
+    Each document is scoped by its own identity, so a second file in the same
+    course indexes independently; only re-uploading the same document skips
+    already-indexed pages (never re-paying the vision model), and each batch is
+    indexed as it is extracted, so a failure keeps the pages done so far.
+
+    A plain daemon thread is used deliberately: FastAPI ``BackgroundTasks`` run
+    within the request scope (defeating the purpose), and ``stream_ingest`` is a
+    blocking, synchronous generator so it cannot run on the event loop. The job
+    registry is in-process — see the multi-worker caveat in ``core.jobs``.
     """
     normalized_chapter = chapter.strip() if chapter and chapter.strip() else None
     contents = await file.read()
     # Persist the original so the user can re-open the intact file later; ingest
     # from that stored path (its extension drives prose/PDF routing).
     stored_path = save_upload(contents, course, file.filename or "document")
+    job_id = create_job(course, normalized_chapter, os.path.basename(stored_path))
 
-    def event_stream() -> Iterator[str]:
-        for event in stream_ingest(stored_path, course, normalized_chapter):
-            yield f"data: {json.dumps(event)}\n\n"
+    def run() -> None:
+        """Drive the (blocking) ingest, mirroring each event into the job store."""
+        try:
+            for event in stream_ingest(stored_path, course, normalized_chapter):
+                update_job(job_id, event)
+                if event.get("type") == "error":
+                    # stream_ingest reports a failed batch as an error event then
+                    # returns; reflect it as a terminal status.
+                    update_job(job_id, {"status": "error"})
+                    return
+            update_job(job_id, {"status": "done"})
+        except Exception as exc:  # pragma: no cover - defensive; ingest guards itself
+            update_job(job_id, {"status": "error", "type": "error", "message": str(exc)})
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    threading.Thread(target=run, daemon=True).start()
+    return {"job_id": job_id}
+
+
+@app.get("/documents/jobs", dependencies=[Depends(require_api_key)])
+def document_jobs() -> list[dict[str, Any]]:
+    """List the current (running and recently finished) ingestion jobs."""
+    return list_jobs()
+
+
+@app.get("/documents/jobs/{job_id}", dependencies=[Depends(require_api_key)])
+def document_job(job_id: str) -> dict[str, Any]:
+    """Return one ingestion job's record, or 404 if unknown or already pruned."""
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
+    return job
 
 
 @app.get("/documents/file", dependencies=[Depends(require_api_key)])
