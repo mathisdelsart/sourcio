@@ -55,6 +55,12 @@ postgres = [
 local = [
     "langchain-ollama>=0.2",
 ]
+# Free-tier hosted LLM provider (Groq). Optional so OpenAI/Ollama users are not
+# forced to install it: `uv sync --extra groq`. Enables `LLM_PROVIDER=groq`
+# (reads GROQ_API_KEY from the environment) for a zero-cost public deployment.
+groq = [
+    "langchain-groq>=0.2",
+]
 
 [dependency-groups]
 dev = [

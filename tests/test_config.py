@@ -109,6 +109,40 @@ def test_resolve_model_per_role_override_beats_global_default_model(monkeypatch)
     assert kwargs == {"base_url": get_settings().ollama_base_url}
 
 
+def test_resolve_model_global_groq_switch_chat_role(monkeypatch):
+    # The global Groq switch resolves non-vision roles to groq:<model> with no
+    # provider kwargs (langchain-groq reads GROQ_API_KEY from the environment).
+    monkeypatch.delenv("LLM_EXPLAIN", raising=False)
+    _fresh_settings(
+        monkeypatch,
+        LLM_PROVIDER="groq",
+        GROQ_CHAT_MODEL="llama-3.3-70b-versatile",
+    )
+    model, kwargs = _resolve_model("explain")
+    assert model == "groq:llama-3.3-70b-versatile"
+    assert kwargs == {}
+
+
+def test_resolve_model_global_groq_switch_extract_falls_back_to_openai(monkeypatch):
+    # Groq has no vision model, so the extract role falls back to the OpenAI
+    # default (ingestion is a one-time offline step, never on the deployed API).
+    monkeypatch.delenv("LLM_EXTRACT", raising=False)
+    _fresh_settings(monkeypatch, LLM_PROVIDER="groq")
+    model, kwargs = _resolve_model("extract")
+    assert model == "gpt-4o-mini"
+    assert kwargs == {}
+
+
+def test_resolve_model_per_role_groq_prefix_no_base_url(monkeypatch):
+    # An explicit groq: prefix passes through verbatim, with no base_url injected.
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.setenv("LLM_GENERATE", "groq:llama-3.1-8b-instant")
+    get_settings.cache_clear()
+    model, kwargs = _resolve_model("generate")
+    assert model == "groq:llama-3.1-8b-instant"
+    assert kwargs == {}
+
+
 def test_get_llm_default_builds_openai_model(monkeypatch):
     # Prove the default path passes the OpenAI model + temperature=0 to the
     # constructor, with no provider kwargs, contacting nothing.
