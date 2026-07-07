@@ -1119,14 +1119,17 @@ def exercise(request: ExerciseRequest, user: UserOut | None = DataUser) -> dict[
     built = state.get("exercise")
     assert built is not None
     # Record the generated exercise as an activity turn so it shows in history
-    # next to the Q&A. Skip on refusal: an uncovered notion produces no activity.
+    # next to the Q&A. The activity content is the student's request (the typed
+    # notion), so the history card shows the ask; the full problem/solution stays
+    # behind the "Show details" fetch (GET /exercise/{id}/review). Skip on
+    # refusal: an uncovered notion produces no activity.
     if not built["refused"]:
         _record_activity(
             request.student_id,
             user,
             request.session_id,
             role=ROLE_EXERCISE,
-            content=built["problem"],
+            content=request.notion,
             ref_id=built.get("id"),
         )
     return {"problem": built["problem"], "refused": built["refused"], "id": built.get("id")}

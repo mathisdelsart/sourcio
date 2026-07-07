@@ -22,6 +22,12 @@ import { cn } from "@/lib/cn";
 interface DocumentsPanelProps {
   studentId: string;
   config: ConnectionConfig;
+  /**
+   * Called after a successful upload so the parent can refresh the course
+   * selectors (Ask/Exercise/Quiz) — a freshly indexed course then appears
+   * without a manual page refresh.
+   */
+  onCoursesChanged?: () => void;
 }
 
 function rowKey(course: string, chapter: string | null): string {
@@ -43,7 +49,7 @@ function fmtTime(seconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-export function DocumentsPanel({ config }: DocumentsPanelProps) {
+export function DocumentsPanel({ config, onCoursesChanged }: DocumentsPanelProps) {
   const toast = useToast();
   const { t } = useT();
   const [items, setItems] = useState<DocumentCourse[]>([]);
@@ -60,6 +66,9 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
   const [uploading, setUploading] = useState(false);
   // True while a file is being dragged over the dropzone (drives the accent styling).
   const [dragging, setDragging] = useState(false);
+  // Live elapsed seconds, ticked by a client interval so the clock counts up
+  // continuously rather than only when an SSE progress event arrives.
+  const [liveElapsed, setLiveElapsed] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Set the file into the shared state used by the button flow, rejecting
@@ -95,6 +104,19 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Live elapsed clock: while an upload is running, anchor a monotonic start
+  // timestamp and tick every second, so the elapsed time counts up smoothly on
+  // its own (the SSE `elapsed` only updates per processed page, in jumps).
+  useEffect(() => {
+    if (!uploading) return;
+    const start = performance.now();
+    setLiveElapsed(0);
+    const id = window.setInterval(() => {
+      setLiveElapsed((performance.now() - start) / 1000);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [uploading]);
+
   async function upload() {
     if (!file || !course.trim() || uploading) return;
     setUploading(true);
@@ -111,6 +133,9 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
       setChapter("");
       if (fileInputRef.current) fileInputRef.current.value = "";
       await load();
+      // A new course may have been indexed: let the parent refresh the course
+      // selectors so it appears without a manual page refresh.
+      onCoursesChanged?.();
     } catch (err) {
       setProgress({
         type: "error",
@@ -189,6 +214,9 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
   const done = progress?.done ?? (progress?.type === "start" ? (progress.skipped ?? 0) : 0);
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : progress ? 5 : 0;
   const elapsed = progress?.elapsed ?? 0;
+  // Show the continuously ticking client clock while uploading (never behind the
+  // per-page SSE elapsed); fall back to the SSE value once the run has ended.
+  const displayElapsed = uploading ? Math.max(liveElapsed, elapsed) : elapsed;
   const fresh = done - (progress?.skipped ?? 0); // pages actually processed this run
   const eta = fresh > 0 && elapsed > 0 ? (elapsed / fresh) * (total - done) : null;
 
@@ -329,12 +357,12 @@ export function DocumentsPanel({ config }: DocumentsPanelProps) {
                     </div>
                     <div className="h-2 w-full overflow-hidden rounded-full bg-brand-100">
                       <div
-                        className="h-full rounded-full bg-brand-500 transition-all"
+                        className="h-full rounded-full bg-brand-500 transition-[width] duration-700 ease-out"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
-                      <span>{t("doc.progress.elapsed", { time: fmtTime(elapsed) })}</span>
+                      <span>{t("doc.progress.elapsed", { time: fmtTime(displayElapsed) })}</span>
                       {eta != null && <span>{t("doc.progress.eta", { time: fmtTime(eta) })}</span>}
                       {(progress.skipped ?? 0) > 0 && (
                         <span>{t("doc.progress.skipped", { count: progress.skipped ?? 0 })}</span>

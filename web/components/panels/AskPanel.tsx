@@ -37,6 +37,8 @@ interface AskPanelProps {
   sessionId: number | null;
   /** Max candidate sources to retrieve (the ceiling `k`); configurable in Settings. */
   sourcesMax: number;
+  /** Bumped after an upload so the course selector re-fetches GET /courses. */
+  coursesRefreshKey?: number;
 }
 
 export function AskPanel({
@@ -46,6 +48,7 @@ export function AskPanel({
   setLastAnswer,
   sessionId,
   sourcesMax,
+  coursesRefreshKey,
 }: AskPanelProps) {
   const toast = useToast();
   const { t, locale } = useT();
@@ -190,7 +193,12 @@ export function AskPanel({
             onKeyDown={submitOnCmdEnter(runAsk)}
           />
           <div className="grid gap-4 sm:grid-cols-2">
-            <CourseSelect value={course} onChange={selectCourse} config={config} />
+            <CourseSelect
+              value={course}
+              onChange={selectCourse}
+              config={config}
+              refreshKey={coursesRefreshKey}
+            />
             <TextField
               label={t("ask.chapterLabel")}
               hint={t("ask.chapterHint")}

@@ -159,11 +159,23 @@ body {
 }
 
 /* Client-side highlight of the excerpt portion a grounded answer relied on.
-   A soft amber wash keeps it readable and subtle rather than garish. */
+   The relevant sentence/line gets a faint wash (`source-passage`); the exact
+   matched keywords inside it get a stronger amber (`source-highlight`), so the
+   passage stands out while the terms still pop. Both stay readable and subtle. */
+.prose-tutor mark.source-passage {
+  @apply rounded bg-amber-50 text-inherit;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
 .prose-tutor mark.source-highlight {
   @apply rounded bg-amber-100 px-0.5 text-inherit;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+}
+
+.dark .prose-tutor mark.source-passage {
+  @apply bg-amber-400/10 text-inherit;
 }
 
 .dark .prose-tutor mark.source-highlight {

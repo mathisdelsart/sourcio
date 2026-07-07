@@ -66,6 +66,10 @@ export default function Home() {
   // Active conversation thread shared between the Ask and Threads tabs.
   // null means "All history (unthreaded)" — no session_id is sent.
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  // Bumped whenever a document upload indexes new material, so every course
+  // selector (Ask/Exercise/Quiz) re-fetches GET /courses and shows the new
+  // course without a manual page refresh.
+  const [coursesRefreshKey, setCoursesRefreshKey] = useState(0);
 
   // Hydrate identity + connection overrides from localStorage on first mount,
   // generating a fresh student id when none exists yet.
@@ -375,6 +379,7 @@ export default function Home() {
                     setLastAnswer={setLastAnswer}
                     sessionId={activeSessionId}
                     sourcesMax={sourcesMax}
+                    coursesRefreshKey={coursesRefreshKey}
                   />
                 </div>
                 <div
@@ -388,6 +393,7 @@ export default function Home() {
                     studentId={effectiveStudentId}
                     config={config}
                     sessionId={activeSessionId}
+                    coursesRefreshKey={coursesRefreshKey}
                   />
                 </div>
                 <div
@@ -401,6 +407,7 @@ export default function Home() {
                     studentId={effectiveStudentId}
                     config={config}
                     sessionId={activeSessionId}
+                    coursesRefreshKey={coursesRefreshKey}
                   />
                 </div>
                 <div
@@ -439,7 +446,11 @@ export default function Home() {
                   hidden={active !== "documents"}
                   className={active === "documents" ? "animate-fade-in" : undefined}
                 >
-                  <DocumentsPanel studentId={effectiveStudentId} config={config} />
+                  <DocumentsPanel
+                    studentId={effectiveStudentId}
+                    config={config}
+                    onCoursesChanged={() => setCoursesRefreshKey((k) => k + 1)}
+                  />
                 </div>
               </div>
               )}

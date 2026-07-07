@@ -216,8 +216,10 @@ def test_exercise_and_quiz_activity_attach_to_session(client, monkeypatch):
     )
 
     rows = client.get(f"/sessions/s1/{thread['id']}/messages").json()
+    # The exercise activity records the request (the typed notion), not the
+    # generated problem; the quiz records its own concise summary.
     assert [(row["role"], row["content"]) for row in rows] == [
-        ("exercise", "Compute X."),
+        ("exercise", "limits"),
         ("quiz", "groups (1 question)"),
     ]
 

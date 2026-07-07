@@ -28,6 +28,8 @@ interface ExercisePanelProps {
   config: ConnectionConfig;
   /** Active thread id, or null; the generated exercise is filed under it. */
   sessionId: number | null;
+  /** Bumped after an upload so the course selector re-fetches GET /courses. */
+  coursesRefreshKey?: number;
 }
 
 /** Clamp a score to 0..100 for the progress meter. */
@@ -47,7 +49,12 @@ function scoreTone(score: number): string {
  * same flow. Grading depends on a persisted exercise, so it lives here rather
  * than in a separate tab and only appears once a real exercise exists.
  */
-export function ExercisePanel({ studentId, config, sessionId }: ExercisePanelProps) {
+export function ExercisePanel({
+  studentId,
+  config,
+  sessionId,
+  coursesRefreshKey,
+}: ExercisePanelProps) {
   const toast = useToast();
   const { t } = useT();
   const [notion, setNotion] = useState("");
@@ -132,7 +139,12 @@ export function ExercisePanel({ studentId, config, sessionId }: ExercisePanelPro
             onKeyDown={submitOnCmdEnter(run)}
           />
           <div className="grid gap-4 sm:grid-cols-2">
-            <CourseSelect value={course} onChange={selectCourse} config={config} />
+            <CourseSelect
+              value={course}
+              onChange={selectCourse}
+              config={config}
+              refreshKey={coursesRefreshKey}
+            />
             <TextField
               label={t("ask.chapterLabel")}
               hint={t("ask.chapterHint")}

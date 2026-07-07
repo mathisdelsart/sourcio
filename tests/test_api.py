@@ -300,6 +300,8 @@ def test_exercise_surfaces_refusal(client, monkeypatch):
 def test_exercise_records_activity_in_history(client, monkeypatch):
     # A generated exercise is recorded as an activity turn with the distinct
     # "exercise" role so the history reads as an activity feed, not just Q&A.
+    # The recorded content is the student's request (the typed notion), not the
+    # full generated problem — the problem stays behind the "Show details" fetch.
     def fake_generate(state):
         return {
             "exercise": {"problem": "Compute X.", "solution": "s", "refused": False},
@@ -312,7 +314,7 @@ def test_exercise_records_activity_in_history(client, monkeypatch):
     rows = client.get("/history/erin").json()
     assert len(rows) == 1
     assert rows[0]["role"] == "exercise"
-    assert rows[0]["content"] == "Compute X."
+    assert rows[0]["content"] == "limits"
 
 
 def test_exercise_refusal_is_not_recorded(client, monkeypatch):
@@ -623,8 +625,9 @@ def test_reexplain_ignores_exercise_activity_in_history(client, monkeypatch):
     client.post("/reexplain", json={"student_id": "rexmix", "level": "beginner"})
 
     history = captured["state"]["history"]
-    # The exercise turn keeps its distinct role (never relabelled to "tutor").
-    assert ("exercise", "Solve for x.") in [(t["role"], t["content"]) for t in history]
+    # The exercise turn keeps its distinct role (never relabelled to "tutor") and
+    # its content is the student's request (the typed notion), not the problem.
+    assert ("exercise", "x") in [(t["role"], t["content"]) for t in history]
     tutor_contents = [t["content"] for t in history if t["role"] == "tutor"]
     assert tutor_contents == ["X is a formal structure (Course, p.3)"]
 

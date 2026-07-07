@@ -30,6 +30,8 @@ interface QuizPanelProps {
   config: ConnectionConfig;
   /** Active thread id, or null; the generated quiz is filed under it. */
   sessionId: number | null;
+  /** Bumped after an upload so the course selector re-fetches GET /courses. */
+  coursesRefreshKey?: number;
 }
 
 /** Clamp a score to 0..100 for the progress meter. */
@@ -46,7 +48,12 @@ function scoreTone(score: number): string {
 
 const COUNTS = [3, 5, 7] as const;
 
-export function QuizPanel({ studentId, config, sessionId }: QuizPanelProps) {
+export function QuizPanel({
+  studentId,
+  config,
+  sessionId,
+  coursesRefreshKey,
+}: QuizPanelProps) {
   const toast = useToast();
   const { t } = useT();
   const [notion, setNotion] = useState("");
@@ -192,7 +199,12 @@ export function QuizPanel({ studentId, config, sessionId }: QuizPanelProps) {
             onKeyDown={submitOnCmdEnter(generate)}
           />
           <div className="grid gap-4 sm:grid-cols-2">
-            <CourseSelect value={course} onChange={selectCourse} config={config} />
+            <CourseSelect
+              value={course}
+              onChange={selectCourse}
+              config={config}
+              refreshKey={coursesRefreshKey}
+            />
             <TextField
               label={t("ask.chapterLabel")}
               hint={t("ask.chapterHint")}

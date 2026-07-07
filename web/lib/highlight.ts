@@ -166,10 +166,19 @@ function isSkippable(node: HastNode): boolean {
   return classes.some((c) => c === "math" || c === "katex" || String(c).startsWith("math-"));
 }
 
+/** Sentence / line boundaries used to grow a keyword hit into its passage. */
+const SENTENCE_DELIM = /[.!?\n]/;
+
 /**
- * A rehype plugin that wraps every case-insensitive occurrence of `terms`
- * inside plain text nodes with `<mark class="source-highlight">`, leaving
- * code, pre and math subtrees alone.
+ * A rehype plugin that highlights the relevant passage of a source excerpt.
+ *
+ * Rather than only marking the isolated matching keywords, it grows each hit to
+ * the sentence (or line) that contains it and tints that whole span with
+ * `<mark class="source-passage">`, so the interesting part stands out at a
+ * glance; the exact matched words inside stay wrapped in
+ * `<mark class="source-highlight">` so they still pop. Sentence detection is per
+ * text node (a good, safe approximation), so `code`, `pre` and math subtrees are
+ * left untouched.
  *
  * It is intended to run BEFORE rehype-katex so math is still an untouched
  * `<span class="math ...">` container at this point and gets skipped, keeping
@@ -180,7 +189,8 @@ export function rehypeHighlight(terms: string[]) {
   const sorted = [...terms].sort((a, b) => b.length - a.length);
   const pattern = sorted.map(escapeRegExp).filter(Boolean).join("|");
 
-  function splitText(value: string): HastNode[] {
+  // Wrap the exact keyword occurrences within a plain string in <mark>.
+  function markKeywords(value: string): HastNode[] {
     const re = new RegExp(`(${pattern})`, "gi");
     const parts = value.split(re);
     if (parts.length <= 1) return [{ type: "text", value }];
@@ -200,6 +210,56 @@ export function rehypeHighlight(terms: string[]) {
         out.push({ type: "text", value: piece });
       }
     }
+    return out;
+  }
+
+  function splitText(value: string): HastNode[] {
+    // Collect keyword match spans in this text node.
+    const re = new RegExp(pattern, "gi");
+    const matches: Array<[number, number]> = [];
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(value)) !== null) {
+      matches.push([m.index, m.index + m[0].length]);
+      if (m.index === re.lastIndex) re.lastIndex++; // guard against zero-length
+    }
+    if (matches.length === 0) return [{ type: "text", value }];
+
+    // Grow each match to its containing sentence/line and merge overlaps, so a
+    // sentence with several hits becomes a single highlighted passage.
+    const passages: Array<[number, number]> = [];
+    for (const [s, e] of matches) {
+      let start = s;
+      while (start > 0 && !SENTENCE_DELIM.test(value[start - 1])) start--;
+      // Skip whitespace that follows the boundary so the tint hugs the text.
+      while (start < s && /\s/.test(value[start])) start++;
+      let end = e;
+      while (end < value.length && !SENTENCE_DELIM.test(value[end])) end++;
+      if (end < value.length) end++; // include the terminating punctuation
+      // Trim trailing whitespace / an included newline back off the span.
+      while (end > e && /\s/.test(value[end - 1])) end--;
+      const last = passages[passages.length - 1];
+      if (last && start <= last[1]) {
+        last[1] = Math.max(last[1], end);
+      } else {
+        passages.push([start, end]);
+      }
+    }
+
+    // Emit plain text outside passages; inside, a tinted passage mark that still
+    // carries the stronger keyword marks.
+    const out: HastNode[] = [];
+    let cursor = 0;
+    for (const [s, e] of passages) {
+      if (s > cursor) out.push({ type: "text", value: value.slice(cursor, s) });
+      out.push({
+        type: "element",
+        tagName: "mark",
+        properties: { className: ["source-passage"] },
+        children: markKeywords(value.slice(s, e)),
+      });
+      cursor = e;
+    }
+    if (cursor < value.length) out.push({ type: "text", value: value.slice(cursor) });
     return out;
   }
 

@@ -22,6 +22,12 @@ interface CourseSelectProps {
   config: ConnectionConfig;
   label?: string;
   hint?: string;
+  /**
+   * Bump this to force a re-fetch of the course list — e.g. after a document
+   * upload adds a new course. Any change of value re-runs the fetch effect, so
+   * a freshly indexed course appears without a manual page refresh.
+   */
+  refreshKey?: number;
 }
 
 /**
@@ -38,6 +44,7 @@ export function CourseSelect({
   config,
   label,
   hint,
+  refreshKey,
 }: CourseSelectProps) {
   const { t } = useT();
   const id = useId();
@@ -64,8 +71,9 @@ export function CourseSelect({
     return () => {
       active = false;
     };
-    // Re-run when the connection target changes.
-  }, [config.baseUrl, config.apiKey, config.token]);
+    // Re-run when the connection target changes, or when refreshKey is bumped
+    // (e.g. after a document upload indexes a new course).
+  }, [config.baseUrl, config.apiKey, config.token, refreshKey]);
 
   const resolvedLabel = label ?? t("ask.courseLabel");
 
