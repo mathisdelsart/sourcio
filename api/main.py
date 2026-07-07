@@ -896,10 +896,10 @@ def public_config() -> dict[str, bool]:
     status_code=status.HTTP_201_CREATED,
 )
 def auth_register(request: RegisterRequest) -> UserOut:
-    """Create a new account from an email and password.
+    """Create a new account from a username and password.
 
     The password is hashed with bcrypt before storage. Returns 201 with the
-    minimal user info on success, 409 when the email is already registered, and
+    minimal user info on success, 409 when the username is already taken, and
     422 on invalid input. This route is additive and does not affect the
     existing endpoints or the ``X-API-Key`` guard.
     """
@@ -911,7 +911,7 @@ def auth_login(request: LoginRequest) -> TokenResponse:
     """Verify credentials and return a signed bearer access token.
 
     Returns ``{access_token, token_type}`` on success or 401 on bad credentials
-    (same message for unknown email and wrong password).
+    (same message for unknown username and wrong password).
     """
     return login_user(request)
 

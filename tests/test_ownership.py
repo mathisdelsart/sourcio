@@ -55,10 +55,10 @@ def _stub_answer(monkeypatch):
     )
 
 
-def _token(client, email="owner@example.com", password="supersecret"):
+def _token(client, username="owner", password="supersecret"):
     """Register then log in, returning a bearer access token."""
-    client.post("/auth/register", json={"email": email, "password": password})
-    return client.post("/auth/login", json={"email": email, "password": password}).json()[
+    client.post("/auth/register", json={"username": username, "password": password})
+    return client.post("/auth/login", json={"username": username, "password": password}).json()[
         "access_token"
     ]
 
@@ -73,7 +73,7 @@ def _student(external_id):
 
 
 def test_authenticated_ask_links_student_to_user(client):
-    token = _token(client, "alice@example.com")
+    token = _token(client, "alice")
     me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"}).json()
 
     response = client.post(
@@ -94,7 +94,7 @@ def test_authenticated_exercise_links_student_to_user(client, monkeypatch):
         "generate",
         lambda state: {"exercise": {"problem": "p", "refused": False, "id": 1}},
     )
-    token = _token(client, "bob@example.com")
+    token = _token(client, "bob")
     me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"}).json()
 
     response = client.post(
@@ -117,7 +117,7 @@ def test_anonymous_ask_creates_unlinked_student(client):
 
 def test_existing_student_of_another_user_is_forbidden(client):
     # First user claims the student.
-    token_a = _token(client, "first@example.com")
+    token_a = _token(client, "first")
     me_a = client.get("/auth/me", headers={"Authorization": f"Bearer {token_a}"}).json()
     client.post(
         "/ask",
@@ -129,7 +129,7 @@ def test_existing_student_of_another_user_is_forbidden(client):
     # A second logged-in user touching the same student id is rejected with 403,
     # even with REQUIRE_AUTH off: being logged in always isolates. Ownership never
     # changes hands.
-    token_b = _token(client, "second@example.com")
+    token_b = _token(client, "second")
     response = client.post(
         "/ask",
         json={"student_id": "shared", "question": "q"},
@@ -151,7 +151,7 @@ def test_foreign_ask_is_rejected_before_answer_runs(client, monkeypatch):
     monkeypatch.setattr(api_main, "answer", _tracking_answer)
 
     # User A claims the student.
-    token_a = _token(client, "l2a@example.com")
+    token_a = _token(client, "l2a")
     client.post(
         "/ask",
         json={"student_id": "l2-shared", "question": "q"},
@@ -161,7 +161,7 @@ def test_foreign_ask_is_rejected_before_answer_runs(client, monkeypatch):
     calls.clear()
 
     # User B touching A's student id is rejected with 403 and answer never runs.
-    token_b = _token(client, "l2b@example.com")
+    token_b = _token(client, "l2b")
     response = client.post(
         "/ask",
         json={"student_id": "l2-shared", "question": "leak?"},
@@ -174,8 +174,8 @@ def test_foreign_ask_is_rejected_before_answer_runs(client, monkeypatch):
 def test_logged_in_user_cannot_read_another_users_student(client):
     # Isolation on reads holds with REQUIRE_AUTH off too: user A owns the student,
     # user B is forbidden from reading its history.
-    token_a = _token(client, "reada@example.com")
-    token_b = _token(client, "readb@example.com")
+    token_a = _token(client, "reada")
+    token_b = _token(client, "readb")
     client.post(
         "/ask",
         json={"student_id": "a-owned", "question": "q"},
@@ -195,8 +195,8 @@ def test_logged_in_user_cannot_read_another_users_student(client):
 
 
 def test_me_students_returns_only_callers_students(client):
-    token_a = _token(client, "carol@example.com")
-    token_b = _token(client, "dave@example.com")
+    token_a = _token(client, "carol")
+    token_b = _token(client, "dave")
 
     client.post(
         "/ask",
@@ -261,8 +261,8 @@ def test_logged_in_user_cannot_review_another_users_exercise(client, monkeypatch
         "generate",
         lambda state: {"exercise": {"problem": "p", "solution": "s", "refused": False, "id": 1}},
     )
-    token_a = _token(client, "exa@example.com")
-    token_b = _token(client, "exb@example.com")
+    token_a = _token(client, "exa")
+    token_b = _token(client, "exb")
     ex = client.post(
         "/exercise",
         json={"student_id": "exa-owned", "notion": "groups"},

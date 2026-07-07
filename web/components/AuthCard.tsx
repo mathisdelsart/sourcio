@@ -12,8 +12,8 @@ import { cn } from "@/lib/cn";
 
 interface AuthCardProps {
   config: ConnectionConfig;
-  /** Called on a successful sign-in with the token and the resolved identity. */
-  onLogin: (token: string, email: string, displayName?: string | null) => void;
+  /** Called on a successful sign-in with the token and the resolved username. */
+  onLogin: (token: string, username: string) => void;
   /** Optional hook fired after a successful sign-in (e.g. to close a modal). */
   onSuccess?: () => void;
   /** When set, a close (✕) button is shown (used in the modal, not the gate). */
@@ -27,26 +27,25 @@ type Mode = "login" | "register";
  * Shared, self-contained sign-in / register card built on the design system.
  *
  * A single source of truth for the auth form: the segmented login/register
- * toggle, email + password (+ an optional display name on register), the
- * full-width primary action, and the register→login→me submit flow with toast
- * feedback. Reused by both the full-screen {@link AuthGate} and the header
- * account menu (as a centered modal), so the two never drift apart.
+ * toggle, username (pseudo) + password, the full-width primary action, and the
+ * register→login→me submit flow with toast feedback. Reused by both the
+ * full-screen {@link AuthGate} and the header account menu (as a centered
+ * modal), so the two never drift apart.
  */
 export function AuthCard({ config, onLogin, onSuccess, onClose, className }: AuthCardProps) {
   const toast = useToast();
   const { t } = useT();
   const passwordId = useId();
   const [mode, setMode] = useState<Mode>("login");
-  const [emailInput, setEmailInput] = useState("");
+  const [usernameInput, setUsernameInput] = useState("");
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   // Submit failures render INLINE in the card (a page toast would sit behind the
   // modal, invisible). Cleared whenever the user edits a field or switches mode.
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = emailInput.trim().length > 0 && password.length > 0 && !loading;
+  const canSubmit = usernameInput.trim().length > 0 && password.length > 0 && !loading;
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -58,19 +57,16 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
     setLoading(true);
     setError(null);
     try {
-      const trimmedEmail = emailInput.trim();
+      const trimmedUsername = usernameInput.trim();
       if (mode === "register") {
-        await register(trimmedEmail, password, config, displayName);
+        await register(trimmedUsername, password, config);
         toast.push(t("auth.accountCreated"), "success");
       }
-      const { access_token } = await login(trimmedEmail, password, config);
+      const { access_token } = await login(trimmedUsername, password, config);
       // Confirm the token resolves and read back the canonical identity.
       const user: AuthUser = await me({ ...config, token: access_token });
-      onLogin(access_token, user.email, user.display_name ?? null);
-      toast.push(
-        t("auth.signedInToast", { email: user.display_name || user.email }),
-        "success",
-      );
+      onLogin(access_token, user.username);
+      toast.push(t("auth.signedInToast", { username: user.username }), "success");
       onSuccess?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("auth.failed"));
@@ -130,30 +126,16 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
           </div>
 
           <TextField
-            label={t("auth.email")}
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            value={emailInput}
+            label={t("auth.username")}
+            type="text"
+            autoComplete="username"
+            placeholder={t("auth.usernamePlaceholder")}
+            value={usernameInput}
             onChange={(e) => {
-              setEmailInput(e.target.value);
+              setUsernameInput(e.target.value);
               setError(null);
             }}
           />
-
-          {mode === "register" && (
-            <TextField
-              label={t("auth.displayName")}
-              type="text"
-              autoComplete="nickname"
-              placeholder={t("auth.displayNamePlaceholder")}
-              value={displayName}
-              onChange={(e) => {
-                setDisplayName(e.target.value);
-                setError(null);
-              }}
-            />
-          )}
 
           {/* Password field is inline (not <TextField/>) so it can host a trailing
               show/hide toggle inside the input. */}

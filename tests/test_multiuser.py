@@ -73,10 +73,10 @@ def _set_require_auth(monkeypatch, value):
     monkeypatch.setattr(api_main, "get_settings", lambda: settings)
 
 
-def _token(client, email="owner@example.com", password="supersecret"):
+def _token(client, username="owner", password="supersecret"):
     """Register then log in, returning a bearer access token."""
-    client.post("/auth/register", json={"email": email, "password": password})
-    return client.post("/auth/login", json={"email": email, "password": password}).json()[
+    client.post("/auth/register", json={"username": username, "password": password})
+    return client.post("/auth/login", json={"username": username, "password": password}).json()[
         "access_token"
     ]
 
@@ -118,8 +118,8 @@ def test_broken_token_is_rejected_when_enforced(client, monkeypatch):
 
 
 def test_owner_can_use_student_but_foreign_user_is_forbidden(client, monkeypatch):
-    token_a = _token(client, "a@example.com")
-    token_b = _token(client, "b@example.com")
+    token_a = _token(client, "usera")
+    token_b = _token(client, "userb")
     _set_require_auth(monkeypatch, True)
 
     # A claims the student and can read its history.
@@ -141,7 +141,7 @@ def test_owner_can_use_student_but_foreign_user_is_forbidden(client, monkeypatch
 
 
 def test_first_authenticated_caller_claims_unclaimed_student(client, monkeypatch):
-    token = _token(client, "claimer@example.com")
+    token = _token(client, "claimer")
     me = client.get("/auth/me", headers=_auth(token)).json()
     _set_require_auth(monkeypatch, True)
 
@@ -157,8 +157,8 @@ def test_stream_rejects_foreign_student_before_streaming(client, monkeypatch):
         yield {"type": "sources", "sources": [], "refused": False, "answer": "ok"}
 
     monkeypatch.setattr(api_main, "stream_answer", _fake_stream)
-    token_a = _token(client, "sa@example.com")
-    token_b = _token(client, "sb@example.com")
+    token_a = _token(client, "streama")
+    token_b = _token(client, "streamb")
     _set_require_auth(monkeypatch, True)
 
     client.post("/ask", json={"student_id": "sa-device", "question": "q"}, headers=_auth(token_a))
@@ -228,8 +228,8 @@ def test_documents_do_not_leak_across_accounts_when_enforced(client, monkeypatch
     monkeypatch.setattr(api_main, "list_documents", _owner_scoped_documents(corpus))
     monkeypatch.setattr(api_main, "list_courses", lambda owner=None: sorted(corpus.get(owner, [])))
 
-    token_a = _token(client, "doca@example.com")
-    token_b = _token(client, "docb@example.com")
+    token_a = _token(client, "doca")
+    token_b = _token(client, "docb")
     _set_require_auth(monkeypatch, True)
 
     # Each account claims its own device student, then lists documents.
@@ -255,8 +255,8 @@ def test_documents_reject_foreign_student_id_when_enforced(client, monkeypatch):
     # account's student_id: ownership is enforced with a 403 before any read.
     monkeypatch.setattr(api_main, "list_documents", _owner_scoped_documents({"b-device": ["B"]}))
 
-    token_a = _token(client, "fa@example.com")
-    token_b = _token(client, "fb@example.com")
+    token_a = _token(client, "forbida")
+    token_b = _token(client, "forbidb")
     # B claims its device student first.
     _set_require_auth(monkeypatch, True)
     client.post("/ask", json={"student_id": "b-device", "question": "q"}, headers=_auth(token_b))
