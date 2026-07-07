@@ -173,3 +173,30 @@ def test_message_ref_id_upgrade_and_downgrade(database_url: str) -> None:
         assert "ref_id" not in message_cols
     finally:
         engine.dispose()
+
+
+def test_user_username_upgrade_and_downgrade(database_url: str) -> None:
+    """The 0010 migration adds ``users.username`` (unique) and relaxes ``email``.
+
+    Upgrade adds the ``username`` column and makes ``email`` nullable; downgrade
+    drops ``username`` and restores ``email`` to NOT NULL.
+    """
+    cfg = _make_config(database_url)
+    command.upgrade(cfg, "head")
+
+    engine = create_engine(database_url, future=True)
+    try:
+        inspector = inspect(engine)
+        columns = {c["name"]: c for c in inspector.get_columns("users")}
+        assert "username" in columns
+        assert columns["email"]["nullable"] is True
+        index_names = {idx["name"] for idx in inspector.get_indexes("users")}
+        assert "ix_users_username" in index_names
+
+        command.downgrade(cfg, "0009")
+        inspector = inspect(engine)
+        columns = {c["name"]: c for c in inspector.get_columns("users")}
+        assert "username" not in columns
+        assert columns["email"]["nullable"] is False
+    finally:
+        engine.dispose()

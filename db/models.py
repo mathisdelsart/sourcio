@@ -30,23 +30,29 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    """A registered account that can authenticate with email and password.
+    """A registered account that authenticates with a username and password.
 
     The password is never stored in clear text: only its bcrypt hash is kept.
-    A user may own zero or more ``Student`` identities. The link is optional on
-    the ``Student`` side, so anonymous, ``external_id``-keyed students created by
-    the tutor endpoints without a logged-in caller remain unlinked and existing
-    flows are unaffected.
+    The ``username`` is a public pseudonym used both as the login identifier and
+    the display name; it is unique first-come-first-served (uniqueness is enforced
+    case-insensitively in the auth layer). A user may own zero or more ``Student``
+    identities. The link is optional on the ``Student`` side, so anonymous,
+    ``external_id``-keyed students created by the tutor endpoints without a
+    logged-in caller remain unlinked and existing flows are unaffected.
     """
 
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    # Unique login identifier and display name (a pseudonym).
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # Kept for backward compatibility only: this is a demo with username-only
+    # auth, so no email is collected. Nullable so existing rows and every new
+    # username-only registration stay valid.
+    email: Mapped[str | None] = mapped_column(String(320), unique=True, index=True, nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
-    # Optional friendly name shown in the UI instead of the email. Nullable so
-    # existing accounts and registrations without one stay valid (email is used
-    # as the fallback display name).
+    # Redundant now that the username is the display name; kept as a harmless
+    # nullable column so no data migration is needed. No longer read or written.
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

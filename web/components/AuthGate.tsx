@@ -8,7 +8,7 @@ import { useT } from "@/lib/i18n";
 
 interface AuthGateProps {
   config: ConnectionConfig;
-  onLogin: (token: string, email: string, displayName?: string | null) => void;
+  onLogin: (token: string, username: string) => void;
 }
 
 /**

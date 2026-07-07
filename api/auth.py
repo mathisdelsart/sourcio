@@ -22,7 +22,7 @@ import bcrypt
 import jwt
 from fastapi import Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from core.config import get_settings
 from db.models import User
@@ -38,7 +38,12 @@ _MAX_PASSWORD_BYTES = 72
 # A pragmatic minimum so empty/blank passwords are rejected at registration.
 _MIN_PASSWORD_LENGTH = 8
 
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# Username rules: a public pseudonym used both as the login id and the display
+# name. Letters, digits and a few separators (``.``, ``_``, ``-``) so pseudos
+# like "Math.D." work; no spaces, 3-32 characters.
+_MIN_USERNAME_LENGTH = 3
+_MAX_USERNAME_LENGTH = 32
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 def hash_password(password: str) -> str:
@@ -105,23 +110,28 @@ def decode_access_token(token: str) -> str:
     return subject
 
 
-def _normalize_email(email: str) -> str:
-    """Lower-case and strip an email so lookups and uniqueness are consistent."""
-    return email.strip().lower()
-
-
-def validate_registration(email: str, password: str) -> tuple[str, str]:
+def validate_registration(username: str, password: str) -> tuple[str, str]:
     """Validate and normalize a registration payload.
 
-    Returns the normalized email and the original password on success. Raises
-    422 with a clear message when the email is malformed or the password is too
-    short or too long for bcrypt.
+    Returns the trimmed username (original case preserved) and the original
+    password on success. Raises 422 with a clear message when the username is the
+    wrong length or contains disallowed characters, or when the password is too
+    short or too long for bcrypt. Uniqueness is checked separately, at insert
+    time, and is case-insensitive.
     """
-    normalized = _normalize_email(email)
-    if not _EMAIL_RE.match(normalized):
+    normalized = username.strip()
+    if not _MIN_USERNAME_LENGTH <= len(normalized) <= _MAX_USERNAME_LENGTH:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="A valid email address is required.",
+            detail=(
+                f"Username must be between {_MIN_USERNAME_LENGTH} and "
+                f"{_MAX_USERNAME_LENGTH} characters."
+            ),
+        )
+    if not _USERNAME_RE.match(normalized):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Username may only contain letters, digits, '.', '_' and '-'.",
         )
     if len(password) < _MIN_PASSWORD_LENGTH:
         raise HTTPException(
@@ -139,21 +149,18 @@ def validate_registration(email: str, password: str) -> tuple[str, str]:
 class RegisterRequest(BaseModel):
     """Credentials to create a new account.
 
-    The email format is validated in ``validate_registration`` rather than via a
-    pydantic ``EmailStr`` so no extra runtime dependency is pulled in.
+    The username format is validated in ``validate_registration`` rather than via
+    a pydantic validator so the rules live in one place.
     """
 
-    email: str = Field(min_length=1)
+    username: str = Field(min_length=1)
     password: str = Field(min_length=1)
-    # Optional friendly name shown in the UI instead of the email. Trimmed and
-    # coerced to ``None`` when blank in ``register_user``.
-    display_name: str | None = None
 
 
 class LoginRequest(BaseModel):
     """Credentials to obtain an access token."""
 
-    email: str = Field(min_length=1)
+    username: str = Field(min_length=1)
     password: str = Field(min_length=1)
 
 
@@ -161,9 +168,8 @@ class UserOut(BaseModel):
     """Public view of a user. The password hash is never exposed."""
 
     id: int
-    email: str
-    # Friendly name shown in the UI; ``None`` falls back to the email client-side.
-    display_name: str | None = None
+    # The pseudonym: both the login identifier and the display name.
+    username: str
 
 
 class TokenResponse(BaseModel):
@@ -219,7 +225,7 @@ def _resolve_user_from_token(token: str) -> UserOut:
                 detail="Invalid or expired token.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        return UserOut(id=user.id, email=user.email, display_name=user.display_name)
+        return UserOut(id=user.id, username=user.username)
 
 
 def get_current_user(authorization: str | None = Header(default=None)) -> UserOut:
@@ -253,36 +259,38 @@ def register_user(payload: RegisterRequest) -> UserOut:
     """Create a new account from a validated registration payload.
 
     Hashes the password with bcrypt and persists the user. Raises 409 when the
-    (normalized) email already exists. The plaintext password is never stored.
+    username is already taken (compared case-insensitively so "Math" and "math"
+    collide), enforcing first-come-first-served. The plaintext password is never
+    stored.
     """
-    email, password = validate_registration(payload.email, payload.password)
-    display_name = (payload.display_name or "").strip() or None
+    username, password = validate_registration(payload.username, payload.password)
     with get_session() as session:
-        existing = session.scalar(select(User).where(User.email == email))
+        existing = session.scalar(select(User).where(func.lower(User.username) == username.lower()))
         if existing is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="An account with this email already exists.",
+                detail="This username is already taken.",
             )
-        user = User(email=email, hashed_password=hash_password(password), display_name=display_name)
+        user = User(username=username, hashed_password=hash_password(password))
         session.add(user)
         session.flush()
-        return UserOut(id=user.id, email=user.email, display_name=user.display_name)
+        return UserOut(id=user.id, username=user.username)
 
 
 def login_user(payload: LoginRequest) -> TokenResponse:
     """Verify credentials and return a signed access token.
 
-    Raises 401 on an unknown email or a wrong password, with the same generic
-    message in both cases so the response does not reveal which emails exist.
+    Looks the account up by username (case-insensitively). Raises 401 on an
+    unknown username or a wrong password, with the same generic message in both
+    cases so the response does not reveal which usernames exist.
     """
-    email = _normalize_email(payload.email)
+    username = payload.username.strip()
     with get_session() as session:
-        user = session.scalar(select(User).where(User.email == email))
+        user = session.scalar(select(User).where(func.lower(User.username) == username.lower()))
         if user is None or not verify_password(payload.password, user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password.",
+                detail="Incorrect username or password.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         return TokenResponse(access_token=create_access_token(str(user.id)))

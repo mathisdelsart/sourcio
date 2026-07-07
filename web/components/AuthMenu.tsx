@@ -11,31 +11,29 @@ import { cn } from "@/lib/cn";
 
 interface AuthMenuProps {
   config: ConnectionConfig;
-  /** Friendly display name, when the account set one. */
-  name: string | null;
-  /** Canonical email; shown when no display name is set. */
-  email: string | null;
-  onLogin: (token: string, email: string, displayName?: string | null) => void;
+  /** The signed-in account's username (pseudonym); null when signed out. */
+  username: string | null;
+  onLogin: (token: string, username: string) => void;
   onLogout: () => void;
 }
 
 /**
  * Header account menu. When signed out, the trigger opens the shared
  * {@link AuthCard} as a centered modal overlay (not a cramped dropdown); when
- * signed in, it shows the account's display name (falling back to the email) and
- * a logout action. The JWT is lifted to the parent (persisted to localStorage)
- * and sent on requests as a bearer token, additively to the optional API key.
+ * signed in, it shows the account's username and a logout action. The JWT is
+ * lifted to the parent (persisted to localStorage) and sent on requests as a
+ * bearer token, additively to the optional API key.
  */
-export function AuthMenu({ config, name, email, onLogin, onLogout }: AuthMenuProps) {
+export function AuthMenu({ config, username, onLogin, onLogout }: AuthMenuProps) {
   const toast = useToast();
   const { t } = useT();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const isAuthed = Boolean(email);
-  const label = name || email;
-  // First letter of the display name (or email) for the avatar badge.
+  const isAuthed = Boolean(username);
+  const label = username;
+  // First letter of the username for the avatar badge.
   const initial = (label ?? "").trim().charAt(0).toUpperCase() || "?";
 
   function close() {

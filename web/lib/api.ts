@@ -182,9 +182,8 @@ export interface ConnectionConfig {
 /** Minimal public view of an authenticated user. */
 export interface AuthUser {
   id: number;
-  email: string;
-  /** Friendly name shown instead of the email; falls back to the email when unset. */
-  display_name?: string | null;
+  /** The pseudonym: both the login identifier and the display name. */
+  username: string;
 }
 
 /** Token returned by a successful login. */
@@ -698,22 +697,18 @@ export async function gradeQuizAll(
   );
 }
 
-/** Create a new account. Returns the created user (id + email + display name). */
+/** Create a new account. Returns the created user (id + username). */
 export async function register(
-  email: string,
+  username: string,
   password: string,
   config?: ConnectionConfig,
-  displayName?: string | null,
 ): Promise<AuthUser> {
-  const body: Record<string, unknown> = { email, password };
-  const trimmed = displayName?.trim();
-  if (trimmed) body.display_name = trimmed;
   return request<AuthUser>(
     "/auth/register",
     {
       method: "POST",
       headers: buildHeaders(config, true),
-      body: JSON.stringify(body),
+      body: JSON.stringify({ username, password }),
     },
     config,
   );
@@ -721,7 +716,7 @@ export async function register(
 
 /** Log in and obtain a bearer access token. */
 export async function login(
-  email: string,
+  username: string,
   password: string,
   config?: ConnectionConfig,
 ): Promise<TokenResponse> {
@@ -730,7 +725,7 @@ export async function login(
     {
       method: "POST",
       headers: buildHeaders(config, true),
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username, password }),
     },
     config,
   );

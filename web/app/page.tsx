@@ -48,8 +48,7 @@ export default function Home() {
   // Max candidate-source pool (`k`) for Ask; configurable in Settings.
   const [sourcesMax, setSourcesMax] = useState(DEFAULT_SOURCES_MAX);
   const [token, setToken] = useState("");
-  const [authEmail, setAuthEmail] = useState("");
-  const [authName, setAuthName] = useState("");
+  const [authUsername, setAuthUsername] = useState("");
   const [active, setActive] = useState("ask");
   // Opens the shared sign-in / register card as a centered modal from the
   // locked tool area (the header AuthMenu owns its own separate modal).
@@ -91,8 +90,7 @@ export default function Home() {
     setApiKey(readLocal(KEYS.apiKey));
     const storedToken = readLocal(KEYS.authToken);
     setToken(storedToken);
-    setAuthEmail(readLocal(KEYS.authEmail));
-    setAuthName(readLocal(KEYS.authName));
+    setAuthUsername(readLocal(KEYS.authUsername));
     // A stored token must resolve before the tool renders any data, so start in
     // the resolving state when one is present (cleared by the me() effect).
     if (storedToken) setAuthResolving(true);
@@ -137,9 +135,9 @@ export default function Home() {
 
   // Resolve the signed-in user's id whenever a token exists (independently of
   // `requireAuth`), so being logged in always isolates the view. The resolved
-  // display name/email are refreshed from the canonical `me()` response. A
-  // stored token that no longer resolves is treated as logged-out (cleared)
-  // rather than silently falling back to the device id.
+  // username is refreshed from the canonical `me()` response. A stored token
+  // that no longer resolves is treated as logged-out (cleared) rather than
+  // silently falling back to the device id.
   useEffect(() => {
     if (!token) {
       setAuthUserId(null);
@@ -152,10 +150,8 @@ export default function Home() {
       .then((user) => {
         if (cancelled) return;
         setAuthUserId(user.id);
-        setAuthEmail(user.email);
-        setAuthName(user.display_name ?? "");
-        writeLocal(KEYS.authEmail, user.email);
-        writeLocal(KEYS.authName, user.display_name ?? "");
+        setAuthUsername(user.username);
+        writeLocal(KEYS.authUsername, user.username);
         setAuthResolving(false);
       })
       .catch(() => {
@@ -200,22 +196,18 @@ export default function Home() {
     return () => document.removeEventListener("keydown", onKey);
   }, [authModalOpen]);
 
-  function onLogin(nextToken: string, nextEmail: string, nextName?: string | null) {
+  function onLogin(nextToken: string, nextUsername: string) {
     setToken(nextToken);
-    setAuthEmail(nextEmail);
-    setAuthName(nextName ?? "");
+    setAuthUsername(nextUsername);
     writeLocal(KEYS.authToken, nextToken);
-    writeLocal(KEYS.authEmail, nextEmail);
-    writeLocal(KEYS.authName, nextName ?? "");
+    writeLocal(KEYS.authUsername, nextUsername);
   }
 
   function onLogout() {
     setToken("");
-    setAuthEmail("");
-    setAuthName("");
+    setAuthUsername("");
     writeLocal(KEYS.authToken, "");
-    writeLocal(KEYS.authEmail, "");
-    writeLocal(KEYS.authName, "");
+    writeLocal(KEYS.authUsername, "");
     // Drop the active thread so a stale account thread id never lingers into the
     // anonymous (device-scoped) view after signing out.
     selectSession(null);
@@ -277,8 +269,7 @@ export default function Home() {
           <LanguageToggle />
           <AuthMenu
             config={config}
-            name={authName || null}
-            email={authEmail || null}
+            username={authUsername || null}
             onLogin={onLogin}
             onLogout={onLogout}
           />

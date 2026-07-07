@@ -273,10 +273,10 @@ def _owner_aware_get_source(owned_by="alice-device"):
     return _stub
 
 
-def _bearer(client, email, password="supersecret"):
+def _bearer(client, username, password="supersecret"):
     """Register then log in, returning an Authorization header dict."""
-    client.post("/auth/register", json={"email": email, "password": password})
-    token = client.post("/auth/login", json={"email": email, "password": password}).json()[
+    client.post("/auth/register", json={"username": username, "password": password})
+    token = client.post("/auth/login", json={"username": username, "password": password}).json()[
         "access_token"
     ]
     return {"Authorization": f"Bearer {token}"}
@@ -287,7 +287,7 @@ def test_source_owner_sees_their_chunk(client, monkeypatch):
     pytest.importorskip("jwt")
     pytest.importorskip("bcrypt")
     monkeypatch.setattr(api_main, "get_source", _owner_aware_get_source())
-    headers = _bearer(client, "srcowner@example.com")
+    headers = _bearer(client, "srcowner")
     response = client.get("/source/known", params={"student_id": "alice-device"}, headers=headers)
     assert response.status_code == 200
     assert response.json() == _CHUNK
@@ -300,7 +300,7 @@ def test_source_foreign_authenticated_caller_gets_404(client, monkeypatch):
     pytest.importorskip("jwt")
     pytest.importorskip("bcrypt")
     monkeypatch.setattr(api_main, "get_source", _owner_aware_get_source())
-    headers = _bearer(client, "srcforeign@example.com")
+    headers = _bearer(client, "srcforeign")
     response = client.get("/source/known", params={"student_id": "bob-device"}, headers=headers)
     assert response.status_code == 404
 

@@ -37,8 +37,8 @@ def client():
     api_main._engine = None
 
 
-def _register(client, email="user@example.com", password="hunter2pass"):
-    return client.post("/auth/register", json={"email": email, "password": password})
+def _register(client, username="tester", password="hunter2pass"):
+    return client.post("/auth/register", json={"username": username, "password": password})
 
 
 # --- password hashing --------------------------------------------------------
@@ -67,10 +67,10 @@ def test_verify_rejects_malformed_hash():
 
 
 def test_register_creates_user_and_hashes_password(client):
-    response = _register(client, "alice@example.com", "supersecret")
+    response = _register(client, "alice", "supersecret")
     assert response.status_code == 201
     body = response.json()
-    assert body["email"] == "alice@example.com"
+    assert body["username"] == "alice"
     assert isinstance(body["id"], int)
     # The hash, not the plaintext, is stored.
     assert "password" not in body
@@ -79,64 +79,45 @@ def test_register_creates_user_and_hashes_password(client):
     from db.session import get_session
 
     with get_session(api_main._engine) as session:
-        user = session.scalar(select(User).where(User.email == "alice@example.com"))
+        user = session.scalar(select(User).where(User.username == "alice"))
         assert user is not None
         assert user.hashed_password != "supersecret"
         assert "supersecret" not in user.hashed_password
         assert auth_mod.verify_password("supersecret", user.hashed_password)
 
 
-def test_register_with_display_name_returns_it(client):
-    response = client.post(
-        "/auth/register",
-        json={"email": "named@example.com", "password": "supersecret", "display_name": "  Ada  "},
-    )
+def test_register_preserves_username_case_and_trims(client):
+    # The stored username keeps its original case but is trimmed of surrounding
+    # whitespace; it is echoed verbatim by /auth/me.
+    response = _register(client, "  Math.D-1  ", "supersecret")
     assert response.status_code == 201
-    body = response.json()
-    assert body["display_name"] == "Ada"  # trimmed
+    assert response.json()["username"] == "Math.D-1"
 
-    # The display name is echoed by /auth/me too.
     token = client.post(
-        "/auth/login", json={"email": "named@example.com", "password": "supersecret"}
+        "/auth/login", json={"username": "Math.D-1", "password": "supersecret"}
     ).json()["access_token"]
     me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"}).json()
-    assert me["display_name"] == "Ada"
+    assert me["username"] == "Math.D-1"
 
 
-def test_register_without_display_name_is_null(client):
-    body = _register(client, "plain@example.com", "supersecret").json()
-    assert body["display_name"] is None
-
-
-def test_register_blank_display_name_is_null(client):
-    response = client.post(
-        "/auth/register",
-        json={"email": "blank@example.com", "password": "supersecret", "display_name": "   "},
-    )
-    assert response.status_code == 201
-    assert response.json()["display_name"] is None
-
-
-def test_register_normalizes_email(client):
-    response = _register(client, "  Bob@Example.COM ", "supersecret")
-    assert response.status_code == 201
-    assert response.json()["email"] == "bob@example.com"
-
-
-def test_register_duplicate_email_is_409(client):
-    assert _register(client, "dup@example.com", "supersecret").status_code == 201
-    # Same email, different case/whitespace, must still collide after normalization.
-    second = _register(client, "DUP@example.com ", "anothersecret")
+def test_register_duplicate_username_is_409(client):
+    assert _register(client, "dup", "supersecret").status_code == 201
+    # Same username, different case/whitespace, must still collide (case-insensitive).
+    second = _register(client, "DUP ", "anothersecret")
     assert second.status_code == 409
+    assert second.json()["detail"] == "This username is already taken."
 
 
 @pytest.mark.parametrize(
     "body",
     [
-        {"password": "supersecret"},  # missing email
-        {"email": "x@example.com"},  # missing password
-        {"email": "not-an-email", "password": "supersecret"},  # bad email
-        {"email": "good@example.com", "password": "short"},  # too short
+        {"password": "supersecret"},  # missing username
+        {"username": "alice"},  # missing password
+        {"username": "ab", "password": "supersecret"},  # too short
+        {"username": "x" * 33, "password": "supersecret"},  # too long
+        {"username": "has space", "password": "supersecret"},  # space not allowed
+        {"username": "bad@name", "password": "supersecret"},  # disallowed char
+        {"username": "gooduser", "password": "short"},  # password too short
     ],
 )
 def test_register_bad_input_is_4xx(client, body):
@@ -148,54 +129,46 @@ def test_register_bad_input_is_4xx(client, body):
 
 
 def test_login_success_returns_bearer_token(client):
-    _register(client, "carol@example.com", "supersecret")
-    response = client.post(
-        "/auth/login", json={"email": "carol@example.com", "password": "supersecret"}
-    )
+    _register(client, "carol", "supersecret")
+    response = client.post("/auth/login", json={"username": "carol", "password": "supersecret"})
     assert response.status_code == 200
     body = response.json()
     assert body["token_type"] == "bearer"
     assert isinstance(body["access_token"], str) and body["access_token"]
 
 
-def test_login_is_case_insensitive_on_email(client):
-    _register(client, "dave@example.com", "supersecret")
-    response = client.post(
-        "/auth/login", json={"email": "DAVE@EXAMPLE.COM", "password": "supersecret"}
-    )
+def test_login_is_case_insensitive_on_username(client):
+    _register(client, "Dave", "supersecret")
+    response = client.post("/auth/login", json={"username": "DAVE", "password": "supersecret"})
     assert response.status_code == 200
 
 
 def test_login_wrong_password_is_401(client):
-    _register(client, "erin@example.com", "supersecret")
-    response = client.post(
-        "/auth/login", json={"email": "erin@example.com", "password": "wrongpass1"}
-    )
+    _register(client, "erin", "supersecret")
+    response = client.post("/auth/login", json={"username": "erin", "password": "wrongpass1"})
     assert response.status_code == 401
 
 
-def test_login_unknown_email_is_401(client):
-    response = client.post(
-        "/auth/login", json={"email": "nobody@example.com", "password": "supersecret"}
-    )
+def test_login_unknown_username_is_401(client):
+    response = client.post("/auth/login", json={"username": "nobody", "password": "supersecret"})
     assert response.status_code == 401
 
 
 # --- /auth/me ----------------------------------------------------------------
 
 
-def _token(client, email="frank@example.com", password="supersecret"):
-    _register(client, email, password)
-    return client.post("/auth/login", json={"email": email, "password": password}).json()[
+def _token(client, username="frank", password="supersecret"):
+    _register(client, username, password)
+    return client.post("/auth/login", json={"username": username, "password": password}).json()[
         "access_token"
     ]
 
 
 def test_me_with_valid_token_returns_user(client):
-    token = _token(client, "frank@example.com")
+    token = _token(client, "frank")
     response = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
-    assert response.json()["email"] == "frank@example.com"
+    assert response.json()["username"] == "frank"
 
 
 def test_me_missing_token_is_401(client):
@@ -209,7 +182,7 @@ def test_me_invalid_token_is_401(client):
 
 
 def test_me_wrong_scheme_is_401(client):
-    token = _token(client, "grace@example.com")
+    token = _token(client, "grace")
     response = client.get("/auth/me", headers={"Authorization": token})  # no "Bearer "
     assert response.status_code == 401
 
@@ -222,7 +195,7 @@ def test_me_expired_token_is_401(client, monkeypatch):
     from core.config import get_settings
 
     # Forge a token that expired one hour ago, signed with the real secret.
-    _register(client, "heidi@example.com", "supersecret")
+    _register(client, "heidi", "supersecret")
     secret = get_settings().jwt_secret
     expired = jwt.encode(
         {
@@ -237,13 +210,13 @@ def test_me_expired_token_is_401(client, monkeypatch):
 
 
 def test_me_token_for_deleted_user_is_401(client):
-    token = _token(client, "ivan@example.com")
+    token = _token(client, "ivan")
     # Remove the user, then the previously valid token must no longer resolve.
     from db.models import User
     from db.session import get_session
 
     with get_session(api_main._engine) as session:
-        user = session.scalar(select(User).where(User.email == "ivan@example.com"))
+        user = session.scalar(select(User).where(User.username == "ivan"))
         session.delete(user)
 
     response = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
