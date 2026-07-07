@@ -58,13 +58,13 @@ const en = {
   "stats.subtitle":
     "Every answer comes from your own courses and shows where it's from — so you can revise without second-guessing.",
   "stats.cited.value": "100%",
-  "stats.cited.label": "Answers cited — never made up",
-  "stats.fromCourse.value": "82%",
-  "stats.fromCourse.label": "Answered straight from your own courses",
-  "stats.tools.value": "8",
-  "stats.tools.label": "Ways to study: ask, quiz, practise, grade…",
-  "stats.free.value": "0 €",
-  "stats.free.label": "To get started — no credit card needed",
+  "stats.cited.label": "Answers cited — never invented",
+  "stats.refuses.value": "0",
+  "stats.refuses.label": "Made-up answers — it refuses when unsure",
+  "stats.private.value": "100%",
+  "stats.private.label": "Private — only you can see your courses",
+  "stats.indexOnce.value": "1×",
+  "stats.indexOnce.label": "Index once, revise all year",
 
   // How it works
   "how.eyebrow": "How it works",
@@ -544,13 +544,13 @@ const fr: Record<TranslationKey, string> = {
   "stats.subtitle":
     "Chaque réponse vient de vos propres cours et indique sa source — pour réviser sans douter.",
   "stats.cited.value": "100 %",
-  "stats.cited.label": "Réponses citées — jamais inventées",
-  "stats.fromCourse.value": "82 %",
-  "stats.fromCourse.label": "Répondu directement depuis vos cours",
-  "stats.tools.value": "8",
-  "stats.tools.label": "Façons de réviser : demander, quiz, exercices, correction…",
-  "stats.free.value": "0 €",
-  "stats.free.label": "Pour commencer — sans carte bancaire",
+  "stats.cited.label": "Réponses sourcées — jamais inventées",
+  "stats.refuses.value": "0",
+  "stats.refuses.label": "Réponse inventée — il refuse quand il ne sait pas",
+  "stats.private.value": "100 %",
+  "stats.private.label": "Privé — vos cours ne sont visibles que par vous",
+  "stats.indexOnce.value": "1×",
+  "stats.indexOnce.label": "Indexé une fois, révisé toute l'année",
 
   // How it works
   "how.eyebrow": "Comment ça marche",
@@ -1034,13 +1034,13 @@ const nl: Record<TranslationKey, string> = {
   "stats.subtitle":
     "Elk antwoord komt uit je eigen cursussen en toont waar het vandaan komt — zodat je kunt studeren zonder te twijfelen.",
   "stats.cited.value": "100%",
-  "stats.cited.label": "Antwoorden geciteerd — nooit verzonnen",
-  "stats.fromCourse.value": "82%",
-  "stats.fromCourse.label": "Rechtstreeks beantwoord vanuit je eigen cursussen",
-  "stats.tools.value": "8",
-  "stats.tools.label": "Manieren om te studeren: vragen, quiz, oefenen, beoordelen…",
-  "stats.free.value": "0 €",
-  "stats.free.label": "Om te beginnen — geen creditcard nodig",
+  "stats.cited.label": "Antwoorden met bron — nooit verzonnen",
+  "stats.refuses.value": "0",
+  "stats.refuses.label": "Verzonnen antwoorden — weigert bij twijfel",
+  "stats.private.value": "100%",
+  "stats.private.label": "Privé — alleen jij ziet je cursussen",
+  "stats.indexOnce.value": "1×",
+  "stats.indexOnce.label": "Eén keer indexeren, het hele jaar herhalen",
 
   // How it works
   "how.eyebrow": "Hoe het werkt",

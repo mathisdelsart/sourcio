@@ -17,9 +17,9 @@ interface Stat {
  */
 const STATS: Stat[] = [
   { value: "stats.cited.value", label: "stats.cited.label" },
-  { value: "stats.fromCourse.value", label: "stats.fromCourse.label" },
-  { value: "stats.tools.value", label: "stats.tools.label" },
-  { value: "stats.free.value", label: "stats.free.label" },
+  { value: "stats.refuses.value", label: "stats.refuses.label" },
+  { value: "stats.private.value", label: "stats.private.label" },
+  { value: "stats.indexOnce.value", label: "stats.indexOnce.label" },
 ];
 
 /**
