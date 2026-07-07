@@ -189,6 +189,63 @@ def test_get_llm_ollama_builds_local_model(monkeypatch):
     assert captured["kwargs"].get("temperature") == 0
 
 
+def test_get_llm_forwards_api_key_for_openai_model(monkeypatch):
+    # A per-call api_key is forwarded to init_chat_model for the OpenAI-fallback
+    # case (the vision extract role under the Groq provider), so a visitor's own
+    # key authenticates their scanned-PDF ingestion instead of the env key.
+    monkeypatch.delenv("LLM_EXTRACT", raising=False)
+    _fresh_settings(monkeypatch, LLM_PROVIDER="groq")
+
+    captured = {}
+
+    def fake_init(model, **kwargs):
+        captured["model"] = model
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr(config, "init_chat_model", fake_init)
+    config.get_llm("extract", api_key="sk-test")
+    assert captured["model"] == "gpt-4o-mini"
+    assert captured["kwargs"].get("api_key") == "sk-test"
+
+
+def test_get_llm_does_not_forward_api_key_for_groq_model(monkeypatch):
+    # A non-OpenAI resolved model (Groq) must ignore the override so the key can
+    # never break the Groq/Ollama paths (or leak to the wrong provider).
+    monkeypatch.delenv("LLM_EXPLAIN", raising=False)
+    _fresh_settings(monkeypatch, LLM_PROVIDER="groq")
+
+    captured = {}
+
+    def fake_init(model, **kwargs):
+        captured["model"] = model
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr(config, "init_chat_model", fake_init)
+    config.get_llm("explain", api_key="sk-test")
+    assert captured["model"].startswith("groq:")
+    assert "api_key" not in captured["kwargs"]
+
+
+def test_get_llm_does_not_forward_api_key_for_ollama_model(monkeypatch):
+    # An Ollama-resolved model likewise ignores the OpenAI override.
+    monkeypatch.delenv("LLM_EXPLAIN", raising=False)
+    _fresh_settings(monkeypatch, LLM_PROVIDER="ollama")
+
+    captured = {}
+
+    def fake_init(model, **kwargs):
+        captured["model"] = model
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr(config, "init_chat_model", fake_init)
+    config.get_llm("explain", api_key="sk-test")
+    assert captured["model"].startswith("ollama:")
+    assert "api_key" not in captured["kwargs"]
+
+
 # --- Effective rate limit ----------------------------------------------------
 
 

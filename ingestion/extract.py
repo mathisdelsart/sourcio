@@ -238,6 +238,7 @@ def extract_pdf(
     concurrency: int = 4,
     transcriber: Transcriber | None = None,
     sleep: Sleeper = time.sleep,
+    api_key: str | None = None,
 ) -> list[Page]:
     """Extract a slide-deck PDF into per-slide Pages.
 
@@ -263,6 +264,12 @@ def extract_pdf(
             injected) is wrapped with rate-limit retry/backoff.
         sleep: Sleep function used by the rate-limit backoff; tests pass a no-op
             so retries do not actually wait.
+        api_key: Optional OpenAI key authenticating the vision model for this
+            extraction only (a visitor importing a scanned/image PDF with their
+            own key so the app owner is not billed). Forwarded to
+            ``get_llm("extract", api_key=...)`` and used transiently; it is never
+            stored or logged. Ignored when a ``transcriber`` is injected (tests)
+            or when the resolved extract model is not an OpenAI one.
 
     Returns:
         One Page per selected slide, with math preserved as LaTeX for
@@ -272,7 +279,7 @@ def extract_pdf(
     import fitz  # PyMuPDF, imported lazily so non-ingestion code can import this module.
 
     if transcriber is None:
-        llm = get_llm("extract")
+        llm = get_llm("extract", api_key=api_key)
 
         def _default_transcriber(image_uri: str) -> str:
             return _vision_transcribe(image_uri, llm)

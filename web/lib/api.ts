@@ -1102,6 +1102,10 @@ export async function listDocuments(
  * the caller polls {@link getJob} to follow progress and survives a page refresh
  * by re-attaching to the same `job_id`. Throws an `ApiError` if the request
  * cannot be reached or returns a non-2xx status.
+ *
+ * `openaiKey` is the visitor's own OpenAI key, sent (as the `openai_key` form
+ * field) ONLY when non-empty and used ONLY to import a scanned/image PDF on the
+ * visitor's own account. It is never persisted server-side.
  */
 export async function startUpload(
   file: File,
@@ -1109,6 +1113,7 @@ export async function startUpload(
   chapter: string | null,
   config?: ConnectionConfig,
   studentId?: string | null,
+  openaiKey?: string | null,
 ): Promise<StartUploadResult> {
   const form = new FormData();
   form.append("file", file);
@@ -1117,6 +1122,9 @@ export async function startUpload(
   // Stamp the uploader so the material is scoped to their account (owner); when
   // absent the upload stays owner-less (shared/legacy).
   if (studentId) form.append("student_id", studentId);
+  // Forward the visitor's OpenAI key only when set — used transiently by the
+  // server for this one scanned-PDF ingestion, never stored.
+  if (openaiKey && openaiKey.trim()) form.append("openai_key", openaiKey.trim());
 
   const url = `${resolveBaseUrl(config)}/documents/upload`;
   let response: Response;
