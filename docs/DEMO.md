@@ -1,32 +1,31 @@
 # Demo recording guide
 
-This is the script for the ~20–30 second GIF shown at the top of the
-[README](../README.md). It walks the four core scenarios and, above all,
-showcases the North Star: **grounded, cited answers and an honest refusal when a
-question is out of course.**
+This is the script for the ~20–30 second walkthrough referenced from the
+**Demo** section of the [README](../README.md). It walks the four core scenarios
+and, above all, showcases the North Star: **grounded, cited answers and an
+honest refusal when a question is out of course.**
 
-The resulting file should be saved as `docs/demo.gif`; the README already
-references it (`![grounded-rag demo](docs/demo.gif)`), so you only need to drop
-the file in.
+Record against the primary web UI (Next.js). Save the clip as a video, or export
+a `docs/demo.gif` and embed it in the README's Demo section.
 
 ## 0. Before you record
 
-Start the stack on the host (Qdrant in Docker, API + UI on the host):
+Start the stack on the host (Qdrant in Docker, API + web on the host):
 
 ```bash
 docker compose up -d qdrant   # vector store (course already indexed)
 make api                      # FastAPI on http://localhost:8000
-make ui                       # Streamlit UI on http://localhost:8501
+make web                      # Next.js UI on http://localhost:3000
 ```
 
-Then open <http://localhost:8501>. Do **not** run `docker compose down` while
-recording — it stops Qdrant.
+Then open <http://localhost:3000>. Do **not** run `docker compose down` while
+recording — it stops Qdrant. (The legacy Streamlit UI, `make ui` on
+<http://localhost:8501>, still works if you prefer it.)
 
 Recording hygiene:
 
-- In the sidebar, keep **Student id** at `demo-student` and leave the **Course
-  filter** empty (or set it to `Wavelet Transform`).
-- Confirm the sidebar shows a healthy **Backend** label before recording.
+- Leave the **Course filter** empty (or set it to `Wavelet Transform`).
+- Confirm the header **health badge** is green before recording.
 - Use a clean browser window, zoom so the answer and its sources fit on screen,
   and pre-type nothing — the typing is part of the story.
 
@@ -39,7 +38,7 @@ Keep each beat short; the contrast between beat A and beat B is the whole point.
 | **A. Grounded answer** (~8 s) | **Ask** | Type *"What is a piecewise constant approximation?"* and click **Ask** | A short answer **with a `Sources` block** citing `(Wavelet Transform, Chap. …, p. …)` — proof every claim is sourced |
 | **B. Honest refusal** (~6 s) | **Ask** | Clear the box, type *"How do I set up a Kubernetes cluster?"*, click **Ask** | The refusal banner: *"This is not covered in the course material."* — the model declines instead of inventing |
 | **C. Generate an exercise** (~7 s) | **Exercise** | In *Notion to practice* type *"piecewise constant approximation"*, click **Generate exercise** | A course-grounded problem statement (the reference solution is **never** shown) |
-| **D. Grade an answer** (~7 s) | **Grade** | Note the *"Grading against generated exercise #N"* banner, type a short answer, click **Grade** | A **Score /100** progress bar plus written feedback |
+| **D. Grade an answer** (~7 s) | **Exercise** | Still in the Exercise panel, type a short answer to the generated exercise and click **Grade** | A **Score /100** progress bar plus written feedback |
 
 Optional 2-second closer: back on the **Ask** tab, pick a level under
 *"Did not get it? Re-explain at a level"* and click **Re-explain** to show the

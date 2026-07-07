@@ -1,354 +1,168 @@
-# grounded-rag
+<div align="center">
 
-![coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)
+# Sourcio
 
-**An AI tutor that answers strictly from your own course material, always citing the source, and refuses anything it does not cover.**
+**An AI tutor that answers only from your own courses — always cited, never invented.**
 
-`grounded-rag` indexes your courses once (slides, exercise sets, summaries) into a persistent vector
-store, then answers questions using *only* those documents. Every claim is backed by a citation
-(course, chapter, page), and when nothing in the material is relevant enough, the system says so
+[![CI](https://img.shields.io/github/actions/workflow/status/mathisdelsart/sourcio/ci.yml?branch=main&label=CI&logo=github)](https://github.com/mathisdelsart/sourcio/actions/workflows/ci.yml)
+![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)
+![Python](https://img.shields.io/badge/python-3.12+-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
+![Next.js](https://img.shields.io/badge/web-Next.js-000000?logo=nextdotjs&logoColor=white)
+![Qdrant](https://img.shields.io/badge/vectors-Qdrant-DC244C)
+![Tests](https://img.shields.io/badge/tests-700+-blue)
+
+</div>
+
+Sourcio indexes your course material once — slides, exercise sets, summaries — into a persistent
+vector store, then answers questions using **only** those documents. Every claim carries a citation
+(course, chapter, page), and when nothing in the material is relevant enough, the tutor says so
 instead of guessing. The running use case is a study assistant over university courses, but the
 pipeline is document-agnostic.
 
-## Why it beats a generic chatbot for studying
+> Sourcio is a portfolio project — a hands-on showcase of a production-shaped RAG stack
+> (retrieval, agentic orchestration, LLM-as-a-judge evaluation, a typed API and web app, CI/CD).
 
-| Generic chatbot | grounded-rag |
+---
+
+## Why not just use a generic chatbot?
+
+| A generic chatbot… | Sourcio instead… |
 | --- | --- |
-| Documents are lost between conversations | **Persistent indexed knowledge base** (Qdrant), courses indexed once |
-| Drifts to out-of-source methods and content | **Strict grounding** behind a calibrated **similarity threshold**: irrelevant retrieval becomes an explicit refusal |
-| References cannot be verified | **Systematic citations** (course / chapter / page) on every answer |
-| Can hallucinate confidently | **Faithfulness guard**: an offline judge checks that answers are supported by the retrieved sources |
+| Loses your documents between conversations | Keeps a **persistent, indexed knowledge base** (Qdrant) — courses indexed once |
+| Drifts to methods and content outside your syllabus | Stays **strictly grounded** in your material behind a calibrated similarity threshold |
+| Gives answers you cannot verify | Attaches a **citation** (course / chapter / page) to every claim |
+| Can hallucinate with confidence | **Refuses** when the course does not cover the question, instead of inventing |
 
-Citations are produced **by construction**, not on trust. The model only ever sees numbered sources
-`[1] [2] [3]` and is instructed to cite those indices; the code then remaps each `[n]` to its real
-source label. The model never handles page numbers, so it cannot invent one.
+Citations are produced *by construction*: the model only ever sees numbered sources `[1] [2] [3]`
+and cites those indices; the code then remaps each `[n]` to its real chapter and page. The model
+never handles page numbers, so it cannot invent one.
 
-## Architecture
+## Key features
 
-The system splits into an **offline** ingestion pass (run once per course) and an **online** agent
-that serves requests, plus an offline **quality / evaluation** layer.
+- 📚 **Grounded, cited answers** — every response is backed by the exact course passages it used.
+- 🚫 **Honest refusals** — out-of-course questions get *"not covered in the course material"*, never a guess.
+- ⚡ **Streaming responses** — answers render token by token over Server-Sent Events.
+- 🎓 **Re-explain by level** — beginner / intermediate / advanced rephrasing that keeps conversation memory.
+- ✍️ **Exercises & quizzes** — course-grounded practice with automatic grading at chosen rigor levels (reference solutions stay server-side).
+- 🔁 **Spaced-repetition review** — SM-2 scheduling to revisit notions at the right time.
+- 🧵 **Threads, history & feedback** — named conversation threads, an activity feed, and per-answer 👍/👎.
+- 📄 **Multi-format ingestion** — PDF slides via a vision model (math/LaTeX preserved), plus `.md` / `.txt` prose.
+- 🔐 **Multi-user by design** — JWT auth with per-account document isolation and background ingestion.
+- 🌍 **Multilingual** — English, French and Dutch UI and answers.
 
-```mermaid
-flowchart TD
-    subgraph OFFLINE["OFFLINE — ingestion (once per course)"]
-        PDF[course.pdf] --> EX["math-aware extraction<br/>slides → Markdown + LaTeX"]
-        EX --> CH["adaptive chunking<br/>1 slide ≈ 1 chunk"]
-        CH --> EMB["multilingual embeddings<br/>BAAI/bge-m3, local"]
-        EMB --> QD[(Qdrant<br/>vector + payload)]
-    end
+## How it works
 
-    subgraph ONLINE["ONLINE — LangGraph agent (per request)"]
-        Q[student message] --> ROUTER{router<br/>intent}
-        ROUTER -->|explain| EXPL["RAG → grounded, cited answer<br/>or refusal"]
-        ROUTER -->|generate| GEN["grounded exercise<br/>+ reference solution"]
-        ROUTER -->|grade| GRD["LLM-as-a-judge<br/>on student answer"]
-        ROUTER -->|reexplain| REX["rephrase, keep<br/>conversation memory"]
-        EXPL -.retrieve.-> QD
-        GEN -.retrieve.-> QD
-    end
-
-    subgraph QUALITY["QUALITY — offline / CI"]
-        REF[reference questions] --> JUDGE["faithfulness + relevance judge"]
-        JUDGE --> GATE{pass / fail gate}
-    end
-
-    QD -.indexed corpus.-> Q
-```
-
-<details>
-<summary>Text version of the diagram</summary>
+Sourcio splits into an **offline** ingestion pass (run once per course) and an **online** agent that
+serves requests, guarded by an offline **evaluation** layer.
 
 ```
-OFFLINE — ingestion (once per course)
-  PDF
-   -> math-aware extraction        (slides -> Markdown + LaTeX preserved)
-   -> adaptive chunking            (one slide ≈ one chunk; prose split with overlap)
-   -> multilingual embeddings      (BAAI/bge-m3, local)
-   -> Qdrant upsert                ({vector, payload: course/chapter/page/text})
+OFFLINE — ingest once per course
+  PDF / .md / .txt
+   → math-aware extraction   (slides → Markdown + LaTeX preserved)
+   → adaptive chunking       (one slide ≈ one chunk; prose split with overlap)
+   → local embeddings        (BAAI/bge-m3, multilingual, free)
+   → Qdrant                  ({vector, payload: course / chapter / page / text})
 
-ONLINE — agent (per request)
-              ┌─ explain     RAG -> grounded, cited answer (or refusal)
-   router ────┼─ generate    grounded exercise + reference solution
-   (intent)   ├─ grade       LLM-as-a-judge on the student's answer
-              └─ reexplain   rephrase, keeping conversation memory
-
-QUALITY — offline / CI
-  reference questions -> answer -> faithfulness + relevance judge -> pass/fail gate
+ONLINE — answer a question
+  question
+   → embed + retrieve top-k from Qdrant, with a similarity threshold
+   → if nothing clears the threshold → refuse ("not covered in the course")
+   → otherwise → grounded answer with citations remapped by the code
 ```
 
-</details>
+A LangGraph router classifies intent (explain / generate exercise / grade / re-explain) and dispatches
+to the matching node. Optional, opt-in retrieval boosters — a cross-encoder reranker, hybrid
+dense + BM25 fusion, multi-query expansion, HyDE, neighbor-chunk expansion — widen recall while the
+refusal guard stays intact. Full module-level walkthrough in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
-A deeper, module-level walkthrough lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+## Results
 
-**Math-aware extraction.** Pages are rasterized and transcribed by a vision model into Markdown with
-LaTeX kept inline, so formulas survive ingestion. A `--hybrid` flag routes plain-text pages to fast,
-free PyMuPDF extraction and reserves the vision path for math- and figure-heavy pages. Transcriptions
-run concurrently (`--concurrency`), and `--pages` / `--max-pages` allow targeting a subset.
+Measured end to end on a full 63-slide *Wavelet Transform* course indexed into Qdrant, then evaluated
+with the offline harness (`eval/`). Numbers are honest and labeled, not marketing.
 
-**Multi-format ingestion.** The same pipeline ingests slide-deck PDFs (vision/PyMuPDF) as well as
-prose `.md` and `.txt` files, which are loaded and split into overlapping windows rather than per-slide.
+| Metric | Result | How it was measured |
+| --- | --- | --- |
+| **Threshold calibration** | 100% in/out separation | In-course scores 0.57–0.68 vs out-of-course 0.28–0.43; threshold ≈ 0.50 |
+| **Retrieval hit-rate** | **73% → 82%** (+9 pts) | With the cross-encoder reranker enabled |
+| **Hybrid retrieval** | **+9.1 pts** hit-rate, +6.6 NDCG@5 | Dense + BM25 (RRF) vs dense-only; the *delta* is what's comparable |
+| **Faithfulness** | 75% | Offline LLM-as-a-judge: every claim supported by the retrieved sources |
+| **Relevance** | 100% | Same judge: answers actually address the question |
+| **Retrieval latency** | p50 **67 ms** · p95 **466 ms** | Query embedding + Qdrant search; LLM-independent |
+| **Test suite / CI** | 700+ tests, green | ruff + pytest + pyright + coverage gate on every PR |
 
-**Adaptive chunking.** Chunking follows the document type: slide decks map roughly one slide to one
-chunk (so unrelated slides are not glued together), while prose is split into overlapping windows.
-
-**Retrieval with refusal.** A question is embedded with the same model used at indexing time, and the
-top-k chunks are fetched from Qdrant with a `score_threshold`. If nothing clears the threshold, the
-answer layer returns an explicit refusal rather than answering from the model's own knowledge. The
-threshold is calibrated empirically (in-course questions accepted, out-of-course questions rejected).
-
-**Advanced retrieval (all opt-in, default off, refusal preserved).** The dense path is the baseline;
-each booster below is enabled by a single setting and keeps the similarity threshold, so an
-out-of-course question still finds nothing and is refused.
-
-- **Cross-encoder reranker** (`RERANKER_MODEL`): fetches more thresholded candidates, rescores each
-  `(question, chunk)` pair locally with a cross-encoder, and keeps the best k. No re-ingestion needed.
-- **Hybrid dense + sparse (BM25-style)** (`HYBRID_RETRIEVAL=1`, with a `--sparse` re-ingest): fuses a
-  dense kNN branch and a `bge-m3` lexical branch with Reciprocal Rank Fusion via Qdrant's Query API. It
-  engages only when the collection actually carries the sparse vector, otherwise falls back to dense.
-- **Multi-query expansion** (`MULTI_QUERY=1`): rewrites the question into a few diverse sub-queries,
-  retrieves for each, and fuses the candidate lists before the threshold and reranker run — widening
-  recall only.
-- **HyDE** (`HYDE=1`): embeds a short hypothetical answer passage instead of the bare question for the
-  dense branch, often landing closer to the indexed chunks. Multi-query takes precedence when both are set.
-- **Neighbor-chunk expansion** (`NEIGHBOR_EXPANSION=1`): after the top results are chosen, pulls adjacent
-  slides/windows (same course/chapter, page within `±NEIGHBOR_WINDOW`) as extra context, appended after
-  the ranked hits. Never runs on an empty retrieval, so the refusal guard is untouched.
-
-**Streaming.** Alongside `POST /ask`, `POST /ask/stream` returns a `text/event-stream`: token deltas
-arrive first and the explanation renders as it is produced, followed by a single final event carrying
-the remapped sources and the refusal flag. Citation remapping is applied once, to the fully assembled
-text, so streamed `[n]` markers can never leak an invented page.
-
-**Quiz mode.** `POST /quiz` generates a grounded multi-question quiz on a notion (reference solutions
-stay server-side, never returned), and `POST /quiz/{quiz_id}/grade` marks one answer against its stored
-reference solution. Both are grounded in retrieval, so a notion the course does not cover yields a refusal.
-
-**Conversation sessions.** Beyond the flat per-student history, a student can open named threads
-(`POST /sessions`), list them, and read one thread's messages in order. `/ask` accepts an optional
-`session_id` so a turn is attached to a thread; threads are entirely opt-in and the flat `/history`
-keeps working unchanged.
-
-**Answer feedback.** `POST /feedback` records a thumbs up/down (with an optional note) on a tutor
-answer, capturing the question and answer verbatim so each row is self-contained for later evaluation.
-`GET /feedback/summary` returns aggregate up/down counts — a lightweight quality signal that reaches no
-LLM and runs no retrieval.
-
-**Spaced repetition.** `POST /reviews` records a recall rating (`0..5`) for a notion and reschedules it
-with **SM-2** (ease, interval, repetitions; a rating below 3 resets the streak), keeping at most one row
-per `(student, notion)`. `GET /reviews/due` lists the notions whose `due_at` has passed, soonest first.
-Both reach no LLM and run no retrieval.
-
-**Dynamic course discovery.** `GET /courses` lists the distinct courses currently indexed in Qdrant
-(via the facet API, with a scroll fallback), so a client can populate a course picker instead of
-hardcoding names.
-
-**Authentication and per-user ownership.** Account auth is additive and independent of the optional
-`X-API-Key` guard: `POST /auth/register` (bcrypt-hashed password) and `POST /auth/login` (signed JWT,
-HS256) issue a bearer token; `GET /auth/me` returns the caller and `GET /me/students` lists only the
-student identities that caller owns. When a request carries a valid bearer token, the resolved student
-is linked to that account, so its turns, exercises, quizzes and feedback become the user's own data —
-without changing any answer.
-
-**Agent.** A LangGraph router classifies the intent (`explain` / `generate` / `grade` / `reexplain`)
-and dispatches to the matching node, with a deterministic keyword fallback if the model output is
-unusable. `generate` is itself grounded in retrieval so exercises stay calibrated to the course's own
-notation.
-
-**Quality layer.** An offline judge (distinct from the product-side grading node) checks answers for
-**faithfulness** (every claim supported by the retrieved sources, no outside knowledge) and
-**relevance**, plus **refusal accuracy** on questions that should be rejected. It runs from a
-reference dataset and exits non-zero on regression, so it can gate CI.
-
-**Observability.** Every LLM call goes through one factory, so **LangFuse tracing** (per-step latency,
-tokens, cost) is a drop-in: it activates only when LangFuse credentials are present and is zero-cost
-when off — see [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md). The API also emits **structured JSON
-logs** carrying a per-request id (reused from an inbound `X-Request-ID` or generated, echoed on the
-response), and exposes a `GET /ready` readiness probe (distinct from `/health` liveness) that reports
-whether startup wiring — chiefly the database engine — completed.
-
-**Security and hardening.** Mutating endpoints (and `/history`) accept an opt-in `X-API-Key` guard,
-independent of the JWT account auth above. Middleware adds **security headers** on every response and
-an opt-in **in-process rate limiter** (`RATE_LIMIT_PER_MINUTE`) that caps each client per rolling
-minute and replies `429` with `Retry-After`; both default to no-ops so the open local setup is
-unchanged. `Strict-Transport-Security` is sent only when `ENABLE_HSTS` is set (behind TLS).
-
-**Storage.** The relational store is SQLite in development and swaps to **PostgreSQL** with a single
-`DATABASE_URL` change — see [docs/POSTGRES.md](docs/POSTGRES.md). Schema is managed by Alembic
-migrations.
+> **Honest caveat.** The test deck is *constructive* (formula slides, few prose definitions), so some
+> definitional questions are refused rather than answered. That is the grounding guard working as
+> intended: declining beats inventing a definition the slides never state.
 
 ## Tech stack
 
-`Python` · `LangChain` / `LangGraph` · `FastAPI` · `Qdrant` · `Docker` · `GitHub Actions`
+**Backend** Python · FastAPI · LangChain / LangGraph · SQLAlchemy + Alembic
+**Retrieval** Qdrant · `BAAI/bge-m3` local embeddings · cross-encoder reranker
+**Frontend** Next.js (App Router) · TypeScript · Tailwind CSS
+**Ops** Docker · GitHub Actions (ruff · pytest · pyright · coverage) · LangFuse (opt-in)
 
-- **Embeddings:** local multilingual `BAAI/bge-m3` (documents and questions are in French) — free, no API call.
-- **PDF extraction:** PyMuPDF for plain-text pages; a vision model for math/figure pages.
-- **Model-agnostic LLM factory:** `get_llm(role)` selects a model per role from `LLM_<ROLE>` env vars,
-  defaulting to a small OpenAI chat model. Swapping models (small router, larger generator/grader) is
-  an environment change, not a code change.
-- **Fully local / zero-cost option:** set `LLM_PROVIDER=ollama` (or `LLM_<ROLE>=ollama:<model>`) to run
-  every LLM on a local [Ollama](https://ollama.com) server. Embeddings, reranker, and Qdrant are already
-  local, so the whole pipeline then costs nothing and runs offline — see [docs/LOCAL.md](docs/LOCAL.md).
-- **Packaging:** `uv` (lockfile, no `requirements.txt`). **Lint/format:** `ruff`.
+The LLM layer is model-agnostic: a single `get_llm(role)` factory picks a model per role from env
+vars (OpenAI by default). Point it at a local [Ollama](https://ollama.com) server and the entire
+pipeline — embeddings, reranker, and Qdrant are already local — runs offline at **zero cost**.
 
-## Quickstart
+## Getting started
 
-Requires Python 3.12+, [`uv`](https://docs.astral.sh/uv/), and Docker.
+The fastest path is fully local and free (LLM via Ollama). Requires Docker, [`uv`](https://docs.astral.sh/uv/),
+Node.js 18+, and a running [Ollama](https://ollama.com) server.
 
 ```bash
-# 1. Install dependencies (extras are installed per phase)
-uv sync --extra ingestion --extra agent
-
-# 2. Start the vector database
+# 1. Vector store (Docker)
 docker compose up -d qdrant
 
-# 3. Configure the environment
-cp .env.example .env        # then set OPENAI_API_KEY
+# 2. API on :8000 — local Ollama provider, zero paid calls (own terminal)
+LLM_PROVIDER=ollama make api
 
-# 4. Ingest a course PDF (vision extraction; --hybrid for cheaper text pages)
+# 3. Web frontend on :3000 (own terminal)
+make web
+```
+
+Open <http://localhost:3000>, ask an in-course question (grounded, cited) and an out-of-course one
+(honest refusal). For the full recipe — pulling models, ingesting a course, resetting the dev DB —
+see **[docs/RUN-LOCAL.md](docs/RUN-LOCAL.md)** and **[docs/LOCAL.md](docs/LOCAL.md)**.
+
+<details>
+<summary>Prefer the CLI / OpenAI?</summary>
+
+```bash
+uv sync --extra ingestion --extra agent
+docker compose up -d qdrant
+cp .env.example .env                 # then set OPENAI_API_KEY
 uv run python -m ingestion.run path/to/course.pdf --course "Wavelet Transform" --hybrid
-
-# 5. Ask a grounded, cited question from the CLI
 uv run python -m core.ask "What is a piecewise constant approximation?"
-
-# 6. (Optional) run the offline faithfulness/relevance evaluation
-uv run python -m eval.run_eval
 ```
 
-### Service interface (API)
-
-The same capabilities are exposed as an HTTP service (FastAPI). The layer stays thin: each route
-delegates to the existing grounded functions and graph nodes — no retrieval or prompting is
-reimplemented. The mutating routes (and `/history`) honor the opt-in `X-API-Key` guard; account
-endpoints use JWT bearer auth.
-
-| Area | Endpoint | Role |
-| --- | --- | --- |
-| Tutoring | `POST /ask` | ask a question, grounded and cited; persists the turn |
-| Tutoring | `POST /ask/stream` | same answer, streamed token by token as Server-Sent Events |
-| Tutoring | `POST /reexplain` | rephrase the last answer at a chosen level (beginner / intermediate / advanced) |
-| Tutoring | `POST /exercise` | generate an exercise (never returns the reference solution) |
-| Tutoring | `POST /grade` | grade a student's answer |
-| Quiz | `POST /quiz` | generate a grounded multi-question quiz on a notion |
-| Quiz | `POST /quiz/{quiz_id}/grade` | grade one quiz answer against its stored reference solution |
-| Feedback | `POST /feedback` | record a thumbs up/down on a tutor answer |
-| Feedback | `GET /feedback/summary` | aggregate thumbs up/down counts for a student |
-| Spaced repetition | `POST /reviews` | record a recall rating and reschedule a notion (SM-2) |
-| Spaced repetition | `GET /reviews/due` | notions due for spaced-repetition review, soonest first |
-| Sessions | `POST /sessions` | open a named conversation thread |
-| Sessions | `GET /sessions/{student_id}` | list a student's threads, newest first |
-| Sessions | `GET /sessions/{student_id}/{session_id}/messages` | one thread's messages, chronological |
-| Sessions | `GET /history/{student_id}` | recent conversation turns, chronological |
-| Auth | `POST /auth/register` | create an account (bcrypt-hashed password) |
-| Auth | `POST /auth/login` | verify credentials, return a JWT bearer token |
-| Auth | `GET /auth/me` | the authenticated user |
-| Auth | `GET /me/students` | student identities owned by the caller |
-| Courses | `GET /courses` | distinct courses currently indexed in Qdrant |
-| Health | `GET /health` | liveness probe (always open) |
-| Health | `GET /ready` | readiness probe (database engine bound) |
-
-Run it with:
-
-```bash
-uv run uvicorn api.main:app --reload
-```
-
-## Example
-
-A grounded answer cites only the sources it relies on:
-
-```
-$ uv run python -m core.ask "What is a piecewise constant approximation?"
-
-A piecewise constant approximation represents a signal as a sum of scaled,
-shifted box functions that are constant on each dyadic interval, capturing the
-signal's average over that interval (Wavelet Transform, Chap. 2, p.11).
-
-Sources:
-  - (Wavelet Transform, Chap. 2, p.11)
-```
-
-A question the course does not cover is refused, not answered:
-
-```
-$ uv run python -m core.ask "How do I set up a Kubernetes cluster?"
-
-This is not covered in the course material.
-```
-
-## Metrics
-
-Measured end-to-end on a full course: a 63-slide *Wavelet Transform* deck ingested into Qdrant,
-then evaluated with the offline harness (`eval/run_eval.py`) and the threshold calibration script.
-
-| Metric | Result | Notes |
-| --- | --- | --- |
-| **Index** | 63 / 63 slides | Parallel ingestion absorbed 25 rate-limit (HTTP 429) responses via retry + backoff, zero crashes |
-| **Threshold calibration** | **100% in/out accuracy** | In-course scores 0.57–0.68, out-of-course 0.28–0.43 → clean separation; threshold calibrated to ≈ 0.50 (0.497) |
-| **Retrieval hit-rate** | **73% → 82% (+9 pts)** | With the cross-encoder reranker (`cross-encoder/ms-marco-MiniLM-L-6-v2`) enabled |
-| **Hybrid retrieval (dense + BM25)** | **+9.1 pts hit-rate · +6.6 NDCG@5** | RRF fusion of dense + `bge-m3` sparse vs dense-only, 22 in-course questions (hit-rate 63.6% → 72.7%; MRR +6.8). Measured on a locally re-extracted sparse index, so the dense→hybrid *delta* is what's comparable. |
-| **Faithfulness** | **75%** | Offline LLM-as-a-judge (gpt-4o-mini): every claim supported by the retrieved sources |
-| **Relevance** | **100%** | Same judge: answers actually address the question |
-| **Retrieval latency** | **p50 67 ms · p95 466 ms** | Query embedding (`bge-m3`) + Qdrant search over 36 questions; LLM-independent, so it holds across providers. End-to-end answer latency is dominated by the chosen LLM. |
-
-**Honest caveat.** This deck is *constructive* (formula slides, few prose definitions), so some
-definitional in-course questions are **refused rather than answered**: the system declines instead of
-hallucinating. That is the North-Star guard working as intended — it lowers the raw "refusal accuracy"
-number on borderline definitional questions, but the alternative (inventing a definition the slides
-never state) is exactly what `grounded-rag` is built to avoid.
-
-## Demo
-
-![grounded-rag demo](docs/demo.gif)
-
-*Asking an in-course question (grounded, cited answer) then an out-of-course one (honest refusal),
-generating an exercise, and grading a student answer — all from the Streamlit tutor UI.*
-
-The full click-by-click recording script is in [`docs/DEMO.md`](docs/DEMO.md).
-
-### Try it locally
-
-Docker runs only the vector store; the API and UI run on the host (this keeps the image free of the
-heavy ML runtime — `torch` / CUDA wheels are multi-gigabyte).
-
-```bash
-docker compose up -d qdrant   # 1. start the vector store (course already indexed)
-make api                      # 2. FastAPI on http://localhost:8000
-make ui                       # 3. Streamlit UI on http://localhost:8501
-```
-
-- **Streamlit UI** — <http://localhost:8501> (tabs: Ask · Exercise · Grade · History; *re-explain by
-  level* is a control under the Ask tab)
-- **API docs** — <http://localhost:8000/docs>
-
-Do **not** run `docker compose down` while demoing — it stops Qdrant.
-
-### Web frontend (Next.js)
-
-The Streamlit UI is the demo client; the premium frontend lives in [`web/`](web/) — a separate
-**Next.js (App Router) · TypeScript · Tailwind** app, a thin typed client over the same FastAPI
-backend (one function per endpoint, no logic reimplemented). It adds bilingual **EN/FR** copy, a
-light/dark **theme toggle**, **streaming answers** over Server-Sent Events, source **citation chips**,
-an **auth menu** (register / login), a **dynamic course picker** populated from `GET /courses`, and
-per-answer **feedback**. Tabs: Ask · Re-explain · Exercise · Grade · Quiz · Threads · History. Run it
-with `cd web && npm install && npm run dev` (http://localhost:3000); see [`web/README.md`](web/README.md).
-
-A known-good in-course question, *"What is the piecewise constant approximation?"*, returns a cited
-answer with LaTeX preserved. An out-of-course question is refused with
-`This is not covered in the course material.` rather than answered.
+Run the API with `uv run uvicorn api.main:app --reload` and browse the interactive docs at
+<http://localhost:8000/docs>.
+</details>
 
 ## Documentation
 
 | Guide | Topic |
 | --- | --- |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | module-level walkthrough of the whole system |
-| [docs/LOCAL.md](docs/LOCAL.md) | run fully local / zero-cost with Ollama |
-| [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) | opt-in LangFuse tracing |
-| [docs/POSTGRES.md](docs/POSTGRES.md) | switch the relational store to PostgreSQL |
-| [docs/DEPLOY-API.md](docs/DEPLOY-API.md) | the CPU-only Docker image for the API service |
-| [docs/DEPLOY.md](docs/DEPLOY.md) | free-tier live deployment (Vercel + Hugging Face Spaces + Qdrant Cloud) |
-| [docs/DEMO.md](docs/DEMO.md) | demo recording script for the GIF above |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module-level walkthrough of the whole system |
+| [docs/RUN-LOCAL.md](docs/RUN-LOCAL.md) | Run the full stack (Qdrant + API + web) locally |
+| [docs/LOCAL.md](docs/LOCAL.md) | Fully local, zero-cost runs with Ollama |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Free-tier live deployment (Vercel + Hugging Face Spaces + Qdrant Cloud) |
+| [docs/DEPLOY-API.md](docs/DEPLOY-API.md) | The CPU-only Docker image for the API service |
+| [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) | Opt-in LangFuse tracing |
+| [docs/POSTGRES.md](docs/POSTGRES.md) | Switch the relational store to PostgreSQL |
+| [docs/DEMO.md](docs/DEMO.md) | Demo recording storyboard |
 
-## Notes
+## Demo
 
-- `.env`, secrets, and course PDFs are never committed (personal data).
-- Author: `mathisdelsart`.
+<!-- demo video to be embedded here -->
+
+_A short walkthrough video is coming — asking an in-course question (grounded, cited answer), an
+out-of-course one (honest refusal), then generating and grading an exercise, all from the web UI._
+The click-by-click recording script lives in **[docs/DEMO.md](docs/DEMO.md)**.
+
+---
+
+Built by [**mathisdelsart**](https://github.com/mathisdelsart) as an AI-engineering portfolio project.
+`.env`, secrets, and course PDFs are never committed (personal data).
