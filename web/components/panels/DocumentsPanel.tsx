@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   ApiError,
   deleteDocument,
@@ -15,10 +15,11 @@ import {
 import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { RefreshButton } from "@/components/RefreshButton";
-import { TextField } from "@/components/TextField";
+import { TextField, FieldShell, baseField } from "@/components/TextField";
 import { EmptyState, Skeleton } from "@/components/States";
 import { useToast } from "@/components/Toast";
 import { useT } from "@/lib/i18n";
+import { KEYS, readLocal, writeLocal } from "@/lib/storage";
 import { cn } from "@/lib/cn";
 
 interface DocumentsPanelProps {
@@ -78,11 +79,16 @@ function fmtTime(seconds: number): string {
 export function DocumentsPanel({ studentId, config, onCoursesChanged }: DocumentsPanelProps) {
   const toast = useToast();
   const { t } = useT();
+  const openaiKeyId = useId();
   const [items, setItems] = useState<DocumentCourse[]>([]);
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [course, setCourse] = useState("");
   const [chapter, setChapter] = useState("");
+  // The visitor's own OpenAI key, used ONLY to import scanned/image PDFs. Kept in
+  // the browser (localStorage) and sent only with the upload; hidden by default.
+  const [openaiKey, setOpenaiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   // Row currently awaiting an explicit red confirmation before deletion.
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
@@ -134,6 +140,8 @@ export function DocumentsPanel({ studentId, config, onCoursesChanged }: Document
     // (started before a refresh/navigation). The polling effect takes over.
     const resumed = loadActiveJob();
     if (resumed) setActiveJob(resumed);
+    // Restore the visitor's own OpenAI key from the browser (never from the server).
+    setOpenaiKey(readLocal(KEYS.openaiKey));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -210,6 +218,7 @@ export function DocumentsPanel({ studentId, config, onCoursesChanged }: Document
         chapter.trim() || null,
         config,
         studentId,
+        openaiKey.trim() || null,
       );
       // Persist the job so a refresh/navigation re-attaches to it, then hand off
       // to the polling effect. Clearing the inputs frees the user to do other
@@ -397,6 +406,58 @@ export function DocumentsPanel({ studentId, config, onCoursesChanged }: Document
                 />
               </div>
             </div>
+
+            {/* Visitor's own OpenAI key for importing scanned/image PDFs. Masked
+                by default with a show/hide toggle (same pattern as the sign-in
+                password field). Persisted to the browser only; sent solely with
+                the upload request, never stored server-side. */}
+            <FieldShell
+              label={t("doc.upload.openaiKey")}
+              hint={t("doc.upload.openaiKeyHint")}
+              id={openaiKeyId}
+            >
+              <div className="relative">
+                <input
+                  id={openaiKeyId}
+                  type={showKey ? "text" : "password"}
+                  autoComplete="off"
+                  placeholder="sk-…"
+                  value={openaiKey}
+                  disabled={uploading}
+                  onChange={(e) => {
+                    setOpenaiKey(e.target.value);
+                    writeLocal(KEYS.openaiKey, e.target.value.trim());
+                  }}
+                  className={cn(baseField, "pr-11")}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey((v) => !v)}
+                  aria-label={showKey ? t("doc.upload.hideKey") : t("doc.upload.showKey")}
+                  aria-pressed={showKey}
+                  className={cn(
+                    "absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg",
+                    "text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-200",
+                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+                  )}
+                >
+                  {showKey ? (
+                    // Eye with a slash: the key is currently visible.
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 3l18 18" />
+                      <path d="M10.58 10.58a2 2 0 002.83 2.83" />
+                      <path d="M9.36 5.18A9.46 9.46 0 0112 5c5 0 9 4.5 9 7a12.3 12.3 0 01-2.16 3.19M6.61 6.61A12.9 12.9 0 003 12c0 2.5 4 7 9 7a9.3 9.3 0 004.24-1" />
+                    </svg>
+                  ) : (
+                    // Open eye: the key is currently hidden.
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </FieldShell>
 
             {/* Live ingestion progress. */}
             {progress && (

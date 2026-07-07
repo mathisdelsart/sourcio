@@ -44,6 +44,34 @@ UPLOADS_DIR = os.environ.get("DOCUMENTS_DIR", "uploads")
 # Surfaced as a clean ``error`` event / raised error instead of a raw fitz crash.
 UNSUPPORTED_FILE_MESSAGE = "Unsupported file type — upload a PDF, .md or .txt"
 
+# User-facing message when a scanned/image PDF needs the vision model but no
+# OpenAI key is available (neither the visitor's nor a server env key). Text PDFs
+# and .md/.txt import for free with local embeddings, so this only ever applies
+# to image-based pages. It guides the UI to prompt the visitor for their own key.
+MISSING_OPENAI_KEY_MESSAGE = (
+    "This looks like a scanned or image-based PDF, which needs a vision model to "
+    "read. Add your OpenAI API key to import it — text PDFs and .md/.txt files "
+    "import for free without a key."
+)
+
+
+def _is_missing_openai_credentials(exc: BaseException) -> bool:
+    """Return whether ``exc`` is an OpenAI missing/invalid-credentials error.
+
+    Detection is by exception class name and message so the OpenAI SDK never has
+    to be imported here. Covers both LangChain's "Did not find openai_api_key"
+    startup ValueError and the SDK's ``AuthenticationError`` (HTTP 401), which is
+    what a scanned PDF hits when no key (visitor's or env) is available for the
+    vision fallback. Unrelated errors return False and keep their own message.
+    """
+    haystack = f"{type(exc).__name__} {exc}".lower()
+    return (
+        "openai_api_key" in haystack
+        or "authenticationerror" in haystack
+        or "api_key client option must be set" in haystack
+        or ("api key" in haystack and "openai" in haystack)
+    )
+
 
 def _is_pdf_file(path: str) -> bool:
     """Return whether ``path`` has a ``.pdf`` extension (case-insensitive)."""
@@ -252,14 +280,16 @@ def _indexed_pages(course: str, document: str | None = None, owner: str | None =
     return pages
 
 
-def _load_pages(path: str, course: str) -> list[Page]:
+def _load_pages(path: str, course: str, *, extract_api_key: str | None = None) -> list[Page]:
     """Extract pages from an uploaded file, routing by extension.
 
-    ``.md``/``.txt`` go through the prose loader (no model, no network); ``.pdf``
-    is routed through the math-aware pipeline in **hybrid** mode, so plain-text
-    pages (e.g. a prose PDF) are extracted for free and deterministically with
-    PyMuPDF while only genuinely math/figure-heavy pages reach the vision model.
-    A clearly-unsupported extension raises a clean :class:`ValueError` rather than
+    ``.md``/``.txt`` go through the prose loader (no model, no network, no key);
+    ``.pdf`` is routed through the math-aware pipeline in **hybrid** mode, so
+    plain-text pages (e.g. a prose PDF) are extracted for free and
+    deterministically with PyMuPDF while only genuinely math/figure-heavy pages
+    reach the vision model. ``extract_api_key`` (a visitor's own OpenAI key) is
+    forwarded to the vision path only; the free text branch never sees it. A
+    clearly-unsupported extension raises a clean :class:`ValueError` rather than
     letting a raw fitz error escape. ``extract_pdf`` is imported lazily so the
     heavy PDF dependency (PyMuPDF) stays optional and a stubbed test never triggers
     it.
@@ -271,10 +301,14 @@ def _load_pages(path: str, course: str) -> list[Page]:
     from ingestion.extract import extract_pdf
 
     try:
-        return extract_pdf(path, course, hybrid=True)
+        return extract_pdf(path, course, hybrid=True, api_key=extract_api_key)
     except ValueError:
         raise
     except Exception as exc:
+        # A missing/invalid OpenAI key on a scanned PDF surfaces as a clear,
+        # actionable message instead of a raw SDK error.
+        if _is_missing_openai_credentials(exc):
+            raise ValueError(MISSING_OPENAI_KEY_MESSAGE) from exc
         # A corrupt/unreadable PDF (fitz.open failure) surfaces as a clean error
         # rather than an opaque low-level exception.
         raise ValueError(f"Could not read the PDF: {exc}") from exc
@@ -327,6 +361,7 @@ def ingest_document(
     *,
     owner: str | None = None,
     sparse: bool = False,
+    extract_api_key: str | None = None,
 ) -> int:
     """Ingest one uploaded file under ``course``/``chapter`` and return the count.
 
@@ -339,7 +374,7 @@ def ingest_document(
     uploader's effective ``student_id``) so the material is scoped to that account.
     Returns the number of indexed chunks (``0`` when the file has no content).
     """
-    pages = _load_pages(path, course)
+    pages = _load_pages(path, course, extract_api_key=extract_api_key)
     _stamp_pages(pages, chapter, _document_id(path), owner)
     if not pages:
         return 0
@@ -358,6 +393,7 @@ def stream_ingest(
     owner: str | None = None,
     batch_size: int = 3,
     sparse: bool = False,
+    extract_api_key: str | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Ingest a file incrementally, yielding progress events.
 
@@ -376,7 +412,12 @@ def stream_ingest(
     only re-uploading the *same* document skips already-indexed pages (never
     re-paying the vision model). Each PDF batch is indexed as soon as it is
     extracted, so a mid-way failure keeps the pages done so far. Prose
-    (``.md``/``.txt``) is loaded and indexed in one step (no model cost).
+    (``.md``/``.txt``) is loaded and indexed in one step (no model cost, no key).
+
+    ``extract_api_key`` (a visitor's own OpenAI key) is forwarded only to the PDF
+    vision path so a scanned/image PDF can be transcribed on the caller's own
+    account; it is used transiently and never stored or logged. The free
+    ``.md``/``.txt`` and plain-text-PDF paths neither receive nor need it.
     """
     started = time.time()
     document = _document_id(path)
@@ -450,7 +491,7 @@ def stream_ingest(
             # (deterministic, no model), so a text PDF indexes even when the
             # configured vision model is weak/absent; only math/figure-heavy pages
             # reach the vision model.
-            pages = extract_pdf(path, course, pages=batch, hybrid=True)
+            pages = extract_pdf(path, course, pages=batch, hybrid=True, api_key=extract_api_key)
             _stamp_pages(pages, chapter, document, owner)
             chunks = chunk_pages(pages)
             if chunks:
@@ -465,9 +506,12 @@ def stream_ingest(
                 "elapsed": round(time.time() - started, 1),
             }
     except Exception as exc:
+        # A scanned/image PDF with no OpenAI key (visitor's or env) surfaces as a
+        # clear, actionable message so the UI can guide the user to add their key.
+        message = MISSING_OPENAI_KEY_MESSAGE if _is_missing_openai_credentials(exc) else str(exc)
         yield {
             "type": "error",
-            "message": str(exc),
+            "message": message,
             "done": done,
             "total": total,
             "indexed": indexed,

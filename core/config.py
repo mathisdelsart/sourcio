@@ -325,7 +325,19 @@ def _resolve_model(role: str) -> tuple[str, dict]:
     return "gpt-4o-mini", {}
 
 
-def get_llm(role: str = "default"):
+def _is_openai_model(model: str) -> bool:
+    """Return whether a resolved model string targets OpenAI.
+
+    `init_chat_model` accepts an optional `provider:model` prefix. A model routed
+    to Ollama or Groq carries an explicit `ollama:`/`groq:` prefix, so anything
+    without one (the bare `gpt-4o-mini` default, an explicit `openai:...`, etc.)
+    is served by OpenAI. This is exactly the vision `extract` fallback under the
+    Groq provider, which is the only place a caller's own key is forwarded.
+    """
+    return not (model.startswith("ollama:") or model.startswith("groq:"))
+
+
+def get_llm(role: str = "default", api_key: str | None = None):
     """Build a chat model for the given role, selected by the `LLM_<ROLE>` env var.
 
     Defaults to OpenAI `gpt-4o-mini`. Set `LLM_<ROLE>=ollama:<model>` or the
@@ -333,12 +345,28 @@ def get_llm(role: str = "default"):
     fully offline), or `LLM_PROVIDER=groq` (with `GROQ_API_KEY` set) to route
     non-vision roles to a free-tier Groq-hosted model. Uses `temperature=0` for
     reproducibility.
+
+    `api_key` is an optional per-call OpenAI key: when given AND the resolved
+    model is an OpenAI one, it authenticates this model instead of the process
+    `OPENAI_API_KEY`. It is used only to let a visitor pay for their own scanned-
+    PDF ingestion (the vision `extract` fallback), so the app owner is never
+    billed. The key is passed straight into `init_chat_model` and lives only on
+    the returned model instance for the duration of this call; it is never cached
+    globally, stored or logged. For a non-OpenAI resolved model the override is
+    ignored, so it can never break the Groq/Ollama paths.
     """
     # Configure the global LLM cache once (no-op unless `llm_cache` is set), so
-    # repeated identical prompts are served from cache instead of re-billed.
+    # repeated identical prompts are served from cache instead of re-billed. The
+    # response cache keys on the prompt + model, never on `api_key`, so a
+    # per-request key is never persisted across callers.
     configure_cache()
 
     model, provider_kwargs = _resolve_model(role)
+    # Forward the caller's key only for an OpenAI model; ignore it otherwise so
+    # Groq/Ollama are untouched. `init_chat_model` maps `api_key` to the provider
+    # SDK's credential (ChatOpenAI's `openai_api_key`).
+    if api_key and _is_openai_model(model):
+        provider_kwargs = {**provider_kwargs, "api_key": api_key}
     llm = init_chat_model(model, temperature=0, **provider_kwargs)
 
     # Compose callbacks: LangFuse tracing (opt-in) and the token budget guard

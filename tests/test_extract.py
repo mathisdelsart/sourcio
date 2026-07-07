@@ -438,3 +438,32 @@ def test_extract_pdf_propagates_non_rate_limit_error(fake_fitz):
 
     with pytest.raises(ValueError, match="genuine application bug"):
         extract.extract_pdf("x.pdf", "Course", transcriber=stub, sleep=lambda _s: None)
+
+
+def test_extract_pdf_forwards_api_key_to_get_llm(fake_fitz, monkeypatch):
+    # With no injected transcriber, extract_pdf must build the vision model via
+    # get_llm and forward the caller's api_key so a visitor's own key pays for the
+    # scanned-PDF ingestion. The model is stubbed so no network/LLM is hit.
+    pages = [_FakePage("E = mc^2", images=1)]
+    fake_fitz(pages)
+
+    captured: dict[str, object] = {}
+
+    class _FakeLLM:
+        def invoke(self, _messages):
+            class _Msg:
+                content = "VISION"
+
+            return _Msg()
+
+    def fake_get_llm(role, api_key=None):
+        captured["role"] = role
+        captured["api_key"] = api_key
+        return _FakeLLM()
+
+    monkeypatch.setattr(extract, "get_llm", fake_get_llm)
+    result = extract.extract_pdf("x.pdf", "Course", api_key="sk-visitor", sleep=lambda _s: None)
+
+    assert captured["role"] == "extract"
+    assert captured["api_key"] == "sk-visitor"
+    assert [p.text for p in result] == ["VISION"]

@@ -379,6 +379,82 @@ def test_stream_ingest_pdf_routes_through_hybrid(monkeypatch, tmp_path):
     assert events[-1]["indexed"] > 0
 
 
+def test_stream_ingest_pdf_forwards_extract_api_key(monkeypatch, tmp_path):
+    # A visitor's own OpenAI key must reach extract_pdf's api_key argument so the
+    # scanned-PDF vision call authenticates on their account, not the server's.
+    path = tmp_path / "scan.pdf"
+    path.write_bytes(b"%PDF")
+
+    seen: dict[str, object] = {}
+
+    def fake_extract(p, course, *, pages=None, hybrid=False, api_key=None, **kwargs):  # noqa: ARG001
+        seen["api_key"] = api_key
+        nums = pages or [1]
+        return [Page(course=course, page=n, text=f"text {n}", doc_type="slides") for n in nums]
+
+    import ingestion.extract
+    import ingestion.run
+
+    monkeypatch.setattr(ingestion.run, "_pdf_page_count", lambda path: 1)  # noqa: ARG005
+    monkeypatch.setattr(ingestion.extract, "extract_pdf", fake_extract)
+    monkeypatch.setattr(
+        documents_mod,
+        "_indexed_pages",
+        lambda course, document=None, owner=None: set(),  # noqa: ARG005
+    )
+    monkeypatch.setattr(documents_mod, "index_chunks", lambda chunks, **_: None)
+
+    events = list(documents_mod.stream_ingest(str(path), "Wavelets", extract_api_key="sk-visitor"))
+    assert seen["api_key"] == "sk-visitor"
+    assert events[-1]["type"] == "done"
+
+
+def test_stream_ingest_md_ignores_api_key(monkeypatch, tmp_path):
+    # The free .md path must index WITHOUT any key and must never touch the PDF
+    # extractor (no vision, no network) even if a key is not supplied.
+    path = tmp_path / "notes.md"
+    path.write_text("# Title\n\nSome prose about wavelets.\n", encoding="utf-8")
+
+    captured: list = []
+    monkeypatch.setattr(documents_mod, "index_chunks", lambda chunks, **_: captured.extend(chunks))
+
+    import ingestion.extract
+
+    def boom_extract(*args, **kwargs):
+        raise AssertionError("extract_pdf must not run for a .md file (free path)")
+
+    monkeypatch.setattr(ingestion.extract, "extract_pdf", boom_extract)
+
+    events = list(documents_mod.stream_ingest(str(path), "Wavelets"))
+    assert events[-1]["type"] == "done"
+    assert events[-1]["indexed"] > 0
+
+
+def test_stream_ingest_missing_openai_key_gives_clear_message(monkeypatch, tmp_path):
+    # A scanned PDF whose vision call fails for missing OpenAI credentials must
+    # surface the actionable "add your OpenAI key" message, not a raw SDK error.
+    path = tmp_path / "scan.pdf"
+    path.write_bytes(b"%PDF")
+
+    def fake_extract(*args, **kwargs):
+        raise ValueError("Did not find openai_api_key, please add an environment variable")
+
+    import ingestion.extract
+    import ingestion.run
+
+    monkeypatch.setattr(ingestion.run, "_pdf_page_count", lambda path: 1)  # noqa: ARG005
+    monkeypatch.setattr(ingestion.extract, "extract_pdf", fake_extract)
+    monkeypatch.setattr(
+        documents_mod,
+        "_indexed_pages",
+        lambda course, document=None, owner=None: set(),  # noqa: ARG005
+    )
+
+    events = list(documents_mod.stream_ingest(str(path), "Wavelets"))
+    assert events[-1]["type"] == "error"
+    assert events[-1]["message"] == documents_mod.MISSING_OPENAI_KEY_MESSAGE
+
+
 def test_stream_ingest_unsupported_extension_emits_error(monkeypatch, tmp_path):
     # A clearly-unsupported file (not PDF, not .md/.txt) is reported as a clean
     # error event rather than blowing up on a raw fitz.open failure.

@@ -1645,7 +1645,7 @@ def test_upload_small_file_is_accepted_and_ingested(client, monkeypatch, tmp_pat
 
     ingested = threading.Event()
 
-    def fake_stream_ingest(path, course, chapter, *, owner=None):
+    def fake_stream_ingest(path, course, chapter, *, owner=None, extract_api_key=None):
         ingested.set()
         yield {"type": "done", "indexed": 1}
 
@@ -1662,3 +1662,69 @@ def test_upload_small_file_is_accepted_and_ingested(client, monkeypatch, tmp_pat
     assert saved["bytes"] == len(b"hello")
     # The background ingest thread was reached with the mocked generator.
     assert ingested.wait(timeout=5.0)
+
+
+def test_upload_md_ingests_without_any_openai_key(client, monkeypatch, tmp_path):
+    # The free .md path must work with NO openai_key form field at all: the key
+    # threaded into stream_ingest is None, never a required argument.
+    import threading
+
+    stored = tmp_path / "notes.md"
+    stored.write_text("hello")
+    seen: dict[str, object] = {}
+    ingested = threading.Event()
+
+    def fake_stream_ingest(path, course, chapter, *, owner=None, extract_api_key=None):
+        seen["extract_api_key"] = extract_api_key
+        ingested.set()
+        yield {"type": "done", "indexed": 1}
+
+    monkeypatch.setattr(api_main, "save_upload", lambda *_a, **_k: str(stored))
+    monkeypatch.setattr(api_main, "stream_ingest", fake_stream_ingest)
+
+    response = client.post(
+        "/documents/upload",
+        data={"course": "Wavelets", "student_id": "s1"},
+        files={"file": ("notes.md", b"hello", "text/markdown")},
+    )
+    assert response.status_code == 202
+    assert ingested.wait(timeout=5.0)
+    assert seen["extract_api_key"] is None
+
+
+def test_upload_threads_openai_key_but_never_stores_it(client, monkeypatch, tmp_path):
+    # A visitor-supplied openai_key is threaded into stream_ingest but MUST NOT be
+    # persisted in the job record (nor returned in the response).
+    import threading
+
+    stored = tmp_path / "scan.pdf"
+    stored.write_bytes(b"%PDF")
+    seen: dict[str, object] = {}
+    ingested = threading.Event()
+
+    def fake_stream_ingest(path, course, chapter, *, owner=None, extract_api_key=None):
+        seen["extract_api_key"] = extract_api_key
+        ingested.set()
+        yield {"type": "done", "indexed": 1}
+
+    monkeypatch.setattr(api_main, "save_upload", lambda *_a, **_k: str(stored))
+    monkeypatch.setattr(api_main, "stream_ingest", fake_stream_ingest)
+
+    response = client.post(
+        "/documents/upload",
+        data={"course": "Wavelets", "student_id": "s1", "openai_key": "sk-visitor"},
+        files={"file": ("scan.pdf", b"%PDF", "application/pdf")},
+    )
+    assert response.status_code == 202
+    body = response.json()
+    assert "job_id" in body
+    # The response never echoes the key.
+    assert "sk-visitor" not in str(body)
+    assert ingested.wait(timeout=5.0)
+    # The key was forwarded to the ingest...
+    assert seen["extract_api_key"] == "sk-visitor"
+    # ...but the polled job record carries no trace of it.
+    job = client.get(f"/documents/jobs/{body['job_id']}").json()
+    assert "sk-visitor" not in str(job)
+    assert "openai_key" not in job
+    assert "api_key" not in job

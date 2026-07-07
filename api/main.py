@@ -1643,6 +1643,7 @@ async def upload_document(
     course: Annotated[str, Form()],
     student_id: Annotated[str, Form()],
     chapter: Annotated[str | None, Form()] = None,
+    openai_key: Annotated[str | None, Form()] = None,
     user: UserOut | None = DataUser,
 ) -> dict[str, str]:
     """Start ingesting an uploaded file as a background job and return its id.
@@ -1666,8 +1667,18 @@ async def upload_document(
     within the request scope (defeating the purpose), and ``stream_ingest`` is a
     blocking, synchronous generator so it cannot run on the event loop. The job
     registry is in-process — see the multi-worker caveat in ``core.jobs``.
+
+    ``openai_key`` is an OPTIONAL, visitor-supplied OpenAI key used ONLY to
+    transcribe a scanned/image PDF on the visitor's own account (so the app owner
+    is never billed). SECURITY: it is used transiently for this one ingestion and
+    is NEVER stored in the job record, NEVER logged (the request middleware does
+    not log form bodies), and NEVER returned in any response. Text PDFs and
+    ``.md``/``.txt`` files ingest for free and ignore it.
     """
     normalized_chapter = chapter.strip() if chapter and chapter.strip() else None
+    # Normalise the visitor's key: an empty/whitespace value is treated as absent
+    # so it is never forwarded. Kept only as a local; never persisted or logged.
+    extract_api_key = openai_key.strip() if openai_key and openai_key.strip() else None
     # ``student_id`` is required so an upload is always stamped with an owner and
     # scoped to that account — never left owner-less (which strict isolation would
     # make invisible to everyone). Resolve (and, when authenticated, enforce
@@ -1694,7 +1705,13 @@ async def upload_document(
     def run() -> None:
         """Drive the (blocking) ingest, mirroring each event into the job store."""
         try:
-            for event in stream_ingest(stored_path, course, normalized_chapter, owner=owner):
+            for event in stream_ingest(
+                stored_path,
+                course,
+                normalized_chapter,
+                owner=owner,
+                extract_api_key=extract_api_key,
+            ):
                 update_job(job_id, event)
                 if event.get("type") == "error":
                     # stream_ingest reports a failed batch as an error event then
