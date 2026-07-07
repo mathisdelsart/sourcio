@@ -1,0 +1,27 @@
+{
+  "provider": "groq llama-3.1-8b (k=2, free tier)",
+  "refusal_accuracy": 0.7037037037037037,
+  "faithfulness_rate": 0.9285714285714286,
+  "relevance_rate": 1.0,
+  "retrieval_hit_rate": 1.0,
+  "citation_rate": 1.0,
+  "answer_keyword_rate": 0.7142857142857143,
+  "judged": 14,
+  "total": 27,
+  "retrieval_checked": 22,
+  "cited_checked": 14,
+  "answer_keyword_checked": 14,
+  "retrieval_p50_ms": 148.20070803398266,
+  "retrieval_p95_ms": 164.34608399868011,
+  "failures": [
+    "expected an answer: 'What does the UECD architecture name stand for?'",
+    "expected an answer: 'What are the three reasoning axes for an RTS neural network in this thesis?'",
+    "expected an answer: 'What does CBAM stand for?'",
+    "expected an answer: 'What value are invalid action logits set to before sampling?'",
+    "expected an answer: 'Give the pairwise win rate formula WR(i,j) used in the tournament.'",
+    "expected an answer: 'If an agent scored 174 of a maximum 180 tournament points, what is its win rate as a percentage?'",
+    "expected an answer: 'Why does the thesis use MicroRTS rather than StarCraft II as its benchmark?'",
+    "expected an answer: 'What two decision scales do RTS games require?'",
+    "unfaithful answer: 'What head-to-head win rate did UECD-Best hold against RAISocketAI?'"
+  ]
+}

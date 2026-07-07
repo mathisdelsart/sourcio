@@ -10,7 +10,7 @@
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
 ![Next.js](https://img.shields.io/badge/web-Next.js-000000?logo=nextdotjs&logoColor=white)
 ![Qdrant](https://img.shields.io/badge/vectors-Qdrant-DC244C)
-![Tests](https://img.shields.io/badge/tests-700+-blue)
+![Tests](https://img.shields.io/badge/tests-800+-blue)
 
 </div>
 
@@ -78,22 +78,39 @@ refusal guard stays intact. Full module-level walkthrough in **[docs/ARCHITECTUR
 
 ## Results
 
-Measured end to end on a full 63-slide *Wavelet Transform* course indexed into Qdrant, then evaluated
-with the offline harness (`eval/`). Numbers are honest and labeled, not marketing.
+Benchmarked end to end on a real 123-page Master's thesis (a dense deep-RL / MicroRTS work) indexed
+into Qdrant — a 27-question suite (13 factual, 3 math, 6 synthesis, and 5 deliberately out-of-scope)
+run through the offline harness (`eval/`, see [`eval/BENCHMARK.md`](eval/BENCHMARK.md)) and graded by an
+LLM-as-a-judge. Numbers are honest and labeled, not marketing.
 
-| Metric | Result | How it was measured |
+**With OpenAI `gpt-4o-mini`:**
+
+| Metric | Result |
+| --- | --- |
+| **Refusal accuracy** — answers in-scope questions, refuses all 5 out-of-scope | **100%** |
+| **Faithfulness** — every claim supported by the retrieved sources | **100%** |
+| **Citation rate** — the answer carries a `[n]` source marker | **100%** |
+| **Retrieval hit-rate** — the relevant passage is retrieved | **100%** |
+| Answer-keyword match | 91% |
+| **Retrieval latency** | p50 **89 ms** · p95 **115 ms** |
+
+**Model comparison** (same suite, same fixed judge):
+
+| Metric | OpenAI `gpt-4o-mini` | Groq `llama-3.1-8b` (free) |
 | --- | --- | --- |
-| **Threshold calibration** | 100% in/out separation | In-course scores 0.57–0.68 vs out-of-course 0.28–0.43; threshold ≈ 0.50 |
-| **Retrieval hit-rate** | **73% → 82%** (+9 pts) | With the cross-encoder reranker enabled |
-| **Hybrid retrieval** | **+9.1 pts** hit-rate, +6.6 NDCG@5 | Dense + BM25 (RRF) vs dense-only; the *delta* is what's comparable |
-| **Faithfulness** | 75% | Offline LLM-as-a-judge: every claim supported by the retrieved sources |
-| **Relevance** | 100% | Same judge: answers actually address the question |
-| **Retrieval latency** | p50 **67 ms** · p95 **466 ms** | Query embedding + Qdrant search; LLM-independent |
-| **Test suite / CI** | 700+ tests, green | ruff + pytest + pyright + coverage gate on every PR |
+| Refusal accuracy | **100%** | 70% |
+| Faithfulness | **100%** | 93% |
+| Citation rate | 100% | 100% |
+| Retrieval hit-rate | 100% | 100% |
 
-> **Honest caveat.** The test deck is *constructive* (formula slides, few prose definitions), so some
-> definitional questions are refused rather than answered. That is the grounding guard working as
-> intended: declining beats inventing a definition the slides never state.
+Retrieval is model-independent (identical hit-rate and citations either way); the gap is in *understanding*
+a dense technical thesis, where the capable model wins. The free Groq tier is token-limited (~6k tokens/min),
+so its run used a reduced retrieval context — fine for a demo, but the OpenAI numbers are the reference.
+
+Retrieval boosters, measured separately on a slide deck: a cross-encoder reranker lifted hit-rate
+**73% → 82%**; opt-in hybrid dense + BM25 (RRF) added **+9 pts** hit-rate and +6.6 NDCG@5.
+
+> **CI:** 800+ tests, green — ruff + pytest + pyright + a coverage gate on every PR.
 
 ## Tech stack
 

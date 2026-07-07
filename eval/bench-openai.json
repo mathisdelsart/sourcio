@@ -1,0 +1,17 @@
+{
+  "provider": "openai",
+  "refusal_accuracy": 1.0,
+  "faithfulness_rate": 1.0,
+  "relevance_rate": 1.0,
+  "retrieval_hit_rate": 1.0,
+  "citation_rate": 1.0,
+  "answer_keyword_rate": 0.9090909090909091,
+  "judged": 22,
+  "total": 27,
+  "retrieval_checked": 22,
+  "cited_checked": 22,
+  "answer_keyword_checked": 22,
+  "retrieval_p50_ms": 88.61608296865597,
+  "retrieval_p95_ms": 114.80799998389557,
+  "failures": []
+}
