@@ -174,6 +174,140 @@ def test_list_courses_cross_account_isolation(monkeypatch):
     assert courses_mod.list_courses(owner="uB") == ["Biology"]
 
 
+# --- list_chapters -----------------------------------------------------------
+
+
+class _FakeChapterFacetClient:
+    """A client whose facet returns preset chapter values (incl. a blank one)."""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def facet(self, *, collection_name, key, limit, facet_filter=None):  # noqa: ARG002
+        hits = [
+            SimpleNamespace(value="Chapter 3", count=5),
+            SimpleNamespace(value="Chapter 1", count=2),
+            # A blank chapter (material indexed without one) must be dropped.
+            SimpleNamespace(value="", count=1),
+        ]
+        return SimpleNamespace(hits=hits)
+
+
+def test_list_chapters_uses_facet_sorted_distinct_non_empty(monkeypatch):
+    _use_client(monkeypatch, _FakeChapterFacetClient)
+    assert courses_mod.list_chapters("Algebra", owner="tester") == ["Chapter 1", "Chapter 3"]
+
+
+def test_list_chapters_scopes_facet_to_course_and_owner(monkeypatch):
+    class _CapturingFacetClient:
+        last_filter = "unset"
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def facet(self, *, collection_name, key, facet_filter, limit):  # noqa: ARG002
+            type(self).last_filter = (key, facet_filter)
+            return SimpleNamespace(hits=[SimpleNamespace(value="C1", count=1)])
+
+    _use_client(monkeypatch, _CapturingFacetClient)
+    courses_mod.list_chapters("Algebra", owner="uA")
+    key, flt = _CapturingFacetClient.last_filter
+    assert key == "chapter"
+    # Combined filter: course == Algebra AND (nested) owner == uA (strict isolation).
+    assert flt is not None and flt.should is None and len(flt.must) == 2
+    course_cond, owner_sub = flt.must
+    assert course_cond.key == "course" and course_cond.match.value == "Algebra"
+    # Owner scope is nested via owner_scope_filter: a sub-filter owner == uA.
+    assert owner_sub.must[0].key == "owner" and owner_sub.must[0].match.value == "uA"
+
+
+def test_list_chapters_fail_closed_without_owner(monkeypatch):
+    # No owner -> fail closed: return [] WITHOUT querying (never enumerate every
+    # account's chapters). The client must not even be constructed/queried.
+    class _BoomFacetClient:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("no Qdrant client must be built when the owner is None")
+
+    _use_client(monkeypatch, _BoomFacetClient)
+    assert courses_mod.list_chapters("Algebra") == []
+    assert courses_mod.list_chapters("Algebra", owner=None) == []
+
+
+class _ChapterScrollOnlyClient:
+    """A client without a facet API, exercising the paged scroll fallback."""
+
+    facet = None
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def scroll(  # noqa: ARG002
+        self, *, collection_name, limit, with_payload, with_vectors, offset, scroll_filter=None
+    ):
+        if offset is None:
+            points = [
+                SimpleNamespace(payload={"chapter": "Chapter 2"}),
+                SimpleNamespace(payload={"chapter": "Chapter 2"}),
+                SimpleNamespace(payload={}),  # no chapter -> skipped
+            ]
+            return points, "next"
+        points = [
+            SimpleNamespace(payload={"chapter": "Chapter 1"}),
+            SimpleNamespace(payload=None),
+        ]
+        return points, None
+
+
+def test_list_chapters_scroll_fallback_when_no_facet(monkeypatch):
+    _use_client(monkeypatch, _ChapterScrollOnlyClient)
+    assert courses_mod.list_chapters("Algebra", owner="tester") == ["Chapter 1", "Chapter 2"]
+
+
+def test_list_chapters_empty_when_facet_raises(monkeypatch):
+    # facet raises (missing collection) and the scroll fallback returns nothing.
+    _use_client(monkeypatch, _RaisingFacetClient)
+    assert courses_mod.list_chapters("Algebra", owner="tester") == []
+
+
+class _ChapterFilterAwareFacetClient:
+    """A facet client that honours the strict course+owner filter over points.
+
+    Returns the distinct chapters of the points matching *both* the owner and the
+    course in the filter, so a test can assert an account discovers only its own
+    course's chapters (never another account's, another course's, or legacy).
+    """
+
+    points = [
+        {"owner": "uA", "course": "Algebra", "chapter": "Ch A1"},
+        {"owner": "uA", "course": "Algebra", "chapter": "Ch A2"},
+        {"owner": "uA", "course": "Biology", "chapter": "Ch B"},  # other course
+        {"owner": "uB", "course": "Algebra", "chapter": "Ch X"},  # other owner
+        {"owner": None, "course": "Algebra", "chapter": "Legacy"},  # owner-less
+    ]
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def facet(self, *, collection_name, key, facet_filter, limit):  # noqa: ARG002
+        # course == <course> is flat; owner == <owner> is nested (owner_scope_filter).
+        course_cond, owner_sub = facet_filter.must
+        want_course = course_cond.match.value
+        want_owner = owner_sub.must[0].match.value
+        seen = {
+            p["chapter"]
+            for p in self.points
+            if p["owner"] == want_owner and p["course"] == want_course
+        }
+        return SimpleNamespace(hits=[SimpleNamespace(value=v, count=1) for v in seen])
+
+
+def test_list_chapters_cross_account_and_course_isolation(monkeypatch):
+    _use_client(monkeypatch, _ChapterFilterAwareFacetClient)
+    # uA sees only its own Algebra chapters; never uB's, never Biology, never legacy.
+    assert courses_mod.list_chapters("Algebra", owner="uA") == ["Ch A1", "Ch A2"]
+    assert courses_mod.list_chapters("Algebra", owner="uB") == ["Ch X"]
+
+
 # --- /courses route ----------------------------------------------------------
 # Gated on the optional `api` extra (FastAPI). The core `list_courses` tests
 # above always run; only the route tests below need the API stack installed.
@@ -264,3 +398,63 @@ def test_courses_accepts_correct_key(client, monkeypatch):
     response = client.get("/courses", headers={"X-API-Key": "secret-key"})
     assert response.status_code == 200
     assert response.json() == {"courses": ["Algebra"]}
+
+
+# --- /chapters route ---------------------------------------------------------
+
+
+@requires_api
+def test_chapters_route_returns_list(client, monkeypatch):
+    monkeypatch.setattr(
+        api_main, "list_chapters", lambda course, owner=None: ["Chapter 1", "Chapter 2"]
+    )
+    response = client.get("/chapters", params={"course": "Algebra"})
+    assert response.status_code == 200
+    assert response.json() == {"chapters": ["Chapter 1", "Chapter 2"]}
+
+
+@requires_api
+def test_chapters_route_requires_course(client):
+    # `course` is a required query param: omitting it is a 422, not a silent read.
+    response = client.get("/chapters")
+    assert response.status_code == 422
+
+
+@requires_api
+def test_chapters_route_empty(client, monkeypatch):
+    monkeypatch.setattr(api_main, "list_chapters", lambda course, owner=None: [])
+    response = client.get("/chapters", params={"course": "Algebra"})
+    assert response.status_code == 200
+    assert response.json() == {"chapters": []}
+
+
+@requires_api
+def test_chapters_route_passes_course_to_core(client, monkeypatch):
+    seen = {}
+
+    def _fake(course, owner=None):
+        seen["course"] = course
+        return ["Ch"]
+
+    monkeypatch.setattr(api_main, "list_chapters", _fake)
+    client.get("/chapters", params={"course": "Wavelet Transform"})
+    assert seen["course"] == "Wavelet Transform"
+
+
+@requires_api
+def test_chapters_rejects_missing_key(client, monkeypatch):
+    _set_api_key(monkeypatch, "secret-key")
+    monkeypatch.setattr(api_main, "list_chapters", lambda course, owner=None: ["Chapter 1"])
+    response = client.get("/chapters", params={"course": "Algebra"})
+    assert response.status_code == 401
+
+
+@requires_api
+def test_chapters_accepts_correct_key(client, monkeypatch):
+    _set_api_key(monkeypatch, "secret-key")
+    monkeypatch.setattr(api_main, "list_chapters", lambda course, owner=None: ["Chapter 1"])
+    response = client.get(
+        "/chapters", params={"course": "Algebra"}, headers={"X-API-Key": "secret-key"}
+    )
+    assert response.status_code == 200
+    assert response.json() == {"chapters": ["Chapter 1"]}

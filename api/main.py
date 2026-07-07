@@ -12,6 +12,7 @@ Endpoints:
     GET  /exercise/{id}/review  full exercise (with solution) + latest grade, for review
     GET  /quiz/{id}/review  full quiz (with solutions) + per-question grades, for review
     GET  /courses           list the distinct courses indexed in Qdrant
+    GET  /chapters          list the distinct chapters of a course (owner-scoped)
     GET  /documents         inventory of indexed material by course and chapter
     POST /documents/upload  ingest an uploaded file under a course/chapter
     DELETE /documents       delete a course's (or one chapter's) indexed points
@@ -83,7 +84,7 @@ from api.middleware import (
 )
 from core.answer import answer, stream_answer
 from core.config import get_settings
-from core.courses import list_courses
+from core.courses import list_chapters, list_courses
 from core.documents import (
     delete_documents,
     list_documents,
@@ -659,6 +660,12 @@ class CoursesResponse(BaseModel):
     """The distinct courses currently indexed in Qdrant, sorted."""
 
     courses: list[str]
+
+
+class ChaptersResponse(BaseModel):
+    """The distinct chapters of one course currently indexed in Qdrant, sorted."""
+
+    chapters: list[str]
 
 
 class DocumentChapter(BaseModel):
@@ -1455,6 +1462,27 @@ def courses(student_id: str | None = None, user: UserOut | None = DataUser) -> d
     """
     owner = _scoped_read_owner(student_id, user)
     return {"courses": list_courses(owner=owner)}
+
+
+@app.get(
+    "/chapters",
+    response_model=ChaptersResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def chapters(
+    course: str, student_id: str | None = None, user: UserOut | None = DataUser
+) -> dict[str, list[str]]:
+    """List the distinct chapters of ``course`` currently indexed, sorted.
+
+    Lets a client populate a chapter picker that depends on the chosen course
+    instead of hardcoding chapters. When ``student_id`` is given the list is
+    strictly scoped to that account's own material; without it the read is
+    fail-closed (empty) rather than listing every account's chapters. Returns an
+    empty list when the course has no chapters or nothing is indexed yet; it
+    never reaches the LLM and runs no retrieval.
+    """
+    owner = _scoped_read_owner(student_id, user)
+    return {"chapters": list_chapters(course, owner=owner)}
 
 
 @app.get(

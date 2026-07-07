@@ -264,3 +264,23 @@ def test_documents_reject_foreign_student_id_when_enforced(client, monkeypatch):
     # A tries to read B's material by passing B's student_id -> 403, never B's docs.
     stolen = client.get("/documents", params={"student_id": "b-device"}, headers=_auth(token_a))
     assert stolen.status_code == 403
+
+
+def test_chapters_reject_foreign_student_id_when_enforced(client, monkeypatch):
+    # A logged-in caller cannot list another account's chapters by passing that
+    # account's student_id: ownership is enforced with a 403 before any read.
+    monkeypatch.setattr(api_main, "list_chapters", lambda course, owner=None: ["Ch"])
+
+    token_a = _token(client, "cha")
+    token_b = _token(client, "chb")
+    _set_require_auth(monkeypatch, True)
+    # B claims its device student first.
+    client.post("/ask", json={"student_id": "b-device", "question": "q"}, headers=_auth(token_b))
+
+    # A tries to read B's chapters by passing B's student_id -> 403, never B's data.
+    stolen = client.get(
+        "/chapters",
+        params={"course": "X", "student_id": "b-device"},
+        headers=_auth(token_a),
+    )
+    assert stolen.status_code == 403
