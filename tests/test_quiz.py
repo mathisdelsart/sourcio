@@ -145,6 +145,41 @@ def test_generate_quiz_refuses_when_not_covered(engine, monkeypatch):
         assert session.scalars(select(Quiz)).first() is None
 
 
+def test_generate_quiz_refuses_when_sources_dont_cover_notion(engine, monkeypatch):
+    # Retrieval returns non-empty chunks (e.g. a CV scoped to the wrong course),
+    # but the model — the coverage judge — finds them unrelated to the notion and
+    # emits the exact refusal sentence. The node must refuse, not fabricate a quiz.
+    from core.answer import REFUSAL
+
+    _patch_retrieve(monkeypatch, _make_retrieved("Work experience and education."))
+    _patch_llm(monkeypatch, REFUSAL)
+
+    result = generate_quiz("Wavelet Transform", 3, "zoe", course="CV")
+
+    assert result["refused"] is True
+    assert result["questions"] == []
+    assert result["quiz_id"] is None
+
+    # No questions were fabricated and nothing was persisted.
+    with get_session(engine) as session:
+        assert session.scalars(select(Quiz)).first() is None
+        assert session.scalars(select(QuizQuestion)).first() is None
+
+
+def test_generate_quiz_generates_when_sources_cover_notion(engine, monkeypatch):
+    # The covered case still produces questions and does not refuse.
+    _patch_retrieve(monkeypatch, _make_retrieved("Group axioms."))
+    _patch_llm(monkeypatch, _TWO_QUESTIONS)
+
+    result = generate_quiz("groups", 2, "zoe")
+
+    assert result["refused"] is False
+    assert [q["problem"] for q in result["questions"]] == [
+        "Prove closure.",
+        "Prove identity.",
+    ]
+
+
 def test_generate_quiz_refuses_when_model_returns_no_question(engine, monkeypatch):
     _patch_retrieve(monkeypatch, _make_retrieved("Group axioms."))
     _patch_llm(monkeypatch, "no usable json here")
