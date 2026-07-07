@@ -413,12 +413,42 @@ def test_grade_node_prompt_includes_question_and_answer(fake_llm):
     assert "my answer" in human_msg
 
 
+def test_grade_system_prompt_does_not_penalise_unrequested_steps():
+    # The judge must not deduct for derivations/formulas/units a value-only
+    # question never asked for: a correct final answer alone should suffice.
+    from agent.nodes.grade import _SYSTEM
+
+    lowered = _SYSTEM.lower()
+    assert "final value or answer" in lowered
+    assert "full (or near-full) credit" in lowered
+    assert "show your work" in lowered
+    assert "unless the question text explicitly asks" in lowered
+
+
 # Distinctive substrings each rigor level's guidance must inject into the prompt.
 _RIGOR_MARKERS = {
     "lenient": "Grade leniently",
     "standard": "Grade with balance",
     "strict": "Grade strictly",
 }
+
+
+@pytest.mark.parametrize(
+    ("rigor", "phrase"),
+    [
+        # lenient and standard must award full credit for a correct final value.
+        ("lenient", "a correct final value alone earns full credit"),
+        ("standard", "a correct final value alone earns full credit"),
+        # strict may expect shown work, but only when the question asked for it.
+        ("strict", "ONLY when the question actually asked"),
+    ],
+)
+def test_grade_rigor_guidance_awards_value_only_answers(fake_llm, rigor, phrase):
+    fake_llm["reply"] = "SCORE: 100\n---\nok"
+    grade({"message": "96.67%", "exercise": {"solution": "ref"}, "rigor": rigor})
+
+    human_msg = fake_llm["last"].calls[0][-1][1]
+    assert phrase in human_msg
 
 
 @pytest.mark.parametrize("rigor", list(_RIGOR_MARKERS))
