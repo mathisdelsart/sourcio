@@ -269,6 +269,60 @@ def test_stream_ingest_text_decode_error_emits_error_event(monkeypatch, tmp_path
     assert events[-1]["message"]
 
 
+def test_stream_ingest_pdf_routes_through_hybrid(monkeypatch, tmp_path):
+    # A text PDF must extract via the free PyMuPDF/hybrid route, so stream_ingest
+    # is required to call extract_pdf with hybrid=True regardless of the vision
+    # model. Capture the kwargs to assert the routing without any real model call.
+    path = tmp_path / "letter.pdf"
+    path.write_bytes(b"%PDF")
+
+    seen: dict[str, object] = {}
+
+    def fake_extract(p, course, *, pages=None, hybrid=False, **kwargs):  # noqa: ARG001
+        seen["hybrid"] = hybrid
+        nums = pages or [1]
+        return [Page(course=course, page=n, text=f"text {n}", doc_type="slides") for n in nums]
+
+    import ingestion.extract
+    import ingestion.run
+
+    monkeypatch.setattr(ingestion.run, "_pdf_page_count", lambda path: 1)  # noqa: ARG005
+    monkeypatch.setattr(ingestion.extract, "extract_pdf", fake_extract)
+    monkeypatch.setattr(documents_mod, "_indexed_pages", lambda course, document=None: set())  # noqa: ARG005
+    monkeypatch.setattr(documents_mod, "index_chunks", lambda chunks, **_: None)
+
+    events = list(documents_mod.stream_ingest(str(path), "Wavelets"))
+    assert seen["hybrid"] is True
+    assert events[-1]["type"] == "done"
+    assert events[-1]["indexed"] > 0
+
+
+def test_stream_ingest_unsupported_extension_emits_error(monkeypatch, tmp_path):
+    # A clearly-unsupported file (not PDF, not .md/.txt) is reported as a clean
+    # error event rather than blowing up on a raw fitz.open failure.
+    path = tmp_path / "resume.docx"
+    path.write_bytes(b"PK\x03\x04 not a real docx")
+
+    def boom_count(path):  # noqa: ARG001
+        raise AssertionError("the PDF page-count must not run for an unsupported file")
+
+    import ingestion.run
+
+    monkeypatch.setattr(ingestion.run, "_pdf_page_count", boom_count)
+
+    events = list(documents_mod.stream_ingest(str(path), "Wavelets"))
+    assert len(events) == 1
+    assert events[0]["type"] == "error"
+    assert events[0]["message"] == documents_mod.UNSUPPORTED_FILE_MESSAGE
+
+
+def test_ingest_document_unsupported_extension_raises(tmp_path):
+    path = tmp_path / "slides.pptx"
+    path.write_bytes(b"not a pdf")
+    with pytest.raises(ValueError, match="Unsupported file type"):
+        documents_mod.ingest_document(str(path), "Wavelets")
+
+
 def test_indexed_pages_scopes_to_course_and_document(monkeypatch):
     class _CapturingScroll:
         last_filter = None
