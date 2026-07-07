@@ -95,8 +95,10 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
           </p>
         </div>
 
-        <div className="mt-6 space-y-3">
-          <div className="flex rounded-lg border border-zinc-200 p-0.5 text-sm dark:border-zinc-700">
+        <div className="mt-6 space-y-4">
+          {/* Segmented pill toggle: a white active segment on a soft track
+              (Linear/Notion style) rather than a hard-edged bordered row. */}
+          <div className="flex rounded-xl bg-zinc-100 p-1 text-sm dark:bg-zinc-800">
             {(["login", "register"] as const).map((m) => (
               <button
                 key={m}
@@ -104,11 +106,11 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
                 onClick={() => setMode(m)}
                 aria-pressed={mode === m}
                 className={cn(
-                  "flex-1 rounded-md px-2 py-1.5 font-medium transition-colors",
+                  "flex-1 rounded-lg px-3 py-2 font-medium transition-all",
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
                   mode === m
-                    ? "bg-brand-600 text-white dark:bg-brand-500"
-                    : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800",
+                    ? "bg-white text-brand-700 shadow-sm dark:bg-zinc-950 dark:text-brand-300"
+                    : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
                 )}
               >
                 {m === "login" ? t("auth.signIn") : t("auth.register")}
@@ -149,7 +151,12 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
             }}
           />
 
-          <Button className="w-full" onClick={submit} loading={loading} disabled={!canSubmit}>
+          <Button
+            className="mt-1 h-11 w-full rounded-xl text-sm"
+            onClick={submit}
+            loading={loading}
+            disabled={!canSubmit}
+          >
             {mode === "login" ? t("auth.signIn") : t("auth.createAccount")}
           </Button>
         </div>

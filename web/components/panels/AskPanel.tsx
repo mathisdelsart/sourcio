@@ -35,11 +35,17 @@ interface AskPanelProps {
   setLastAnswer: (a: AskResponse | null) => void;
   /** Active conversation thread; when set, questions attach to it. */
   sessionId: number | null;
-  /** Max candidate sources to retrieve (the ceiling `k`); configurable in Settings. */
+  /** Max candidate sources to retrieve (the ceiling `k`); surfaced below. */
   sourcesMax: number;
+  /** Persist a new max-sources ceiling (clamped by the parent). */
+  onSourcesMaxChange: (next: number) => void;
   /** Bumped after an upload so the course selector re-fetches GET /courses. */
   coursesRefreshKey?: number;
 }
+
+// Bounds for the max-sources control (mirrors the parent's clamp).
+const SOURCES_MAX_MIN = 1;
+const SOURCES_MAX_MAX = 50;
 
 export function AskPanel({
   studentId,
@@ -48,6 +54,7 @@ export function AskPanel({
   setLastAnswer,
   sessionId,
   sourcesMax,
+  onSourcesMaxChange,
   coursesRefreshKey,
 }: AskPanelProps) {
   const toast = useToast();
@@ -206,6 +213,24 @@ export function AskPanel({
               placeholder={t("ask.chapterPlaceholder")}
               value={chapter}
               onChange={(e) => setChapter(e.target.value)}
+            />
+          </div>
+          {/* Max sources — how many candidate passages retrieval pulls before
+              the answer cites only the useful ones. Kept compact and wired to
+              the page's persisted `sourcesMax`. */}
+          <div className="w-32">
+            <TextField
+              label={t("ask.maxSources")}
+              hint={t("ask.maxSourcesHint")}
+              type="number"
+              inputMode="numeric"
+              min={SOURCES_MAX_MIN}
+              max={SOURCES_MAX_MAX}
+              value={String(sourcesMax)}
+              onChange={(e) => {
+                const parsed = Number.parseInt(e.target.value, 10);
+                if (Number.isFinite(parsed)) onSourcesMaxChange(parsed);
+              }}
             />
           </div>
           <div className="flex justify-end">

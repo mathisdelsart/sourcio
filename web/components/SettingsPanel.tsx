@@ -21,8 +21,8 @@ interface SettingsPanelProps {
 
 // Bounds for the candidate-source ceiling. A too-small pool starves the answer
 // of sources; a very high one slows a LOCAL model (larger context, latency).
-const SOURCES_MAX_MIN = 1;
-const SOURCES_MAX_MAX = 50;
+export const SOURCES_MAX_MIN = 1;
+export const SOURCES_MAX_MAX = 50;
 export const DEFAULT_SOURCES_MAX = 15;
 
 /**

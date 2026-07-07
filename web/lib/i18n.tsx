@@ -161,6 +161,12 @@ const en = {
   "gate.title": "Sign in to continue",
   "gate.subtitle": "This tutor requires an account. Sign in or create one to get started.",
 
+  // Locked tool area (landing stays public; the tool requires an account).
+  "toolGate.title": "Sign in to start",
+  "toolGate.subtitle":
+    "Create an account to index your own courses — your documents stay private to you.",
+  "toolGate.button": "Sign in or create an account",
+
   // Settings panel
   "settings.title": "Settings",
   "settings.studentId": "Student id",
@@ -226,6 +232,8 @@ const en = {
   "ask.chapterHint": "Optional — restrict to a single chapter.",
   "ask.chapterPlaceholder": "e.g. Chapter 3",
   "ask.kLabel": "Sources to retrieve:",
+  "ask.maxSources": "Max sources",
+  "ask.maxSourcesHint": "How many passages to retrieve.",
   "ask.submit": "Ask",
   "ask.answerTitle": "Answer",
   "ask.empty.title": "No answer yet",
@@ -630,6 +638,12 @@ const fr: Record<TranslationKey, string> = {
   "gate.subtitle":
     "Ce tuteur nécessite un compte. Connectez-vous ou créez-en un pour commencer.",
 
+  // Locked tool area (landing stays public; the tool requires an account).
+  "toolGate.title": "Connectez-vous pour commencer",
+  "toolGate.subtitle":
+    "Créez un compte pour indexer vos propres cours — vos documents restent privés.",
+  "toolGate.button": "Se connecter ou créer un compte",
+
   // Settings panel
   "settings.title": "Paramètres",
   "settings.studentId": "Identifiant étudiant",
@@ -698,6 +712,8 @@ const fr: Record<TranslationKey, string> = {
   "ask.chapterHint": "Optionnel — restreindre à un seul chapitre.",
   "ask.chapterPlaceholder": "ex. Chapitre 3",
   "ask.kLabel": "Sources à récupérer :",
+  "ask.maxSources": "Sources max",
+  "ask.maxSourcesHint": "Nombre de passages à récupérer.",
   "ask.submit": "Demander",
   "ask.answerTitle": "Réponse",
   "ask.empty.title": "Pas encore de réponse",
@@ -1098,6 +1114,12 @@ const nl: Record<TranslationKey, string> = {
   "gate.subtitle":
     "Deze tutor vereist een account. Log in of maak er een aan om te beginnen.",
 
+  // Locked tool area (landing stays public; the tool requires an account).
+  "toolGate.title": "Log in om te starten",
+  "toolGate.subtitle":
+    "Maak een account om je eigen cursussen te indexeren — je documenten blijven privé.",
+  "toolGate.button": "Inloggen of een account aanmaken",
+
   // Settings panel
   "settings.title": "Instellingen",
   "settings.studentId": "Student-id",
@@ -1162,6 +1184,8 @@ const nl: Record<TranslationKey, string> = {
   "ask.chapterHint": "Optioneel — beperk tot één hoofdstuk.",
   "ask.chapterPlaceholder": "bijv. Hoofdstuk 3",
   "ask.kLabel": "Op te halen bronnen:",
+  "ask.maxSources": "Max. bronnen",
+  "ask.maxSourcesHint": "Hoeveel passages worden opgehaald.",
   "ask.submit": "Vragen",
   "ask.answerTitle": "Antwoord",
   "ask.empty.title": "Nog geen antwoord",

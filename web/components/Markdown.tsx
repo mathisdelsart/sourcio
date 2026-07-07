@@ -55,8 +55,28 @@ const PROTECTED_RE =
  *   - `\( ... \)`  -> `$ ... $`    (inline math)
  *   - standalone `\begin{env}...\end{env}` -> `$$ ... $$`
  */
+/**
+ * Guard against a single stray `$` in plain text (e.g. a price, or an unclosed
+ * inline-math delimiter) opening a math span that never closes. Balanced
+ * `$...$` / `$$...$$` spans are already split out as PROTECTED regions before
+ * this runs, so any `$` reaching here is unpaired within its segment: if the
+ * count of unescaped `$` is odd, escape the last one so it renders literally.
+ * Run on the RAW segment, before the bracket rewrites insert their own `$`.
+ */
+function escapeStrayDollar(segment: string): string {
+  const positions: number[] = [];
+  for (let i = 0; i < segment.length; i++) {
+    if (segment[i] === "$" && (i === 0 || segment[i - 1] !== "\\")) {
+      positions.push(i);
+    }
+  }
+  if (positions.length % 2 === 0) return segment;
+  const last = positions[positions.length - 1];
+  return `${segment.slice(0, last)}\\$${segment.slice(last + 1)}`;
+}
+
 function normalizePlainSegment(segment: string): string {
-  return segment
+  return escapeStrayDollar(segment)
     .replace(BRACKET_DISPLAY_RE, (_match, inner: string) => `$$${inner}$$`)
     .replace(BRACKET_INLINE_RE, (_match, inner: string) => `$${inner}$`)
     .replace(BARE_ENV_RE, (match: string) => `$$\n${match}\n$$`);
@@ -106,7 +126,9 @@ export function Markdown({
 }) {
   const rehypePlugins: ComponentProps<typeof ReactMarkdown>["rehypePlugins"] = [
     ...(highlight && highlight.length > 0 ? [rehypeHighlight(highlight)] : []),
-    [rehypeKatex, { throwOnError: false, strict: false }],
+    // `errorColor: currentColor` renders a malformed expression in the normal
+    // text color instead of KaTeX's alarming red, keeping fail-soft unobtrusive.
+    [rehypeKatex, { throwOnError: false, strict: false, errorColor: "currentColor" }],
   ];
   return (
     <div className="prose-tutor">

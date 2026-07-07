@@ -35,6 +35,8 @@ export function AuthMenu({ config, name, email, onLogin, onLogout }: AuthMenuPro
 
   const isAuthed = Boolean(email);
   const label = name || email;
+  // First letter of the display name (or email) for the avatar badge.
+  const initial = (label ?? "").trim().charAt(0).toUpperCase() || "?";
 
   function close() {
     setOpen(false);
@@ -75,17 +77,38 @@ export function AuthMenu({ config, name, email, onLogin, onLogout }: AuthMenuPro
         aria-expanded={open}
         aria-haspopup="dialog"
         className={cn(
-          "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
+          "inline-flex items-center gap-2 text-sm font-semibold transition-colors",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2",
           isAuthed
-            ? "border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-            : "bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-500 active:bg-brand-700",
+            ? "rounded-full border border-zinc-200 bg-white py-1 pl-1 pr-3 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            : "rounded-lg bg-brand-600 px-4 py-2 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-500 active:bg-brand-700",
         )}
       >
         {isAuthed ? (
           <>
-            <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
-            <span className="max-w-[12rem] truncate">{label}</span>
+            {/* Initial-avatar badge on a brand-tinted circle. */}
+            <span
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white dark:bg-brand-500"
+              aria-hidden
+            >
+              {initial}
+            </span>
+            <span className="max-w-[10rem] truncate">{label}</span>
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              className={cn(
+                "h-4 w-4 shrink-0 text-zinc-400 transition-transform dark:text-zinc-500",
+                open && "rotate-180",
+              )}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
           </>
         ) : (
           <span>{t("header.signIn")}</span>

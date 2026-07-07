@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { getConfig, me, type AskResponse, type ConnectionConfig } from "@/lib/api";
 import { KEYS, generateStudentId, readLocal, writeLocal } from "@/lib/storage";
 import { Tabs, type TabItem } from "@/components/Tabs";
 import { HealthBadge } from "@/components/HealthBadge";
 import { AuthMenu } from "@/components/AuthMenu";
 import { AuthGate } from "@/components/AuthGate";
+import { AuthCard } from "@/components/AuthCard";
+import { Button } from "@/components/Button";
 import { BrandMark } from "@/components/Logo";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useT } from "@/lib/i18n";
@@ -17,7 +20,7 @@ import { Features } from "@/components/Features";
 import { StatsBand } from "@/components/StatsBand";
 import { LandingCta } from "@/components/LandingCta";
 import { Reveal } from "@/components/Reveal";
-import { SettingsPanel, DEFAULT_SOURCES_MAX } from "@/components/SettingsPanel";
+import { DEFAULT_SOURCES_MAX, SOURCES_MAX_MAX, SOURCES_MAX_MIN } from "@/components/SettingsPanel";
 import { ThreadSelect } from "@/components/ThreadSelect";
 import { AskPanel } from "@/components/panels/AskPanel";
 import { ExercisePanel } from "@/components/panels/ExercisePanel";
@@ -47,6 +50,9 @@ export default function Home() {
   const [authEmail, setAuthEmail] = useState("");
   const [authName, setAuthName] = useState("");
   const [active, setActive] = useState("ask");
+  // Opens the shared sign-in / register card as a centered modal from the
+  // locked tool area (the header AuthMenu owns its own separate modal).
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   // Enforced multi-user mode, learned from GET /config. When true and the user
   // is not signed in, a blocking login gate replaces the app. Defaults to false
   // so an unreachable backend never locks the anonymous MVP flow.
@@ -171,6 +177,16 @@ export default function Home() {
   // exactly as before.
   const effectiveStudentId = authUserId != null ? `u${authUserId}` : studentId;
 
+  // Close the sign-in modal on Escape so keyboard users are never stranded.
+  useEffect(() => {
+    if (!authModalOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setAuthModalOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [authModalOpen]);
+
   function onLogin(nextToken: string, nextEmail: string, nextName?: string | null) {
     setToken(nextToken);
     setAuthEmail(nextEmail);
@@ -192,20 +208,12 @@ export default function Home() {
     selectSession(null);
   }
 
-  function saveSettings(next: {
-    studentId: string;
-    baseUrl: string;
-    apiKey: string;
-    sourcesMax: number;
-  }) {
-    setStudentId(next.studentId);
-    setBaseUrl(next.baseUrl);
-    setApiKey(next.apiKey);
-    setSourcesMax(next.sourcesMax);
-    writeLocal(KEYS.studentId, next.studentId);
-    writeLocal(KEYS.baseUrl, next.baseUrl);
-    writeLocal(KEYS.apiKey, next.apiKey);
-    writeLocal(KEYS.sourcesMax, String(next.sourcesMax));
+  // Update the max candidate-source ceiling (surfaced on the Ask panel).
+  // Clamped to a sane range and persisted so it survives reloads.
+  function updateSourcesMax(next: number) {
+    const clamped = Math.min(SOURCES_MAX_MAX, Math.max(SOURCES_MAX_MIN, next));
+    setSourcesMax(clamped);
+    writeLocal(KEYS.sourcesMax, String(clamped));
   }
 
   if (!ready) {
@@ -334,16 +342,41 @@ export default function Home() {
                   <div className="h-10 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800" />
                   <div className="h-64 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
                 </div>
+              ) : !token ? (
+                // The landing above stays public for visitors, but the tool
+                // itself requires an account — nothing is usable without signing
+                // in. This locked panel replaces the tabs with a clear sign-in
+                // CTA that opens the shared login/register card.
+                <div className="flex flex-col items-center justify-center px-6 py-16 text-center sm:py-24">
+                  <span
+                    className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300"
+                    aria-hidden
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-7 w-7"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="4" y="11" width="16" height="10" rx="2" />
+                      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                    </svg>
+                  </span>
+                  <h3 className="mt-5 text-xl font-bold tracking-tight text-ink">
+                    {t("toolGate.title")}
+                  </h3>
+                  <p className="mt-2 max-w-md text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+                    {t("toolGate.subtitle")}
+                  </p>
+                  <Button className="mt-6" onClick={() => setAuthModalOpen(true)}>
+                    {t("toolGate.button")}
+                  </Button>
+                </div>
               ) : (
               <div className="space-y-6 p-6 sm:p-8">
-                <SettingsPanel
-                  studentId={effectiveStudentId}
-                  baseUrl={baseUrl}
-                  apiKey={apiKey}
-                  sourcesMax={sourcesMax}
-                  onSave={saveSettings}
-                />
-
                 {/* Thread switcher in the tool frame — visible on every tab so
                     the active conversation thread can be seen and changed from
                     anywhere, sharing the page's activeSessionId/selectSession. */}
@@ -379,6 +412,7 @@ export default function Home() {
                     setLastAnswer={setLastAnswer}
                     sessionId={activeSessionId}
                     sourcesMax={sourcesMax}
+                    onSourcesMaxChange={updateSourcesMax}
                     coursesRefreshKey={coursesRefreshKey}
                   />
                 </div>
@@ -506,6 +540,30 @@ export default function Home() {
           </div>
         </footer>
       </main>
+
+      {/* Sign-in / register modal opened from the locked tool CTA. Rendered
+          through a portal on document.body so the sticky header's transform
+          can't capture the fixed overlay. Reuses the shared AuthCard, so it
+          never drifts from the header menu and the full-screen gate. */}
+      {authModalOpen &&
+        createPortal(
+          <div
+            className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4 backdrop-blur-sm"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setAuthModalOpen(false);
+            }}
+          >
+            <div role="dialog" aria-modal="true" aria-label={t("auth.aria")}>
+              <AuthCard
+                config={config}
+                onLogin={onLogin}
+                onSuccess={() => setAuthModalOpen(false)}
+                onClose={() => setAuthModalOpen(false)}
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
