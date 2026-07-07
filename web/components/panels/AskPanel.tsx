@@ -249,7 +249,16 @@ export function AskPanel({
                   <ol className="space-y-1.5">
                     {lastAnswer.citations.map((c, i) => (
                       <li key={`${c.id}-${i}`}>
-                        <CitationChip label={c.label} id={c.id} n={c.n} config={config} />
+                        <CitationChip
+                          label={c.label}
+                          id={c.id}
+                          n={c.n}
+                          config={config}
+                          // Highlight, inside the opened excerpt, the words the
+                          // answer (and the asked question) drew on. Purely
+                          // client-side: neither is sent to the backend.
+                          highlightSource={`${question} ${lastAnswer.answer}`}
+                        />
                       </li>
                     ))}
                   </ol>

@@ -16,6 +16,8 @@ interface AuthCardProps {
   onLogin: (token: string, email: string, displayName?: string | null) => void;
   /** Optional hook fired after a successful sign-in (e.g. to close a modal). */
   onSuccess?: () => void;
+  /** When set, a close (✕) button is shown (used in the modal, not the gate). */
+  onClose?: () => void;
   className?: string;
 }
 
@@ -30,7 +32,7 @@ type Mode = "login" | "register";
  * feedback. Reused by both the full-screen {@link AuthGate} and the header
  * account menu (as a centered modal), so the two never drift apart.
  */
-export function AuthCard({ config, onLogin, onSuccess, className }: AuthCardProps) {
+export function AuthCard({ config, onLogin, onSuccess, onClose, className }: AuthCardProps) {
   const toast = useToast();
   const { t } = useT();
   const [mode, setMode] = useState<Mode>("login");
@@ -67,11 +69,27 @@ export function AuthCard({ config, onLogin, onSuccess, className }: AuthCardProp
   }
 
   return (
-    <Card className={cn("w-full max-w-sm animate-fade-in", className)}>
-      <CardBody className="p-6 sm:p-8">
+    <Card className={cn("relative w-full max-w-sm animate-fade-in", className)}>
+      {onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t("auth.close")}
+          className={cn(
+            "absolute right-3.5 top-3.5 inline-flex h-8 w-8 items-center justify-center rounded-full",
+            "text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+          )}
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      )}
+      <CardBody className="p-7 sm:p-9">
         <div className="flex flex-col items-center text-center">
-          <BrandMark className="h-12 w-12" />
-          <h1 className="mt-4 text-lg font-semibold text-ink">{t("auth.cardTitle")}</h1>
+          <BrandMark className="h-14 w-14" />
+          <span className="mt-4 text-2xl font-bold tracking-tight text-ink">{t("app.name")}</span>
           <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
             {t("auth.cardSubtitle")}
           </p>

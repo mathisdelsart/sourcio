@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { type ConnectionConfig } from "@/lib/api";
 import { AuthCard } from "@/components/AuthCard";
 import { Button } from "@/components/Button";
@@ -110,19 +111,29 @@ export function AuthMenu({ config, name, email, onLogin, onLogout }: AuthMenuPro
         </div>
       )}
 
-      {/* Signed-out: a centered modal overlay hosting the shared AuthCard. */}
-      {open && !isAuthed && (
-        <div
-          className="animate-fade-in fixed inset-0 z-40 flex items-center justify-center bg-ink/40 px-4 backdrop-blur-sm"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) close();
-          }}
-        >
-          <div role="dialog" aria-modal="true" aria-label={t("auth.aria")}>
-            <AuthCard config={config} onLogin={onLogin} onSuccess={() => setOpen(false)} />
-          </div>
-        </div>
-      )}
+      {/* Signed-out: a centered modal overlay hosting the shared AuthCard.
+          Rendered through a portal on document.body so a transformed ancestor
+          (the sticky header) can't capture the fixed overlay and shift it. */}
+      {open &&
+        !isAuthed &&
+        createPortal(
+          <div
+            className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4 backdrop-blur-sm"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) close();
+            }}
+          >
+            <div role="dialog" aria-modal="true" aria-label={t("auth.aria")}>
+              <AuthCard
+                config={config}
+                onLogin={onLogin}
+                onSuccess={() => setOpen(false)}
+                onClose={close}
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

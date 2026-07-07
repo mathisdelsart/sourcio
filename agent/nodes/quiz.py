@@ -8,7 +8,10 @@ than inventing questions that are not in the course, mirroring the refusal
 contract in ``generate.py`` and ``answer.py``.
 
 The questions are generated in a single grounded call so they stay distinct and
-share the same retrieved sources. Persistence is best-effort and optional: when
+share the same retrieved sources. The node also refuses when the model — acting
+as the coverage judge — decides the retrieved sources are genuinely unrelated to
+the requested notion, so a quiz scoped to the wrong course cannot be answered
+from the model's own knowledge. Persistence is best-effort and optional: when
 no ``student_id`` is given, or no database is configured, the quiz is still
 returned (without ids) and nothing is written.
 """
@@ -20,6 +23,7 @@ import re
 from typing import Any
 
 from agent.state import Rigor
+from core.answer import REFUSAL
 from core.config import get_llm
 from core.obs import get_callbacks
 from ingestion.schema import format_numbered_sources
@@ -29,9 +33,16 @@ from ingestion.schema import format_numbered_sources
 DEFAULT_RIGOR: Rigor = "standard"
 
 _SYSTEM = (
-    "You are a course tutor who writes short practice quizzes.\n"
-    "- Build exactly {n} distinct question(s) on the requested notion using ONLY"
-    " the numbered sources below.\n"
+    "You are a course tutor who writes short practice quizzes on the requested"
+    " notion using ONLY the numbered sources below.\n"
+    "- Build exactly {n} distinct question(s) as long as the numbered sources"
+    " cover the requested notion, even partially. You are the judge of coverage.\n"
+    "- Only if the sources are genuinely unrelated to the notion (a different"
+    " subject, or they merely mention it in passing) reply with exactly this"
+    f" sentence and nothing else: {REFUSAL}\n"
+    "- The refusal sentence stands alone as a complete reply; never invent"
+    " questions on material that is not in the sources just because some source"
+    " was retrieved.\n"
     "- Never introduce material that is not in the sources; keep the course's"
     " notation.\n"
     "- Make every question SELF-CONTAINED: never refer to 'the source', 'the"
@@ -154,6 +165,15 @@ def generate_quiz(
     system = _SYSTEM.format(n=n)
     prompt = f"Sources:\n{format_numbered_sources(results)}\n\nNotion: {notion}"
     raw = get_llm("generate").invoke([("system", system), ("human", prompt)]).content.strip()
+
+    # The model is the coverage judge: when the retrieved sources do not actually
+    # cover the requested notion (e.g. the quiz was scoped to the wrong course, or
+    # only matched a chunk mentioning the topic in passing), it emits the exact
+    # refusal sentence. Mirror answer.py/generate.py: detect it and refuse rather
+    # than fabricating questions from the model's own knowledge. REFUSAL carries no
+    # '[' or ']', so it never collides with the JSON-array regex in _parse_questions.
+    if raw == REFUSAL:
+        return {"quiz_id": None, "notion": notion, "questions": [], "refused": True}
 
     questions = _parse_questions(raw, n)
     if not questions:

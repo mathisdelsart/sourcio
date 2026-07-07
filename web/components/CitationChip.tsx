@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getSource, type ConnectionConfig, type SourceChunk } from "@/lib/api";
 import { Markdown } from "@/components/Markdown";
 import { Spinner } from "@/components/Spinner";
+import { highlightTerms } from "@/lib/highlight";
 import { useT } from "@/lib/i18n";
 
 const CHIP =
@@ -16,19 +17,27 @@ const CHIP =
  * a modal, so the reader can check precisely where a claim comes from. Without
  * an id it renders as a plain, non-interactive pill. When `n` is given, the chip
  * leads with the inline marker `[n]` so it pairs with the `[n]` in the answer.
+ *
+ * `highlightSource` is optional free text (typically the grounded answer, and
+ * optionally the user's question) used purely client-side to highlight, inside
+ * the opened excerpt, the words the answer drew on — so the reader sees which
+ * part of a long chunk was actually used. It never leaves the browser.
  */
 export function CitationChip({
   label,
   id,
   n,
   config,
+  highlightSource,
 }: {
   label: string;
   id?: string;
   n?: number;
   config?: ConnectionConfig;
+  highlightSource?: string;
 }) {
   const { t } = useT();
+  const highlight = useMemo(() => highlightTerms(highlightSource), [highlightSource]);
   const [open, setOpen] = useState(false);
   const [chunk, setChunk] = useState<SourceChunk | null>(null);
   const [loading, setLoading] = useState(false);
@@ -138,7 +147,7 @@ export function CitationChip({
               ) : failed ? (
                 <p className="text-sm text-red-600">{t("source.failed")}</p>
               ) : chunk ? (
-                <Markdown>{chunk.text}</Markdown>
+                <Markdown highlight={highlight}>{chunk.text}</Markdown>
               ) : null}
             </div>
           </div>

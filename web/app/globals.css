@@ -158,6 +158,18 @@ body {
   @apply overflow-x-auto overflow-y-hidden py-1;
 }
 
+/* Client-side highlight of the excerpt portion a grounded answer relied on.
+   A soft amber wash keeps it readable and subtle rather than garish. */
+.prose-tutor mark.source-highlight {
+  @apply rounded bg-amber-100 px-0.5 text-inherit;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.dark .prose-tutor mark.source-highlight {
+  @apply bg-amber-400/25 text-inherit;
+}
+
 /* Streaming caret: a blinking bar that trails the end of the last rendered line
    as tokens arrive, instead of sitting on its own line below the answer. */
 @keyframes caret-blink {

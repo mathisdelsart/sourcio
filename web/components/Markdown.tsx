@@ -1,7 +1,9 @@
+import type { ComponentProps } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import { rehypeHighlight } from "@/lib/highlight";
 
 /**
  * LaTeX environments that are valid math on their own and are frequently
@@ -89,14 +91,26 @@ export function normalizeMath(markdown: string): string {
  *
  * Raw HTML is NOT enabled (no `rehype-raw`), so untrusted markdown cannot
  * inject arbitrary HTML — only the standard markdown surface is rendered.
+ *
+ * When `highlight` terms are provided, a small rehype plugin wraps their
+ * occurrences in `<mark>` on the rendered text nodes. It runs BEFORE
+ * rehype-katex so math is still an untouched `<span class="math">` container
+ * and gets skipped, leaving KaTeX rendering intact.
  */
-export function Markdown({ children }: { children: string }) {
+export function Markdown({
+  children,
+  highlight,
+}: {
+  children: string;
+  highlight?: string[];
+}) {
+  const rehypePlugins: ComponentProps<typeof ReactMarkdown>["rehypePlugins"] = [
+    ...(highlight && highlight.length > 0 ? [rehypeHighlight(highlight)] : []),
+    [rehypeKatex, { throwOnError: false, strict: false }],
+  ];
   return (
     <div className="prose-tutor">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]}
-      >
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={rehypePlugins}>
         {normalizeMath(children)}
       </ReactMarkdown>
     </div>
