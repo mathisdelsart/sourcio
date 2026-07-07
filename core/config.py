@@ -177,11 +177,20 @@ class Settings(BaseSettings):
     # is rejected and the user must log in again.
     jwt_expire_minutes: int = 60
 
-    # Global LLM provider switch for fully local, zero-cost runs. "" keeps the
-    # default OpenAI provider; "ollama" routes every role to a local Ollama chat
-    # model (see `get_llm`). Per-role `LLM_<ROLE>` values may still carry their
-    # own `provider:model` prefix, which always wins over this global default.
+    # Global LLM provider switch. "" keeps the default OpenAI provider; "ollama"
+    # routes every role to a local Ollama chat model; "groq" routes every non-vision
+    # role to a free-tier Groq-hosted model (see `get_llm`). Per-role `LLM_<ROLE>`
+    # values may still carry their own `provider:model` prefix, which always wins
+    # over this global default.
     llm_provider: str = ""
+
+    # Default Groq chat model used when `llm_provider="groq"` and a role has no
+    # explicit `LLM_<ROLE>` override. Groq serves this on its free tier via an
+    # OpenAI-style API; langchain-groq reads GROQ_API_KEY from the environment, so
+    # no base_url is needed. Groq has no vision model, so the `extract` (vision)
+    # role falls back to the OpenAI default — ingestion is a one-time offline step
+    # and is never run on the deployed API.
+    groq_chat_model: str = "llama-3.3-70b-versatile"
 
     # Base URL of the local Ollama server, used only when the Ollama provider is
     # active. The default matches Ollama's out-of-the-box bind address.
@@ -246,26 +255,42 @@ def _resolve_model(role: str) -> tuple[str, dict]:
        without its own override resolves to a local Ollama model: the multimodal
        `ollama_vision_model` for the `extract` role and `ollama_chat_model`
        otherwise. The Ollama `base_url` is forwarded so a non-default server can
-       be targeted.
+       be targeted. When set to "groq", every non-vision role resolves to
+       `groq:<groq_chat_model>` (langchain-groq reads GROQ_API_KEY from the
+       environment, so no kwargs are injected); the `extract` (vision) role falls
+       back to the OpenAI default since Groq has no vision model.
     3. The OpenAI default `gpt-4o-mini`.
 
     Returns the model string (possibly `provider:model`) and a kwargs dict passed
-    through to `init_chat_model` (e.g. `base_url` for Ollama).
+    through to `init_chat_model` (e.g. `base_url` for Ollama). Groq needs no
+    kwargs, so its dict is empty.
     """
     override = os.getenv(f"LLM_{role.upper()}")
     settings = get_settings()
 
     # An explicit per-role override always wins, including its own provider prefix.
+    # Only Ollama needs a base_url forwarded; groq:/openai: prefixes pass through
+    # verbatim with no provider kwargs.
     if override:
         kwargs: dict = {}
         if override.startswith("ollama:"):
             kwargs["base_url"] = settings.ollama_base_url
         return override, kwargs
 
+    provider = settings.llm_provider.strip().lower()
+
     # Global Ollama switch: pick a sensible default model id per role.
-    if settings.llm_provider.strip().lower() == "ollama":
+    if provider == "ollama":
         model_id = settings.ollama_vision_model if role == "extract" else settings.ollama_chat_model
         return f"ollama:{model_id}", {"base_url": settings.ollama_base_url}
+
+    # Global Groq switch: free-tier hosted chat model for every role except the
+    # vision `extract` role, which Groq cannot serve and which falls back to the
+    # OpenAI default (ingestion is a one-time offline step, never on the API).
+    if provider == "groq":
+        if role == "extract":
+            return "gpt-4o-mini", {}
+        return f"groq:{settings.groq_chat_model}", {}
 
     # Default: OpenAI gpt-4o-mini, unchanged.
     return "gpt-4o-mini", {}
@@ -276,7 +301,9 @@ def get_llm(role: str = "default"):
 
     Defaults to OpenAI `gpt-4o-mini`. Set `LLM_<ROLE>=ollama:<model>` or the
     global `LLM_PROVIDER=ollama` to run a local Ollama model instead (zero-cost,
-    fully offline). Uses `temperature=0` for reproducibility.
+    fully offline), or `LLM_PROVIDER=groq` (with `GROQ_API_KEY` set) to route
+    non-vision roles to a free-tier Groq-hosted model. Uses `temperature=0` for
+    reproducibility.
     """
     # Configure the global LLM cache once (no-op unless `llm_cache` is set), so
     # repeated identical prompts are served from cache instead of re-billed.
