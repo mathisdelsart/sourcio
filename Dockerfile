@@ -37,6 +37,9 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.12.*"
 # 2) Install the remaining runtime dependencies from PyPI. Only the extras the API
 #    actually needs at runtime are installed (justification):
 #      - base deps (langchain, langchain-openai, qdrant-client, pydantic-settings)
+#      - langchain-groq -> the free hosted Groq LLM provider (LLM_PROVIDER=groq)
+#      - psycopg[binary] -> the Postgres driver, for a managed DATABASE_URL
+#        (postgresql+psycopg://...); harmless when the default SQLite is used
 #      - `api`    -> FastAPI, uvicorn, sqlalchemy (the web layer)
 #      - `agent`  -> langgraph (the explain/generate/grade/reexplain nodes)
 #      - `obs`    -> langfuse (optional tracing; tiny, keeps observability working)
@@ -53,12 +56,14 @@ RUN pip install \
     "langchain>=0.3" \
     "langchain-core>=1.4" \
     "langchain-openai>=0.2" \
+    "langchain-groq>=0.2" \
     "pydantic-settings>=2.5" \
     "python-dotenv>=1.0" \
     "qdrant-client>=1.12" \
     "fastapi>=0.115" \
     "uvicorn[standard]>=0.30" \
     "sqlalchemy>=2.0" \
+    "psycopg[binary]>=3.1" \
     "pydantic>=2.13" \
     "langgraph>=0.2" \
     "langfuse>=2.0" \
