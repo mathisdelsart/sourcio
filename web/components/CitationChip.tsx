@@ -28,12 +28,14 @@ export function CitationChip({
   id,
   n,
   config,
+  studentId,
   highlightSource,
 }: {
   label: string;
   id?: string;
   n?: number;
   config?: ConnectionConfig;
+  studentId?: string;
   highlightSource?: string;
 }) {
   const { t } = useT();
@@ -76,7 +78,7 @@ export function CitationChip({
     setLoading(true);
     setFailed(false);
     try {
-      setChunk(await getSource(id!, config));
+      setChunk(await getSource(id!, studentId, config));
     } catch {
       setFailed(true);
     } finally {

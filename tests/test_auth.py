@@ -273,3 +273,34 @@ def test_existing_endpoints_do_not_require_bearer(client, monkeypatch):
 def test_jwt_round_trip_subject():
     token = auth_mod.create_access_token("42")
     assert auth_mod.decode_access_token(token) == "42"
+
+
+# --- startup JWT secret guard (H1) -------------------------------------------
+# When auth is required, the app must refuse to boot with the forgeable default
+# secret (or any too-short secret). With auth off, the local default is fine.
+
+from core.config import Settings  # noqa: E402
+
+
+def test_validate_jwt_secret_rejects_default_when_auth_required():
+    settings = Settings(require_auth=True, jwt_secret="dev-insecure-change-me")
+    with pytest.raises(RuntimeError, match="JWT_SECRET"):
+        api_main._validate_jwt_secret(settings)
+
+
+def test_validate_jwt_secret_rejects_short_secret_when_auth_required():
+    settings = Settings(require_auth=True, jwt_secret="tooshort")
+    with pytest.raises(RuntimeError, match="JWT_SECRET"):
+        api_main._validate_jwt_secret(settings)
+
+
+def test_validate_jwt_secret_accepts_strong_secret_when_auth_required():
+    settings = Settings(require_auth=True, jwt_secret="a-strong-random-secret-value")
+    # Must not raise.
+    api_main._validate_jwt_secret(settings)
+
+
+def test_validate_jwt_secret_allows_default_when_auth_off():
+    # Local dev (require_auth off) keeps the placeholder secret without blocking.
+    settings = Settings(require_auth=False, jwt_secret="dev-insecure-change-me")
+    api_main._validate_jwt_secret(settings)

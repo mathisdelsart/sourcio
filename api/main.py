@@ -127,10 +127,44 @@ def configure_engine(engine: Engine) -> None:
     configure_session_factory(engine)
 
 
+# The placeholder secret shipped for local development. It MUST be overridden
+# before enabling ``require_auth`` — otherwise anyone knowing this public default
+# could forge a valid access token.
+_INSECURE_JWT_DEFAULT = "dev-insecure-change-me"
+# Minimum length accepted for a JWT signing secret when auth is required. A short
+# secret is brute-forceable and defeats the point of signing.
+_MIN_JWT_SECRET_LEN = 16
+
+
+def _validate_jwt_secret(settings: Any) -> None:
+    """Fail fast when auth is required but the JWT secret is unsafe.
+
+    Only enforced when ``require_auth`` is on (a public/shared deployment). The
+    default placeholder secret or any secret shorter than
+    :data:`_MIN_JWT_SECRET_LEN` characters is rejected with a clear
+    ``RuntimeError`` so the operator sets a strong ``JWT_SECRET`` instead of
+    silently running with a forgeable one. With ``require_auth`` off (local dev)
+    the placeholder is left alone so nothing changes for single-user runs.
+    """
+    if not settings.require_auth:
+        return
+    secret = settings.jwt_secret
+    if secret == _INSECURE_JWT_DEFAULT or len(secret) < _MIN_JWT_SECRET_LEN:
+        raise RuntimeError(
+            "REQUIRE_AUTH is enabled but JWT_SECRET is unsafe "
+            "(the insecure default or shorter than "
+            f"{_MIN_JWT_SECRET_LEN} characters). Set a strong, random JWT_SECRET "
+            "before running with authentication enabled."
+        )
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Configure structured logging and the database on startup."""
-    configure_logging(get_settings().log_level)
+    settings = get_settings()
+    configure_logging(settings.log_level)
+    # Refuse to boot a public (auth-required) deployment with a forgeable secret.
+    _validate_jwt_secret(settings)
     if _engine is None:
         configure_engine(create_engine_from_settings())
     yield
@@ -923,6 +957,12 @@ def ask(request: AskRequest, user: UserOut | None = DataUser) -> dict[str, Any]:
     history for the student. When the request carries a valid bearer token, the
     student is linked to that account so the turns become the user's own.
     """
+    # Resolve (and, when authenticated, enforce ownership of) the student up
+    # front so a foreign student id is rejected with 403 *before* any retrieval
+    # or LLM work runs, mirroring ``/ask/stream``. The block below re-resolves to
+    # persist the turn; by then the student is owned, so that call is a no-op.
+    with get_session(_engine) as session:
+        _resolve_student(session, request.student_id, user)
     result = answer(
         request.question,
         k=request.k,
@@ -1569,15 +1609,24 @@ def remove_documents(
     response_model=SourceResponse,
     dependencies=[Depends(require_api_key)],
 )
-def source(chunk_id: str) -> dict[str, Any]:
+def source(
+    chunk_id: str, student_id: str | None = None, user: UserOut | None = DataUser
+) -> dict[str, Any]:
     """Return a cited source chunk's full text and citation metadata.
 
     Lets a client resolve a citation (the chunk id surfaced with an answer) into
     the underlying course excerpt, so a UI can show what an answer was grounded
-    in. Yields 404 when the id is unknown or the collection is missing; it never
-    reaches the LLM and runs no retrieval.
+    in. When ``student_id`` is given the lookup is owner-scoped to that account's
+    own material plus the owner-less (shared/legacy) corpus, so one account
+    cannot read another's chunk by guessing its deterministic id; an
+    authenticated caller passing a foreign student id is rejected with 403. A
+    chunk owned by a different account is reported as 404 (its existence never
+    leaks). Without a ``student_id`` the lookup is unscoped (unchanged). Yields
+    404 when the id is unknown or the collection is missing; it never reaches the
+    LLM and runs no retrieval.
     """
-    chunk = get_source(chunk_id)
+    owner = _scoped_read_owner(student_id, user)
+    chunk = get_source(chunk_id, owner=owner)
     if chunk is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

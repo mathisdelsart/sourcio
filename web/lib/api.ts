@@ -721,10 +721,21 @@ export async function me(config?: ConnectionConfig): Promise<AuthUser> {
   return request<AuthUser>("/auth/me", { method: "GET", headers: buildHeaders(config) }, config);
 }
 
-/** Resolve a citation's chunk id into its full source excerpt (GET /source/{id}). */
-export async function getSource(id: string, config?: ConnectionConfig): Promise<SourceChunk> {
+/**
+ * Resolve a citation's chunk id into its full source excerpt (GET /source/{id}).
+ *
+ * `studentId` scopes the lookup to the caller's own material plus the shared
+ * corpus, matching /ask, so one account cannot read another's chunk by its
+ * deterministic id. It is omitted for anonymous/local single-user use.
+ */
+export async function getSource(
+  id: string,
+  studentId?: string,
+  config?: ConnectionConfig,
+): Promise<SourceChunk> {
+  const query = studentId ? `?student_id=${encodeURIComponent(studentId)}` : "";
   return request<SourceChunk>(
-    `/source/${encodeURIComponent(id)}`,
+    `/source/${encodeURIComponent(id)}${query}`,
     { method: "GET", headers: buildHeaders(config) },
     config,
   );

@@ -139,6 +139,38 @@ def test_existing_student_of_another_user_is_forbidden(client):
     assert _student("shared").user_id == me_a["id"]
 
 
+def test_foreign_ask_is_rejected_before_answer_runs(client, monkeypatch):
+    # L2: a foreign student id must 403 *before* any retrieval/LLM work. The
+    # answer stub records whether it was invoked; it must stay untouched.
+    calls: list[str] = []
+
+    def _tracking_answer(question, *, k=5, course=None, chapter=None, owner=None, language=None):
+        calls.append(question)
+        return {"answer": "ok", "refused": False, "sources": [], "raw": "ok"}
+
+    monkeypatch.setattr(api_main, "answer", _tracking_answer)
+
+    # User A claims the student.
+    token_a = _token(client, "l2a@example.com")
+    client.post(
+        "/ask",
+        json={"student_id": "l2-shared", "question": "q"},
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert calls == ["q"]
+    calls.clear()
+
+    # User B touching A's student id is rejected with 403 and answer never runs.
+    token_b = _token(client, "l2b@example.com")
+    response = client.post(
+        "/ask",
+        json={"student_id": "l2-shared", "question": "leak?"},
+        headers={"Authorization": f"Bearer {token_b}"},
+    )
+    assert response.status_code == 403
+    assert calls == []
+
+
 def test_logged_in_user_cannot_read_another_users_student(client):
     # Isolation on reads holds with REQUIRE_AUTH off too: user A owns the student,
     # user B is forbidden from reading its history.

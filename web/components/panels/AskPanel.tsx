@@ -263,6 +263,7 @@ export function AskPanel({
                           id={c.id}
                           n={c.n}
                           config={config}
+                          studentId={studentId}
                           // Highlight, inside the opened excerpt, the words the
                           // answer (and the asked question) drew on. Purely
                           // client-side: neither is sent to the backend.
