@@ -352,41 +352,38 @@ def test_dense_query_uses_default_vector_on_plain_collection(monkeypatch):
     assert _FakeQdrantClient.last_kwargs.get("using") is None
 
 
-# --- Per-account owner scoping ---------------------------------------------
+# --- Per-account owner scoping (STRICT isolation) ----------------------------
 
-from qdrant_client.models import (  # noqa: E402
-    FieldCondition,
-    IsEmptyCondition,
-)
+from qdrant_client.models import FieldCondition  # noqa: E402
 
 
 def _owner_sub_filter(flt: Filter) -> Filter | None:
-    """Return the nested owner-scope sub-filter (the ``should`` branch) in ``flt``."""
+    """Return the nested strict owner-scope sub-filter (a ``must``) in ``flt``."""
     for cond in flt.must or []:
         if isinstance(cond, Filter):
             return cond
     return None
 
 
-def test_owner_scope_filter_is_mine_or_unset():
+def test_owner_scope_filter_is_strict_mine_only():
+    # Strict isolation: a single "owner == mine" must condition, no shared/legacy
+    # branch (no ``should``, no IsEmpty). An owner-less point can never match.
     flt = retrieval.owner_scope_filter("uA")
-    assert flt.must is None
-    assert len(flt.should) == 2
-    field, empty = flt.should
+    assert flt.should is None
+    assert len(flt.must) == 1
+    field = flt.must[0]
     assert isinstance(field, FieldCondition)
     assert field.key == "owner" and field.match.value == "uA"
-    assert isinstance(empty, IsEmptyCondition)
-    assert empty.is_empty.key == "owner"
 
 
 def test_build_filter_appends_owner_scope_to_must():
     flt = retrieval._build_filter("Wavelet Transform", None, "uA")
     assert isinstance(flt, Filter)
-    # course FieldCondition + the owner-scope sub-filter.
+    # course FieldCondition + the strict owner-scope sub-filter.
     courses = [c for c in flt.must if isinstance(c, FieldCondition) and c.key == "course"]
     assert courses and courses[0].match.value == "Wavelet Transform"
     sub = _owner_sub_filter(flt)
-    assert sub is not None and len(sub.should) == 2
+    assert sub is not None and len(sub.must) == 1 and sub.must[0].match.value == "uA"
 
 
 def test_build_filter_owner_only():
@@ -397,6 +394,8 @@ def test_build_filter_owner_only():
 
 
 def test_build_filter_none_without_owner():
+    # Offline/CLI/eval path: no owner -> no filter (global). The API never reaches
+    # here with owner=None because student_id is required on AskRequest.
     assert retrieval._build_filter(None, None, None) is None
 
 
@@ -409,8 +408,6 @@ def test_retrieve_threads_owner_into_query_filter():
 
 def _cond_ok(payload: dict, cond) -> bool:
     """Evaluate one leaf condition against a payload (owner-scope semantics only)."""
-    if isinstance(cond, IsEmptyCondition):
-        return payload.get(cond.is_empty.key) is None
     if isinstance(cond, FieldCondition) and cond.match is not None:
         return payload.get(cond.key) == cond.match.value
     return True
@@ -421,8 +418,8 @@ def _point_passes(payload: dict, flt: Filter | None) -> bool:
     if flt is None:
         return True
     for cond in flt.must or []:
-        if isinstance(cond, Filter):  # nested owner-scope: should == OR
-            if not any(_cond_ok(payload, c) for c in cond.should or []):
+        if isinstance(cond, Filter):  # nested strict owner-scope: all must match
+            if not all(_cond_ok(payload, c) for c in cond.must or []):
                 return False
         elif not _cond_ok(payload, cond):
             return False
@@ -430,10 +427,11 @@ def _point_passes(payload: dict, flt: Filter | None) -> bool:
 
 
 class _OwnerAwareClient:
-    """A fake that honours the owner-scope filter against canned points.
+    """A fake that honours the strict owner-scope filter against canned points.
 
-    Lets a test assert the end-to-end semantics: mine is returned for me, another
-    owner's is not, and an owner-less (legacy/shared) point is returned for all.
+    Lets a test assert the end-to-end semantics: only *my* points are returned for
+    me, another owner's are never returned, and an owner-less (legacy) point is
+    invisible to every scoped account (strict isolation).
     """
 
     corpus = [
@@ -460,19 +458,22 @@ class _OwnerAwareClient:
         return SimpleNamespace(config=SimpleNamespace(params=SimpleNamespace(sparse_vectors={})))
 
 
-def test_owner_scoping_semantics(monkeypatch):
+def test_owner_scoping_semantics_is_strict(monkeypatch):
     _set_settings(monkeypatch)
     monkeypatch.setattr(retrieval, "QdrantClient", _OwnerAwareClient)
 
+    # Strict: only my own points -- never uB's, never the owner-less legacy chunk.
     mine = {r.chunk.id for r in retrieval.retrieve("q", owner="uA")}
-    assert mine == {"mine", "legacy"}  # my own + shared/legacy, never uB's
+    assert mine == {"mine"}
 
     other = {r.chunk.id for r in retrieval.retrieve("q", owner="uB")}
-    assert other == {"other", "legacy"}
+    assert other == {"other"}
 
-    # Legacy (owner-less) material stays visible to every account.
-    assert "legacy" in mine and "legacy" in other
+    # The owner-less legacy chunk is invisible to every scoped account.
+    assert "legacy" not in mine and "legacy" not in other
+    # No cross-tenant bleed either way.
+    assert "other" not in mine and "mine" not in other
 
-    # No owner scoping -> the whole corpus (unchanged global behaviour).
+    # No owner scoping (offline/CLI/eval only) -> the whole corpus, unchanged.
     everyone = {r.chunk.id for r in retrieval.retrieve("q")}
     assert everyone == {"mine", "other", "legacy"}

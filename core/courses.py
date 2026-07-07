@@ -30,11 +30,19 @@ def list_courses(owner: str | None = None) -> list[str]:
     enumerates the distinct ``course`` payload values in the configured
     collection. Prefers the facet aggregation API and falls back to a paged
     scroll when it is unavailable. When ``owner`` is given, the aggregation is
-    scoped to the caller's own or owner-less (shared/legacy) material, so an
-    account only discovers its own courses plus the shared corpus. Returns ``[]``
-    for an empty or missing collection, and never raises on a connection or
-    collection error.
+    strictly scoped to the caller's *own* material, so an account only discovers
+    its own courses (no shared/legacy visibility). When ``owner`` is ``None`` the
+    read is **fail-closed**: it returns ``[]`` without querying, since a course
+    listing is a per-account read and running it unscoped would enumerate every
+    account's courses. Returns ``[]`` for an empty or missing collection, and
+    never raises on a connection or collection error.
     """
+    # Fail closed: with no owner there is no caller to scope to, so return nothing
+    # rather than enumerating every account's courses. The API always supplies the
+    # caller's effective id; only a request with no identity reaches here as None.
+    if owner is None:
+        return []
+
     # Imported lazily so importing this module stays cheap and the heavy client
     # is only loaded when courses are actually requested, matching the codebase
     # style for optional/heavy dependencies.
@@ -45,7 +53,7 @@ def list_courses(owner: str | None = None) -> list[str]:
     settings = get_settings()
     client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
     collection = settings.qdrant_collection
-    owner_filter = owner_scope_filter(owner) if owner is not None else None
+    owner_filter = owner_scope_filter(owner)
 
     courses = _facet_courses(client, collection, owner_filter)
     if courses is None:
@@ -59,8 +67,7 @@ def _facet_courses(client, collection: str, owner_filter=None) -> set[str] | Non
     Returns the distinct values as a set, an empty set for an empty or missing
     collection, or ``None`` when the facet API cannot be used (e.g. the client
     lacks it), signalling the caller to fall back to scrolling. ``owner_filter``,
-    when given, scopes the aggregation to the caller's own or shared/legacy
-    material.
+    when given, strictly scopes the aggregation to the caller's own material.
     """
     facet = getattr(client, "facet", None)
     if facet is None:
@@ -84,8 +91,8 @@ def _scroll_courses(client, collection: str, owner_filter=None) -> set[str]:
 
     Bounded by ``_SCROLL_MAX_POINTS`` so the scan can never run unbounded.
     Returns an empty set for an empty or missing collection (any error is
-    treated as "nothing indexed"). ``owner_filter``, when given, scopes the scan
-    to the caller's own or shared/legacy material.
+    treated as "nothing indexed"). ``owner_filter``, when given, strictly scopes
+    the scan to the caller's own material.
     """
     courses: set[str] = set()
     offset = None

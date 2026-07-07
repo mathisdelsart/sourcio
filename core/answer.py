@@ -143,8 +143,8 @@ def _retrieve(
     strategy from embedding a single HyDE probe; rather than nesting the two we
     keep it simple and let multi-query take over. Otherwise, when only ``hyde``
     is set, :func:`retrieve` runs with ``hyde=True``. In every case the
-    threshold/refusal and reranker behave identically. ``owner`` scopes retrieval
-    to the caller's own or shared/legacy material.
+    threshold/refusal and reranker behave identically. ``owner`` strictly scopes
+    retrieval to the caller's own material (no shared/legacy visibility).
     """
     settings = get_settings()
     if settings.multi_query:
@@ -187,7 +187,7 @@ def answer(
 
     ``course`` and ``chapter`` optionally restrict retrieval to a single course
     (and chapter); when both are None the whole collection is searched. ``owner``
-    scopes retrieval to the caller's own or shared/legacy material.
+    strictly scopes retrieval to the caller's own material (no shared/legacy).
     ``language`` (a locale code) sets the default answer language; when None the
     model answers in the question's own language.
     """

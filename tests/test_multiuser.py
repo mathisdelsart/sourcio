@@ -194,3 +194,73 @@ def test_anonymous_flow_still_works_when_disabled(client):
     assert history.status_code == 200
     assert [turn["role"] for turn in history.json()] == ["user", "assistant"]
     assert _student("anon").user_id is None
+
+
+# --- Cross-account document isolation (the reported leak) --------------------
+
+
+def _owner_scoped_documents(corpus):
+    """Build a list_documents stub that returns only the given owner's material.
+
+    ``corpus`` maps ``owner -> [course names]``. Mirrors the real strict scoping:
+    a listing only ever contains the caller's own courses, never another
+    account's — even when a course name is shared between accounts.
+    """
+
+    def _stub(owner=None):
+        if owner is None:  # fail closed: no identity -> nothing
+            return []
+        return [
+            {"course": name, "total_pages": 1, "chapters": [], "files": []}
+            for name in corpus.get(owner, [])
+        ]
+
+    return _stub
+
+
+def test_documents_do_not_leak_across_accounts_when_enforced(client, monkeypatch):
+    # Reproduces the reported bug: account A must never see account B's documents,
+    # and a course name shared by both must not leak B's material into A's listing.
+    corpus = {
+        "a-device": ["Wavelets", "Shared"],
+        "b-device": ["Biology", "Shared"],
+    }
+    monkeypatch.setattr(api_main, "list_documents", _owner_scoped_documents(corpus))
+    monkeypatch.setattr(api_main, "list_courses", lambda owner=None: sorted(corpus.get(owner, [])))
+
+    token_a = _token(client, "doca@example.com")
+    token_b = _token(client, "docb@example.com")
+    _set_require_auth(monkeypatch, True)
+
+    # Each account claims its own device student, then lists documents.
+    a_docs = client.get("/documents", params={"student_id": "a-device"}, headers=_auth(token_a))
+    b_docs = client.get("/documents", params={"student_id": "b-device"}, headers=_auth(token_b))
+    assert a_docs.status_code == 200 and b_docs.status_code == 200
+    a_courses = {c["course"] for c in a_docs.json()}
+    b_courses = {c["course"] for c in b_docs.json()}
+
+    # A sees only its own courses (incl. its own "Shared"), never B's "Biology".
+    assert a_courses == {"Wavelets", "Shared"}
+    assert "Biology" not in a_courses
+    assert b_courses == {"Biology", "Shared"}
+    assert "Wavelets" not in b_courses
+
+    # Same guarantee on the course picker (GET /courses).
+    a_list = client.get("/courses", params={"student_id": "a-device"}, headers=_auth(token_a))
+    assert set(a_list.json()["courses"]) == {"Shared", "Wavelets"}
+
+
+def test_documents_reject_foreign_student_id_when_enforced(client, monkeypatch):
+    # A logged-in caller cannot list another account's documents by passing that
+    # account's student_id: ownership is enforced with a 403 before any read.
+    monkeypatch.setattr(api_main, "list_documents", _owner_scoped_documents({"b-device": ["B"]}))
+
+    token_a = _token(client, "fa@example.com")
+    token_b = _token(client, "fb@example.com")
+    # B claims its device student first.
+    _set_require_auth(monkeypatch, True)
+    client.post("/ask", json={"student_id": "b-device", "question": "q"}, headers=_auth(token_b))
+
+    # A tries to read B's material by passing B's student_id -> 403, never B's docs.
+    stolen = client.get("/documents", params={"student_id": "b-device"}, headers=_auth(token_a))
+    assert stolen.status_code == 403

@@ -146,17 +146,26 @@ def list_documents(owner: str | None = None) -> list[dict[str, Any]]:
     ``page`` numbers per ``course`` and ``chapter``. The shape is
     ``[{course, total_pages, chapters: [{chapter, pages}]}]`` where ``chapter``
     is ``None`` for material indexed without one (a UI groups it as
-    "Uncategorized"). When ``owner`` is given the scroll is scoped to the caller's
-    own or owner-less (shared/legacy) material, so an account only sees its own
-    documents plus the shared corpus. Returns ``[]`` for an empty or missing
-    collection and never raises on a connection or collection error.
+    "Uncategorized"). When ``owner`` is given the scroll is strictly scoped to the
+    caller's *own* material, so an account only sees its own documents (no
+    shared/legacy visibility). When ``owner`` is ``None`` the read is
+    **fail-closed**: it returns ``[]`` without querying, since a document
+    inventory is a per-account read and running it unscoped would list every
+    account's material. Returns ``[]`` for an empty or missing collection and
+    never raises on a connection or collection error.
     """
+    # Fail closed: with no owner there is no caller to scope to, so return nothing
+    # rather than listing every account's documents. The API always supplies the
+    # caller's effective id; only a request with no identity reaches here as None.
+    if owner is None:
+        return []
+
     from core.retrieval import owner_scope_filter
 
     settings = get_settings()
     client = _client()
     collection = settings.qdrant_collection
-    scroll_filter = owner_scope_filter(owner) if owner is not None else None
+    scroll_filter = owner_scope_filter(owner)
 
     # course -> chapter (str | None) -> set of distinct page numbers.
     index: dict[str, dict[Any, set[int]]] = {}
@@ -280,8 +289,10 @@ def _stamp_pages(
     (see :func:`_document_id`); a non-empty ``chapter`` overrides the
     source-derived one so the material is filed under the user's chosen chapter.
     ``owner`` (the uploader's effective ``student_id``) is stamped on every page so
-    the indexed chunks are scoped to that account; ``None`` leaves the material
-    owner-less (shared/legacy), preserving the CLI ingestion behaviour.
+    the indexed chunks are scoped to that account. ``None`` leaves the material
+    owner-less, which the CLI ingestion path may do; note that under strict
+    isolation owner-less chunks are invisible to every account's reads (the API
+    upload therefore requires a ``student_id`` and never leaves it null).
     """
     for page in pages:
         page.document = document
@@ -479,14 +490,21 @@ def delete_documents(course: str, chapter: str | None = None, owner: str | None 
 
     Builds a payload filter on ``course`` (plus ``chapter`` when given), counts
     the matching points, then deletes them with that filter. When ``owner`` is
-    given the deletion is scoped to what that account can *see* — its own points
-    OR owner-less (shared/legacy) points — via :func:`owner_scope_filter`, the
-    same "mine OR unset" rule used for reads. A user can therefore delete the
-    legacy/CLI-ingested corpus they see and their own uploads, but never another
-    account's *owned* material. Returns the number of points removed; a missing
-    collection or any error yields ``0`` rather than raising, so the endpoint
-    degrades gracefully.
+    given the deletion is strictly scoped to that account's *own* points via
+    :func:`owner_scope_filter` — never another account's material and never the
+    owner-less legacy corpus (which is invisible to reads too). When ``owner`` is
+    ``None`` the delete is **fail-closed**: it returns ``0`` without deleting,
+    since a delete is a per-account operation and running it unscoped would remove
+    every account's points for that course. Returns the number of points removed;
+    a missing collection or any error yields ``0`` rather than raising, so the
+    endpoint degrades gracefully.
     """
+    # Fail closed: with no owner there is no caller to scope to, so delete nothing
+    # rather than wiping every account's points for the course. The API always
+    # supplies the caller's effective id; only a request with no identity is None.
+    if owner is None:
+        return 0
+
     from qdrant_client.models import FieldCondition, Filter, FilterSelector, MatchValue
 
     from core.retrieval import owner_scope_filter
@@ -498,11 +516,9 @@ def delete_documents(course: str, chapter: str | None = None, owner: str | None 
     conditions: list[Any] = [FieldCondition(key="course", match=MatchValue(value=course))]
     if chapter is not None:
         conditions.append(FieldCondition(key="chapter", match=MatchValue(value=chapter)))
-    if owner is not None:
-        # Delete what the caller can see: "mine OR unset (shared/legacy)", the same
-        # scope used for reads. Another account's OWNED points never match, so they
-        # can never be deleted from here.
-        conditions.append(owner_scope_filter(owner))
+    # Strictly scope to the caller's own points: another account's OWNED points and
+    # the owner-less legacy corpus never match, so neither can be deleted here.
+    conditions.append(owner_scope_filter(owner))
     payload_filter = Filter(must=conditions)
 
     try:

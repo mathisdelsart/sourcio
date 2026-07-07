@@ -23,15 +23,22 @@ def get_source(chunk_id: str, owner: str | None = None) -> dict | None:
     payload, or ``None`` when the id is unknown, the collection is missing, or
     any retrieval error occurs. Never raises.
 
-    When ``owner`` is given the point is owner-scoped with the same "mine OR
-    shared" rule used by retrieval (``core.retrieval.owner_scope_filter``): the
-    chunk is returned only if its payload ``owner`` equals ``owner`` or is unset
-    (the legacy/CLI-ingested shared corpus). A chunk that exists but belongs to a
-    *different* account is treated as absent (returns ``None``, so the route
-    404s), so a caller cannot read another account's material by guessing its
-    deterministic chunk id. When ``owner`` is ``None`` (anonymous / no auth) the
-    lookup is unscoped, preserving the local single-user behaviour.
+    When ``owner`` is given the point is strictly owner-scoped (the same rule as
+    ``core.retrieval.owner_scope_filter``): the chunk is returned only if its
+    payload ``owner`` equals ``owner``. A chunk that exists but belongs to a
+    *different* account — or is owner-less (legacy/CLI corpus) — is treated as
+    absent (returns ``None``, so the route 404s), so a caller cannot read another
+    account's material by guessing its deterministic chunk id. When ``owner`` is
+    ``None`` the lookup is **fail-closed**: it returns ``None`` without querying,
+    since a source lookup is a per-account read and running it unscoped could
+    reveal any account's chunk. The API always supplies the caller's effective id;
+    only a request with no identity reaches here as None.
     """
+    # Fail closed: with no owner there is no caller to scope to, so report the
+    # source as absent rather than revealing a chunk that may belong to anyone.
+    if owner is None:
+        return None
+
     # Imported lazily so importing this module stays cheap and the heavy client
     # is only loaded when a source is actually requested, matching the codebase
     # style for optional/heavy dependencies.
@@ -58,13 +65,12 @@ def get_source(chunk_id: str, owner: str | None = None) -> dict | None:
 
     point = points[0]
     payload = point.payload or {}
-    # Owner-scope check (mirrors ``owner_scope_filter``): the chunk is visible to
-    # its owner or when it carries no owner (shared/legacy corpus). A point owned
-    # by a different account is reported as absent so its existence never leaks.
-    if owner is not None:
-        point_owner = payload.get("owner")
-        if point_owner is not None and point_owner != owner:
-            return None
+    # Strict owner-scope check (mirrors ``owner_scope_filter``): the chunk is
+    # visible only to its own owner. A point owned by a different account, or one
+    # with no owner (legacy/CLI corpus), is reported as absent so its existence
+    # never leaks.
+    if payload.get("owner") != owner:
+        return None
     return {
         "id": str(point.id),
         "course": payload.get("course"),

@@ -136,8 +136,10 @@ def _use_client(monkeypatch, client_cls):
 
 
 def test_list_documents_groups_by_course_and_chapter(monkeypatch):
+    # A real caller always scopes by owner; the fake ignores the filter and returns
+    # its presets, so this still exercises the grouping mechanics.
     _use_client(monkeypatch, _ScrollClient)
-    inventory = documents_mod.list_documents()
+    inventory = documents_mod.list_documents(owner="tester")
 
     # Courses are sorted by name.
     assert [c["course"] for c in inventory] == ["Algebra", "Wavelets"]
@@ -158,12 +160,27 @@ def test_list_documents_groups_by_course_and_chapter(monkeypatch):
 
 def test_list_documents_empty_collection(monkeypatch):
     _use_client(monkeypatch, _EmptyScrollClient)
-    assert documents_mod.list_documents() == []
+    assert documents_mod.list_documents(owner="tester") == []
 
 
 def test_list_documents_missing_collection_degrades(monkeypatch):
     _use_client(monkeypatch, _RaisingScrollClient)
+    assert documents_mod.list_documents(owner="tester") == []
+
+
+def test_list_documents_fail_closed_without_owner(monkeypatch):
+    # No owner -> fail closed: return [] WITHOUT scrolling (never list every
+    # account's material). The client's scroll must not even be called.
+    class _BoomScrollClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def scroll(self, *args, **kwargs):  # noqa: ARG002
+            raise AssertionError("no Qdrant call must happen when the owner is None")
+
+    _use_client(monkeypatch, _BoomScrollClient)
     assert documents_mod.list_documents() == []
+    assert documents_mod.list_documents(owner=None) == []
 
 
 # --- ingest_document: routing without touching any model ---------------------
@@ -431,18 +448,36 @@ class _DeleteClient:
 
 def test_delete_documents_course_only(monkeypatch):
     _use_client(monkeypatch, _DeleteClient)
-    deleted = documents_mod.delete_documents("Wavelets")
+    deleted = documents_mod.delete_documents("Wavelets", None, "uA")
     assert deleted == 4
-    # One condition (course) when no chapter is given.
-    assert len(_DeleteClient.last_count_filter.must) == 1
+    # course condition + the strict owner-scope sub-filter (no chapter).
+    assert len(_DeleteClient.last_count_filter.must) == 2
 
 
 def test_delete_documents_course_and_chapter(monkeypatch):
     _use_client(monkeypatch, _DeleteClient)
-    deleted = documents_mod.delete_documents("Wavelets", "Intro")
+    deleted = documents_mod.delete_documents("Wavelets", "Intro", "uA")
     assert deleted == 4
-    # Two conditions (course + chapter) when a chapter is given.
-    assert len(_DeleteClient.last_count_filter.must) == 2
+    # course + chapter + the strict owner-scope sub-filter.
+    assert len(_DeleteClient.last_count_filter.must) == 3
+
+
+def test_delete_documents_fail_closed_without_owner(monkeypatch):
+    # No owner -> fail closed: delete nothing WITHOUT touching Qdrant (never wipe
+    # every account's points for the course).
+    class _BoomDeleteClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def count(self, *args, **kwargs):  # noqa: ARG002
+            raise AssertionError("no Qdrant call must happen when the owner is None")
+
+        def delete(self, *args, **kwargs):  # noqa: ARG002
+            raise AssertionError("no Qdrant call must happen when the owner is None")
+
+    _use_client(monkeypatch, _BoomDeleteClient)
+    assert documents_mod.delete_documents("Wavelets") == 0
+    assert documents_mod.delete_documents("Wavelets", None, None) == 0
 
 
 def test_delete_documents_degrades_on_error(monkeypatch):
@@ -454,7 +489,7 @@ def test_delete_documents_degrades_on_error(monkeypatch):
             raise RuntimeError("missing collection")
 
     _use_client(monkeypatch, _RaisingDeleteClient)
-    assert documents_mod.delete_documents("Wavelets") == 0
+    assert documents_mod.delete_documents("Wavelets", None, "uA") == 0
 
 
 # --- Per-account owner scoping -----------------------------------------------
@@ -504,7 +539,7 @@ def test_indexed_pages_scopes_to_owner(monkeypatch):
     assert len(_CapturingScroll.last_filter.must) == 3
 
 
-def test_list_documents_scopes_scroll_by_owner(monkeypatch):
+def test_list_documents_scopes_scroll_strictly_to_owner(monkeypatch):
     class _CapturingScroll:
         last_filter = "unset"
 
@@ -518,34 +553,64 @@ def test_list_documents_scopes_scroll_by_owner(monkeypatch):
     _use_client(monkeypatch, _CapturingScroll)
     documents_mod.list_documents(owner="uA")
     flt = _CapturingScroll.last_filter
-    # The owner-scope sub-filter is "mine OR unset" (a should of two conditions).
-    assert flt is not None and len(flt.should) == 2
-
-    # Without an owner the scroll stays unscoped (global), unchanged.
-    documents_mod.list_documents()
-    assert _CapturingScroll.last_filter is None
+    # Strict isolation: a single "owner == mine" must condition, no shared branch.
+    assert flt is not None and flt.should is None and len(flt.must) == 1
+    assert flt.must[0].key == "owner" and flt.must[0].match.value == "uA"
 
 
-def test_delete_documents_owner_scopes_mine_or_shared(monkeypatch):
+class _FilterAwareScroll:
+    """A scroll client that honours the strict owner filter against canned points.
+
+    Returns only the points whose ``owner`` matches the scroll filter's owner
+    condition, so a test can assert an account's inventory contains only its own
+    material (never another account's, never the owner-less legacy corpus).
+    """
+
+    points = [
+        {"course": "Algebra", "chapter": None, "page": 1, "owner": "uA"},
+        {"course": "Biology", "chapter": None, "page": 1, "owner": "uB"},
+        {"course": "Legacy", "chapter": None, "page": 1, "owner": None},
+    ]
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def scroll(self, *, scroll_filter, **kwargs):  # noqa: ARG002
+        want = scroll_filter.must[0].match.value if scroll_filter is not None else None
+        matched = [SimpleNamespace(payload=p) for p in self.points if p["owner"] == want]
+        return matched, None
+
+
+def test_list_documents_cross_account_isolation(monkeypatch):
+    _use_client(monkeypatch, _FilterAwareScroll)
+    # uA sees only its own course; never uB's, never the owner-less legacy course.
+    a_courses = [c["course"] for c in documents_mod.list_documents(owner="uA")]
+    b_courses = [c["course"] for c in documents_mod.list_documents(owner="uB")]
+    assert a_courses == ["Algebra"]
+    assert b_courses == ["Biology"]
+    assert "Legacy" not in a_courses and "Legacy" not in b_courses
+
+
+def test_delete_documents_owner_scopes_strictly_to_mine(monkeypatch):
     from qdrant_client.models import Filter
 
     _use_client(monkeypatch, _DeleteClient)
     documents_mod.delete_documents("Wavelets", None, "uA")
     conds = _DeleteClient.last_count_filter.must
-    # course + a "mine OR unset" owner sub-filter (a nested Filter whose `should`
-    # holds two branches: owner == mine, and owner unset/legacy), so the caller can
-    # delete what they can see, not just their own points.
+    # course + a strict owner sub-filter (a nested Filter whose single `must`
+    # condition is owner == mine), so the caller deletes only their own points.
     owner_filters = [c for c in conds if isinstance(c, Filter)]
     assert len(owner_filters) == 1
-    assert owner_filters[0].should is not None and len(owner_filters[0].should) == 2
+    assert owner_filters[0].should is None and len(owner_filters[0].must) == 1
+    assert owner_filters[0].must[0].match.value == "uA"
 
 
 class _FilterEvalClient:
     """A fake Qdrant client that actually evaluates delete/count filters.
 
-    Holds a fixed set of point payloads and honours the ``course`` +
-    "mine OR unset" owner scope built by :func:`delete_documents`, so the delete
-    *scope* (not just the filter shape) can be asserted end to end.
+    Holds a fixed set of point payloads and honours the ``course`` + strict owner
+    scope built by :func:`delete_documents`, so the delete *scope* (not just the
+    filter shape) can be asserted end to end.
     """
 
     points: list[dict] = []
@@ -556,12 +621,10 @@ class _FilterEvalClient:
 
     @staticmethod
     def _cond_matches(cond, payload: dict) -> bool:
-        from qdrant_client.models import FieldCondition, Filter, IsEmptyCondition
+        from qdrant_client.models import FieldCondition, Filter
 
-        if isinstance(cond, Filter):  # nested OR (should)
-            return any(_FilterEvalClient._cond_matches(c, payload) for c in (cond.should or []))
-        if isinstance(cond, IsEmptyCondition):
-            return payload.get(cond.is_empty.key) is None
+        if isinstance(cond, Filter):  # nested strict owner scope: all must match
+            return all(_FilterEvalClient._cond_matches(c, payload) for c in (cond.must or []))
         if isinstance(cond, FieldCondition):
             return payload.get(cond.key) == cond.match.value
         return False
@@ -579,15 +642,16 @@ class _FilterEvalClient:
         type(self).deleted = self._matching(points_selector.filter)
 
 
-def test_delete_documents_removes_owner_less_legacy_course(monkeypatch):
+def test_delete_documents_leaves_owner_less_legacy_course(monkeypatch):
     _FilterEvalClient.points = [
         {"course": "Wavelets", "owner": None},
         {"course": "Wavelets", "owner": None},
     ]
     _use_client(monkeypatch, _FilterEvalClient)
-    # A user (uA) can delete a course whose points have no owner (legacy corpus).
-    assert documents_mod.delete_documents("Wavelets", None, "uA") == 2
-    assert len(_FilterEvalClient.deleted) == 2
+    # Strict isolation: owner-less (legacy) points are invisible, so uA cannot
+    # delete them either -- nothing matches, 0 removed.
+    assert documents_mod.delete_documents("Wavelets", None, "uA") == 0
+    assert _FilterEvalClient.deleted == []
 
 
 def test_delete_documents_removes_callers_own_course(monkeypatch):
@@ -610,6 +674,19 @@ def test_delete_documents_leaves_another_accounts_owned_course(monkeypatch):
     # uA must not be able to delete uB's OWNED points: nothing matches, 0 removed.
     assert documents_mod.delete_documents("Wavelets", None, "uA") == 0
     assert _FilterEvalClient.deleted == []
+
+
+def test_delete_documents_only_removes_mine_when_mixed(monkeypatch):
+    # A course shared (by name) across accounts: deleting as uA removes ONLY uA's
+    # points, never uB's and never the owner-less legacy ones.
+    _FilterEvalClient.points = [
+        {"course": "Shared", "owner": "uA"},
+        {"course": "Shared", "owner": "uB"},
+        {"course": "Shared", "owner": None},
+    ]
+    _use_client(monkeypatch, _FilterEvalClient)
+    assert documents_mod.delete_documents("Shared", None, "uA") == 1
+    assert [p["owner"] for p in _FilterEvalClient.deleted] == ["uA"]
 
 
 # --- /documents routes -------------------------------------------------------
@@ -711,7 +788,7 @@ def test_upload_route_returns_job_and_finishes(client, monkeypatch):
     response = client.post(
         "/documents/upload",
         files={"file": ("notes.md", b"hello world", "text/markdown")},
-        data={"course": "Wavelets", "chapter": "Intro"},
+        data={"course": "Wavelets", "chapter": "Intro", "student_id": "uA"},
     )
     assert response.status_code == 202
     job_id = response.json()["job_id"]
@@ -744,11 +821,43 @@ def test_upload_route_blank_chapter_becomes_null(client, monkeypatch):
     response = client.post(
         "/documents/upload",
         files={"file": ("notes.txt", b"content", "text/plain")},
-        data={"course": "Wavelets", "chapter": "   "},
+        data={"course": "Wavelets", "chapter": "   ", "student_id": "uA"},
     )
     assert response.status_code == 202
     _wait_for_job(client, response.json()["job_id"])
     assert seen["chapter"] is None
+
+
+@requires_api
+def test_upload_route_requires_student_id(client):
+    # student_id is required so an upload is always owner-stamped (never left
+    # owner-less, which strict isolation would make invisible). Missing -> 422.
+    response = client.post(
+        "/documents/upload",
+        files={"file": ("notes.txt", b"content", "text/plain")},
+        data={"course": "Wavelets"},
+    )
+    assert response.status_code == 422
+
+
+@requires_api
+def test_upload_route_stamps_owner_from_student_id(client, monkeypatch):
+    seen: dict = {}
+
+    def fake_stream(path, course, chapter=None, *, owner=None, **kwargs):  # noqa: ARG001
+        seen["owner"] = owner
+        yield {"type": "done", "indexed": 1, "total": 1, "reason": "indexed", "elapsed": 0.0}
+
+    monkeypatch.setattr(api_main, "save_upload", lambda *a, **k: "/tmp/x.txt")
+    monkeypatch.setattr(api_main, "stream_ingest", fake_stream)
+    response = client.post(
+        "/documents/upload",
+        files={"file": ("notes.txt", b"content", "text/plain")},
+        data={"course": "Wavelets", "student_id": "uA"},
+    )
+    assert response.status_code == 202
+    _wait_for_job(client, response.json()["job_id"])
+    assert seen["owner"] == "uA"
 
 
 @requires_api
@@ -762,7 +871,7 @@ def test_upload_route_error_event_marks_job_error(client, monkeypatch):
     response = client.post(
         "/documents/upload",
         files={"file": ("notes.pdf", b"%PDF", "application/pdf")},
-        data={"course": "Wavelets"},
+        data={"course": "Wavelets", "student_id": "uA"},
     )
     assert response.status_code == 202
     job = _wait_for_job(client, response.json()["job_id"])
@@ -786,7 +895,7 @@ def test_jobs_list_includes_started_job(client, monkeypatch):
     response = client.post(
         "/documents/upload",
         files={"file": ("a.txt", b"x", "text/plain")},
-        data={"course": "Wavelets"},
+        data={"course": "Wavelets", "student_id": "uA"},
     )
     job_id = response.json()["job_id"]
     _wait_for_job(client, job_id)

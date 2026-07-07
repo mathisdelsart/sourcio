@@ -80,8 +80,8 @@ def generate(state: TutorState) -> TutorState:
     # is built from the right material rather than whatever matched globally.
     course_filter = state.get("course")
     chapter_filter = state.get("chapter")
-    # Scope to the requesting student's own (or shared/legacy) material so an
-    # exercise is never built from another account's uploads.
+    # Strictly scope to the requesting student's own material so an exercise is
+    # never built from another account's uploads (nor the owner-less legacy corpus).
     results = retrieve(
         message, course=course_filter, chapter=chapter_filter, owner=state.get("student_id")
     )

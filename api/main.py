@@ -372,12 +372,14 @@ def _scoped_read_owner(external_id: str | None, user: UserOut | None) -> str | N
     """Return the owner id to scope a read by, enforcing ownership when authenticated.
 
     ``external_id`` is the request's effective ``student_id`` (``u<id>`` when
-    logged in, the device id when anonymous). When ``None`` (existing callers that
-    do not scope) the read stays global (returns ``None``). Otherwise, when the
-    caller is authenticated, a student that belongs to a *different* account is
-    rejected with 403 (via :func:`_student_for_read`), so one account can never
-    read another's material by passing its id. The owner string is returned
-    unchanged so the core layer scopes retrieval/listing to "mine or shared".
+    logged in, the device id when anonymous). When ``None`` (a request carrying no
+    identity) this returns ``None``, and the core read layer treats a ``None``
+    owner as **fail-closed** (empty result), never as "read everything". Otherwise,
+    when the caller is authenticated, a student that belongs to a *different*
+    account is rejected with 403 (via :func:`_student_for_read`), so one account
+    can never read another's material by passing its id. The owner string is
+    returned unchanged so the core layer scopes retrieval/listing strictly to the
+    caller's own material.
     """
     if external_id is None:
         return None
@@ -1446,8 +1448,8 @@ def courses(student_id: str | None = None, user: UserOut | None = DataUser) -> d
 
     Lets a client discover the available courses dynamically (e.g. to populate a
     picker) instead of hardcoding them. When ``student_id`` is given the list is
-    scoped to that account's own courses plus the owner-less (shared/legacy)
-    corpus; without it the whole collection is listed (unchanged). Returns an
+    strictly scoped to that account's own courses; without it the read is
+    fail-closed (empty) rather than listing every account's courses. Returns an
     empty list when nothing is indexed yet; it never reaches the LLM and runs no
     retrieval.
     """
@@ -1468,10 +1470,10 @@ def documents(
     Lets a client show what is indexed (and how much) so a user can manage it.
     The shape is ``[{course, total_pages, chapters: [{chapter, pages}]}]`` with a
     ``null`` chapter for material indexed without one. When ``student_id`` is
-    given the inventory is scoped to that account's own material plus the
-    owner-less (shared/legacy) corpus; without it everything is listed
-    (unchanged). Returns an empty list when nothing is indexed yet; it never
-    reaches the LLM and runs no retrieval.
+    given the inventory is strictly scoped to that account's own material; without
+    it the read is fail-closed (empty) rather than listing every account's
+    material. Returns an empty list when nothing is indexed yet; it never reaches
+    the LLM and runs no retrieval.
     """
     owner = _scoped_read_owner(student_id, user)
     return list_documents(owner=owner)
@@ -1485,8 +1487,8 @@ def documents(
 async def upload_document(
     file: Annotated[UploadFile, File()],
     course: Annotated[str, Form()],
+    student_id: Annotated[str, Form()],
     chapter: Annotated[str | None, Form()] = None,
-    student_id: Annotated[str | None, Form()] = None,
     user: UserOut | None = DataUser,
 ) -> dict[str, str]:
     """Start ingesting an uploaded file as a background job and return its id.
@@ -1512,15 +1514,13 @@ async def upload_document(
     registry is in-process — see the multi-worker caveat in ``core.jobs``.
     """
     normalized_chapter = chapter.strip() if chapter and chapter.strip() else None
-    # Resolve (and, when authenticated, enforce ownership of) the uploader so the
-    # material is stamped with their owner id and scoped to their account. When no
-    # student_id is sent (e.g. CLI-style callers) the upload stays owner-less
-    # (shared/legacy), preserving the previous behaviour.
-    owner: str | None = None
-    if student_id is not None:
-        with get_session(_engine) as session:
-            _resolve_student(session, student_id, user)
-        owner = student_id
+    # ``student_id`` is required so an upload is always stamped with an owner and
+    # scoped to that account — never left owner-less (which strict isolation would
+    # make invisible to everyone). Resolve (and, when authenticated, enforce
+    # ownership of) the uploader before stamping.
+    with get_session(_engine) as session:
+        _resolve_student(session, student_id, user)
+    owner: str = student_id
     contents = await file.read()
     # Persist the original so the user can re-open the intact file later; ingest
     # from that stored path (its extension drives prose/PDF routing).
@@ -1589,12 +1589,13 @@ def remove_documents(
 
     ``course`` is required; ``chapter`` (a query parameter) restricts the deletion
     to a single chapter when given. When ``student_id`` is given the deletion is
-    scoped to that account's OWN points only (never the owner-less shared corpus
-    or another account's material); the student is resolved and ownership enforced
-    exactly as elsewhere. Without a ``student_id`` the deletion is unscoped
-    (unchanged). Returns how many points were removed. A missing collection or an
-    unknown course yields ``{"deleted": 0}`` rather than an error; it never
-    reaches the LLM and runs no retrieval.
+    strictly scoped to that account's OWN points only (never another account's
+    material and never the owner-less legacy corpus); the student is resolved and
+    ownership enforced exactly as elsewhere. Without a ``student_id`` the delete is
+    fail-closed (removes nothing) rather than wiping every account's points.
+    Returns how many points were removed. A missing collection or an unknown
+    course yields ``{"deleted": 0}`` rather than an error; it never reaches the LLM
+    and runs no retrieval.
     """
     owner: str | None = None
     if student_id is not None:
@@ -1616,12 +1617,12 @@ def source(
 
     Lets a client resolve a citation (the chunk id surfaced with an answer) into
     the underlying course excerpt, so a UI can show what an answer was grounded
-    in. When ``student_id`` is given the lookup is owner-scoped to that account's
-    own material plus the owner-less (shared/legacy) corpus, so one account
-    cannot read another's chunk by guessing its deterministic id; an
-    authenticated caller passing a foreign student id is rejected with 403. A
-    chunk owned by a different account is reported as 404 (its existence never
-    leaks). Without a ``student_id`` the lookup is unscoped (unchanged). Yields
+    in. When ``student_id`` is given the lookup is strictly owner-scoped to that
+    account's own material, so one account cannot read another's chunk by guessing
+    its deterministic id; an authenticated caller passing a foreign student id is
+    rejected with 403. A chunk owned by a different account (or an owner-less
+    legacy chunk) is reported as 404 (its existence never leaks). Without a
+    ``student_id`` the lookup is fail-closed (404) rather than unscoped. Yields
     404 when the id is unknown or the collection is missing; it never reaches the
     LLM and runs no retrieval.
     """

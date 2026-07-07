@@ -78,11 +78,13 @@ def _use_client(monkeypatch, client_cls):
 
 
 def test_list_courses_uses_facet_sorted_distinct(monkeypatch):
+    # A real caller always scopes by owner; the fake ignores the filter and returns
+    # its presets, so this still exercises the facet/sort mechanics.
     _use_client(monkeypatch, _FakeFacetClient)
-    assert courses_mod.list_courses() == ["Algebra", "Wavelet Transform"]
+    assert courses_mod.list_courses(owner="tester") == ["Algebra", "Wavelet Transform"]
 
 
-def test_list_courses_scopes_facet_by_owner(monkeypatch):
+def test_list_courses_scopes_facet_strictly_to_owner(monkeypatch):
     class _CapturingFacetClient:
         last_filter = "unset"
 
@@ -96,23 +98,38 @@ def test_list_courses_scopes_facet_by_owner(monkeypatch):
     _use_client(monkeypatch, _CapturingFacetClient)
     courses_mod.list_courses(owner="uA")
     flt = _CapturingFacetClient.last_filter
-    # Owner scope is "mine OR unset" (a should of two conditions).
-    assert flt is not None and len(flt.should) == 2
+    # Strict isolation: a single "owner == mine" must condition, no shared branch.
+    assert flt is not None and flt.should is None and len(flt.must) == 1
+    assert flt.must[0].key == "owner" and flt.must[0].match.value == "uA"
 
-    # Without an owner the facet stays unscoped (global), unchanged.
-    courses_mod.list_courses()
-    assert _CapturingFacetClient.last_filter is None
+
+def test_list_courses_fail_closed_without_owner(monkeypatch):
+    # No owner -> fail closed: return [] WITHOUT querying (never enumerate every
+    # account's courses). The client's facet must not even be called.
+    class _BoomFacetClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def facet(self, *args, **kwargs):  # noqa: ARG002
+            raise AssertionError("no Qdrant call must happen when the owner is None")
+
+        def scroll(self, *args, **kwargs):  # noqa: ARG002
+            raise AssertionError("no Qdrant call must happen when the owner is None")
+
+    _use_client(monkeypatch, _BoomFacetClient)
+    assert courses_mod.list_courses() == []
+    assert courses_mod.list_courses(owner=None) == []
 
 
 def test_list_courses_scroll_fallback_when_no_facet(monkeypatch):
     _use_client(monkeypatch, _ScrollOnlyClient)
-    assert courses_mod.list_courses() == ["Algebra", "Wavelet Transform"]
+    assert courses_mod.list_courses(owner="tester") == ["Algebra", "Wavelet Transform"]
 
 
 def test_list_courses_empty_when_facet_raises(monkeypatch):
     # facet raises (missing collection) and the scroll fallback returns nothing.
     _use_client(monkeypatch, _RaisingFacetClient)
-    assert courses_mod.list_courses() == []
+    assert courses_mod.list_courses(owner="tester") == []
 
 
 def test_list_courses_empty_facet_response(monkeypatch):
@@ -124,7 +141,37 @@ def test_list_courses_empty_facet_response(monkeypatch):
             return SimpleNamespace(hits=[])
 
     _use_client(monkeypatch, _EmptyFacetClient)
-    assert courses_mod.list_courses() == []
+    assert courses_mod.list_courses(owner="tester") == []
+
+
+class _FilterAwareFacetClient:
+    """A facet client that honours the strict owner filter against canned points.
+
+    Each point has an ``owner`` and a ``course``; ``facet`` returns the distinct
+    courses of the points that match the owner filter, so a test can assert an
+    account discovers only its own courses (never another account's, never legacy).
+    """
+
+    points = [
+        {"owner": "uA", "course": "Algebra"},
+        {"owner": "uB", "course": "Biology"},
+        {"owner": None, "course": "Legacy"},
+    ]
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def facet(self, *, collection_name, key, facet_filter, limit):  # noqa: ARG002
+        want = facet_filter.must[0].match.value if facet_filter is not None else None
+        seen = {p["course"] for p in self.points if p["owner"] == want}
+        return SimpleNamespace(hits=[SimpleNamespace(value=v, count=1) for v in seen])
+
+
+def test_list_courses_cross_account_isolation(monkeypatch):
+    _use_client(monkeypatch, _FilterAwareFacetClient)
+    # uA sees only its own course; never uB's, never the owner-less legacy course.
+    assert courses_mod.list_courses(owner="uA") == ["Algebra"]
+    assert courses_mod.list_courses(owner="uB") == ["Biology"]
 
 
 # --- /courses route ----------------------------------------------------------

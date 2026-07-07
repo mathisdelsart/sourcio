@@ -39,9 +39,7 @@ from qdrant_client.models import (
     Filter,
     Fusion,
     FusionQuery,
-    IsEmptyCondition,
     MatchValue,
-    PayloadField,
     Prefetch,
     Range,
     SparseVector,
@@ -63,21 +61,17 @@ _MAX_NEIGHBORS = 20
 
 
 def owner_scope_filter(owner: str) -> Filter:
-    """Sub-filter matching material owned by ``owner`` OR with no owner set.
+    """Sub-filter matching *only* material owned by ``owner`` (strict isolation).
 
-    "Owner is mine OR owner is unset" — the ``should`` (logical OR) keeps an
-    account's own uploads private while leaving owner-less points (the legacy /
-    shared corpus ingested before per-account scoping, or via the CLI) visible to
-    everyone. Nesting this ``Filter`` inside another filter's ``must`` requires
-    that at least one branch of the ``should`` matches, so it scopes reads to
-    "mine or shared" without hiding the pre-existing corpus.
+    A single ``must`` condition ``owner == owner`` — no shared/legacy branch. An
+    account sees strictly its own material: owner-less points (the legacy / CLI
+    corpus ingested before per-account scoping) are *not* matched and are
+    therefore invisible to every account. Nesting this ``Filter`` inside another
+    filter's ``must`` requires the owner to match, so it scopes reads, deletes and
+    single-source lookups to the caller's own points and nothing else. This closes
+    the cross-tenant leak where an owner-less chunk was visible to everyone.
     """
-    return Filter(
-        should=[
-            FieldCondition(key="owner", match=MatchValue(value=owner)),
-            IsEmptyCondition(is_empty=PayloadField(key="owner")),
-        ]
-    )
+    return Filter(must=[FieldCondition(key="owner", match=MatchValue(value=owner))])
 
 
 def _build_filter(
@@ -86,10 +80,12 @@ def _build_filter(
     """Build a Qdrant payload filter, or None when no scope is requested.
 
     Only matching chunks are returned, so the answer stays inside the chosen
-    course/chapter. When ``owner`` is given, the results are further scoped to the
-    caller's own material or owner-less (shared/legacy) material via
-    :func:`owner_scope_filter`. With course, chapter and owner all None the query
-    is unfiltered (full collection).
+    course/chapter. When ``owner`` is given, the results are strictly scoped to the
+    caller's *own* material via :func:`owner_scope_filter` (no shared/legacy
+    branch). ``owner`` is None only on the offline/CLI/eval path (the API always
+    supplies the caller's id, which is required on ``AskRequest``); in that case
+    the query is not owner-scoped. With course, chapter and owner all None the
+    query is unfiltered (full collection), which is the offline behaviour.
     """
     conditions: list[Condition] = []
     if course is not None:
@@ -337,9 +333,9 @@ def _neighbor_filter(result: Retrieved, window: int, owner: str | None = None) -
     Same course and (when present) chapter as the result, with ``page`` in
     ``[page - window, page + window]`` and the result's own page excluded. This
     keeps neighbors inside the same course/chapter so expansion never pulls in
-    unrelated material. When ``owner`` is given the neighbors are further scoped
-    to the caller's own or owner-less (shared/legacy) material, so expansion never
-    leaks another account's adjacent slides.
+    unrelated material. When ``owner`` is given the neighbors are strictly scoped
+    to the caller's *own* material (via :func:`owner_scope_filter`, no shared/legacy
+    branch), so expansion never leaks another account's adjacent slides.
     """
     page = result.chunk.page
     must: list[Condition] = [
@@ -369,7 +365,7 @@ def _fetch_neighbors(
 
     Uses a payload-only ``scroll`` with the neighbor filter; ``limit`` caps how
     many records are pulled. Returns context-only :class:`Retrieved` (score 0).
-    ``owner`` scopes the neighbors to the caller's own or shared/legacy material.
+    ``owner`` strictly scopes the neighbors to the caller's own material.
     """
     records, _ = client.scroll(
         collection_name=collection,
@@ -500,8 +496,10 @@ def retrieve(
 
     In all paths, when ``course`` and/or ``chapter`` are given retrieval is
     restricted to chunks whose payload matches them; when both are None the
-    whole collection is searched. When ``owner`` is given, retrieval is further
-    scoped to the caller's own material or owner-less (shared/legacy) material.
+    whole collection is searched. When ``owner`` is given, retrieval is strictly
+    scoped to the caller's *own* material (no shared/legacy visibility). ``owner``
+    is None only on the offline/CLI/eval path; the API always passes the caller's
+    id (required on ``AskRequest``), so a user read is always owner-scoped.
     ``scorer`` is injectable for testing; when None the configured cross-encoder
     model is used.
     """

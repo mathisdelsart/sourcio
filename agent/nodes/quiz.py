@@ -170,8 +170,8 @@ def generate_quiz(
     from core.retrieval import retrieve
 
     n = max(1, int(n))
-    # Scope to the requesting student's own (or shared/legacy) material so a quiz
-    # is never built from another account's uploads.
+    # Strictly scope to the requesting student's own material so a quiz is never
+    # built from another account's uploads (nor the owner-less legacy corpus).
     results = retrieve(notion, course=course, chapter=chapter, owner=student_id)
     if not results:
         return {"quiz_id": None, "notion": notion, "questions": [], "refused": True}

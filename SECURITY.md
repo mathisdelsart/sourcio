@@ -42,19 +42,27 @@ caps, and physical/host compromise.
 
 Isolation is enforced in two layers that must agree.
 
-- **Vector store (Qdrant), owner-scoped.** Each indexed chunk carries an `owner`
-  in its payload. Reads apply a *"mine OR unset"* filter (`owner_scope_filter` in
-  `core/retrieval.py`): a caller sees chunks whose `owner` matches their own id
-  **or** which have no owner (the legacy/CLI-ingested shared corpus). Chunk ids
-  are deterministic (`ingestion/chunk.py`), so single-source lookups are scoped
-  by the same rule: `GET /source/{chunk_id}` resolves the caller's effective
-  owner and passes it to `get_source`, which returns a chunk only when it is the
-  caller's own or unowned. A chunk owned by a *different* account is reported as
-  **404** — its existence is never leaked, so a caller cannot read another
-  account's material by guessing a chunk id. Deletes (`DELETE /documents`) use
-  the same *"mine OR unset"* scope (`delete_documents` in `core/documents.py`): a
-  caller can remove their own uploads and the unowned/legacy corpus they can see,
-  but never another account's *owned* material.
+- **Vector store (Qdrant), strict owner isolation.** Each indexed chunk carries
+  an `owner` in its payload. Reads apply a strict *"owner == mine"* filter
+  (`owner_scope_filter` in `core/retrieval.py`): a caller sees **only** chunks
+  whose `owner` matches their own id — there is **no shared/legacy branch**, so
+  owner-less chunks (e.g. ingested via the CLI before per-account scoping) are
+  invisible to every account. This closes the cross-tenant leak where an
+  owner-less chunk was visible to everyone. Chunk ids are deterministic
+  (`ingestion/chunk.py`), so single-source lookups are scoped by the same rule:
+  `GET /source/{chunk_id}` resolves the caller's effective owner and passes it to
+  `get_source`, which returns a chunk only when its `owner` equals the caller's.
+  A chunk owned by a *different* account — or an owner-less legacy chunk — is
+  reported as **404**; its existence is never leaked, so a caller cannot read
+  another account's material by guessing a chunk id. Deletes (`DELETE /documents`)
+  use the same strict scope (`delete_documents` in `core/documents.py`): a caller
+  can remove only their own uploads, never another account's material and never
+  the owner-less corpus. **Fail-closed on missing identity.** Listing, retrieval,
+  single-source and delete paths never run unscoped when an owner is expected: if
+  the effective owner resolves to `None` (a request carrying no identity), the
+  read returns *empty* and the delete removes *nothing*, rather than falling back
+  to "everything". Uploads require a `student_id` so every indexed chunk is
+  owner-stamped and never left globally invisible.
 - **Relational store (SQLAlchemy), ownership-scoped.** Students, history,
   sessions, exercises, quizzes, feedback and reviews hang off `Student`, and
   `Student.user_id` links a student to a user account. Every write resolves the
@@ -145,10 +153,11 @@ Before exposing the API to the network, set **all** of the following:
   `localStorage`, so frontend XSS can exfiltrate a token until it expires. There
   is no server-side token revocation list; shortening `JWT_EXPIRE_MINUTES` limits
   the exposure window.
-- **Shared/legacy corpus is world-readable.** Chunks with no `owner` (ingested
-  via the CLI or before per-account scoping) are intentionally visible to every
-  account under the "mine OR unset" rule. Ingest per-account material with an
-  owner if it must stay private.
+- **Owner-less corpus is invisible, not shared.** Under strict isolation, chunks
+  with no `owner` (ingested via the CLI or before per-account scoping) match no
+  account's reads and are therefore invisible in the UI (not listed, not
+  retrievable, not deletable). They are not a cross-tenant risk; ingest material
+  through the API (which owner-stamps it) so it is visible to its account.
 - **No account lifecycle.** There is no email verification, password reset, or
   account lockout/throttling on repeated login attempts beyond the global rate
   limit. Add these before treating the service as production-grade multi-tenant.
