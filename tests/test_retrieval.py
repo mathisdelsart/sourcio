@@ -129,18 +129,19 @@ def test_answer_threads_course_and_chapter_to_retrieve(monkeypatch):
 
     captured = {}
 
-    def fake_retrieve(question, *, k=5, course=None, chapter=None):
-        captured.update(question=question, k=k, course=course, chapter=chapter)
+    def fake_retrieve(question, *, k=5, course=None, chapter=None, owner=None):
+        captured.update(question=question, k=k, course=course, chapter=chapter, owner=owner)
         return []  # empty -> refusal, so no LLM is invoked
 
     monkeypatch.setattr(answer_mod, "retrieve", fake_retrieve)
-    out = answer_mod.answer("q", course="Wavelet Transform", chapter="Intro")
+    out = answer_mod.answer("q", course="Wavelet Transform", chapter="Intro", owner="uA")
     assert out["refused"] is True
     assert captured == {
         "question": "q",
         "k": 5,
         "course": "Wavelet Transform",
         "chapter": "Intro",
+        "owner": "uA",
     }
 
 
@@ -349,3 +350,129 @@ def test_dense_query_uses_default_vector_on_plain_collection(monkeypatch):
     _FakeQdrantClient.has_sparse = False
     retrieval.retrieve("q", k=5)
     assert _FakeQdrantClient.last_kwargs.get("using") is None
+
+
+# --- Per-account owner scoping ---------------------------------------------
+
+from qdrant_client.models import (  # noqa: E402
+    FieldCondition,
+    IsEmptyCondition,
+)
+
+
+def _owner_sub_filter(flt: Filter) -> Filter | None:
+    """Return the nested owner-scope sub-filter (the ``should`` branch) in ``flt``."""
+    for cond in flt.must or []:
+        if isinstance(cond, Filter):
+            return cond
+    return None
+
+
+def test_owner_scope_filter_is_mine_or_unset():
+    flt = retrieval.owner_scope_filter("uA")
+    assert flt.must is None
+    assert len(flt.should) == 2
+    field, empty = flt.should
+    assert isinstance(field, FieldCondition)
+    assert field.key == "owner" and field.match.value == "uA"
+    assert isinstance(empty, IsEmptyCondition)
+    assert empty.is_empty.key == "owner"
+
+
+def test_build_filter_appends_owner_scope_to_must():
+    flt = retrieval._build_filter("Wavelet Transform", None, "uA")
+    assert isinstance(flt, Filter)
+    # course FieldCondition + the owner-scope sub-filter.
+    courses = [c for c in flt.must if isinstance(c, FieldCondition) and c.key == "course"]
+    assert courses and courses[0].match.value == "Wavelet Transform"
+    sub = _owner_sub_filter(flt)
+    assert sub is not None and len(sub.should) == 2
+
+
+def test_build_filter_owner_only():
+    flt = retrieval._build_filter(None, None, "uA")
+    assert isinstance(flt, Filter)
+    assert len(flt.must) == 1
+    assert _owner_sub_filter(flt) is not None
+
+
+def test_build_filter_none_without_owner():
+    assert retrieval._build_filter(None, None, None) is None
+
+
+def test_retrieve_threads_owner_into_query_filter():
+    retrieval.retrieve("q", owner="uA")
+    flt = _FakeQdrantClient.last_kwargs["query_filter"]
+    assert isinstance(flt, Filter)
+    assert _owner_sub_filter(flt) is not None
+
+
+def _cond_ok(payload: dict, cond) -> bool:
+    """Evaluate one leaf condition against a payload (owner-scope semantics only)."""
+    if isinstance(cond, IsEmptyCondition):
+        return payload.get(cond.is_empty.key) is None
+    if isinstance(cond, FieldCondition) and cond.match is not None:
+        return payload.get(cond.key) == cond.match.value
+    return True
+
+
+def _point_passes(payload: dict, flt: Filter | None) -> bool:
+    """Apply a (possibly owner-scoped) filter to a payload the way Qdrant would."""
+    if flt is None:
+        return True
+    for cond in flt.must or []:
+        if isinstance(cond, Filter):  # nested owner-scope: should == OR
+            if not any(_cond_ok(payload, c) for c in cond.should or []):
+                return False
+        elif not _cond_ok(payload, cond):
+            return False
+    return True
+
+
+class _OwnerAwareClient:
+    """A fake that honours the owner-scope filter against canned points.
+
+    Lets a test assert the end-to-end semantics: mine is returned for me, another
+    owner's is not, and an owner-less (legacy/shared) point is returned for all.
+    """
+
+    corpus = [
+        SimpleNamespace(
+            id="mine", score=0.9, payload={"course": "C", "page": 1, "text": "a", "owner": "uA"}
+        ),
+        SimpleNamespace(
+            id="other", score=0.9, payload={"course": "C", "page": 2, "text": "b", "owner": "uB"}
+        ),
+        SimpleNamespace(
+            id="legacy", score=0.9, payload={"course": "C", "page": 3, "text": "c", "owner": None}
+        ),
+    ]
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def query_points(self, **kwargs):
+        flt = kwargs.get("query_filter")
+        points = [p for p in self.corpus if _point_passes(p.payload, flt)]
+        return SimpleNamespace(points=points)
+
+    def get_collection(self, name):
+        return SimpleNamespace(config=SimpleNamespace(params=SimpleNamespace(sparse_vectors={})))
+
+
+def test_owner_scoping_semantics(monkeypatch):
+    _set_settings(monkeypatch)
+    monkeypatch.setattr(retrieval, "QdrantClient", _OwnerAwareClient)
+
+    mine = {r.chunk.id for r in retrieval.retrieve("q", owner="uA")}
+    assert mine == {"mine", "legacy"}  # my own + shared/legacy, never uB's
+
+    other = {r.chunk.id for r in retrieval.retrieve("q", owner="uB")}
+    assert other == {"other", "legacy"}
+
+    # Legacy (owner-less) material stays visible to every account.
+    assert "legacy" in mine and "legacy" in other
+
+    # No owner scoping -> the whole corpus (unchanged global behaviour).
+    everyone = {r.chunk.id for r in retrieval.retrieve("q")}
+    assert everyone == {"mine", "other", "legacy"}

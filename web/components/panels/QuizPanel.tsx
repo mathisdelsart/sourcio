@@ -205,6 +205,7 @@ export function QuizPanel({
               value={course}
               onChange={selectCourse}
               config={config}
+              studentId={studentId}
               refreshKey={coursesRefreshKey}
             />
             <TextField

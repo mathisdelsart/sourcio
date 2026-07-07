@@ -145,6 +145,7 @@ export function ExercisePanel({
               value={course}
               onChange={selectCourse}
               config={config}
+              studentId={studentId}
               refreshKey={coursesRefreshKey}
             />
             <TextField

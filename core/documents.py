@@ -139,19 +139,24 @@ def _format_inventory(index: dict[str, dict[Any, set[int]]]) -> list[dict[str, A
     return result
 
 
-def list_documents() -> list[dict[str, Any]]:
+def list_documents(owner: str | None = None) -> list[dict[str, Any]]:
     """Return the indexed material organized by course and chapter.
 
     Scrolls the configured collection (payload only) and groups the distinct
     ``page`` numbers per ``course`` and ``chapter``. The shape is
     ``[{course, total_pages, chapters: [{chapter, pages}]}]`` where ``chapter``
     is ``None`` for material indexed without one (a UI groups it as
-    "Uncategorized"). Returns ``[]`` for an empty or missing collection and never
-    raises on a connection or collection error.
+    "Uncategorized"). When ``owner`` is given the scroll is scoped to the caller's
+    own or owner-less (shared/legacy) material, so an account only sees its own
+    documents plus the shared corpus. Returns ``[]`` for an empty or missing
+    collection and never raises on a connection or collection error.
     """
+    from core.retrieval import owner_scope_filter
+
     settings = get_settings()
     client = _client()
     collection = settings.qdrant_collection
+    scroll_filter = owner_scope_filter(owner) if owner is not None else None
 
     # course -> chapter (str | None) -> set of distinct page numbers.
     index: dict[str, dict[Any, set[int]]] = {}
@@ -161,6 +166,7 @@ def list_documents() -> list[dict[str, Any]]:
         while scanned < _SCROLL_MAX_POINTS:
             points, offset = client.scroll(
                 collection_name=collection,
+                scroll_filter=scroll_filter,
                 limit=_SCROLL_PAGE,
                 with_payload=True,
                 with_vectors=False,
@@ -190,15 +196,17 @@ def list_documents() -> list[dict[str, Any]]:
     return result
 
 
-def _indexed_pages(course: str, document: str | None = None) -> set[int]:
+def _indexed_pages(course: str, document: str | None = None, owner: str | None = None) -> set[int]:
     """Page numbers already indexed for a specific document, so a retry can skip.
 
     This is what makes a retry free: a page already in Qdrant is never sent to
     the (paid) vision model again. The filter is scoped to ``course`` **and**
     ``document`` so a fresh document (whose page numbers 1..N would otherwise
     collide with pages already indexed for the course) is never wrongly skipped;
-    only re-uploading the *same* document skips. Any error degrades to an empty
-    set (nothing skipped) rather than failing the ingest.
+    only re-uploading the *same* document skips. It is further scoped to ``owner``
+    so a different account re-uploading the same filename is not wrongly skipped
+    (their pages have a distinct owner). Any error degrades to an empty set
+    (nothing skipped) rather than failing the ingest.
     """
     settings = get_settings()
     from qdrant_client.models import FieldCondition, Filter, MatchValue
@@ -206,6 +214,8 @@ def _indexed_pages(course: str, document: str | None = None) -> set[int]:
     conditions: list[Any] = [FieldCondition(key="course", match=MatchValue(value=course))]
     if document is not None:
         conditions.append(FieldCondition(key="document", match=MatchValue(value=document)))
+    if owner is not None:
+        conditions.append(FieldCondition(key="owner", match=MatchValue(value=owner)))
     pages: set[int] = set()
     offset = None
     scanned = 0
@@ -261,15 +271,21 @@ def _load_pages(path: str, course: str) -> list[Page]:
         raise ValueError(f"Could not read the PDF: {exc}") from exc
 
 
-def _stamp_pages(pages: list[Page], chapter: str | None, document: str) -> None:
+def _stamp_pages(
+    pages: list[Page], chapter: str | None, document: str, owner: str | None = None
+) -> None:
     """Stamp the document identity (and chosen chapter, if any) onto every page.
 
     The document id distinguishes this upload from every other file in the course
     (see :func:`_document_id`); a non-empty ``chapter`` overrides the
     source-derived one so the material is filed under the user's chosen chapter.
+    ``owner`` (the uploader's effective ``student_id``) is stamped on every page so
+    the indexed chunks are scoped to that account; ``None`` leaves the material
+    owner-less (shared/legacy), preserving the CLI ingestion behaviour.
     """
     for page in pages:
         page.document = document
+        page.owner = owner
         if chapter is not None:
             page.chapter = chapter
 
@@ -294,7 +310,12 @@ def _done_reason(indexed: int, skipped: int) -> str:
 
 
 def ingest_document(
-    path: str, course: str, chapter: str | None = None, *, sparse: bool = False
+    path: str,
+    course: str,
+    chapter: str | None = None,
+    *,
+    owner: str | None = None,
+    sparse: bool = False,
 ) -> int:
     """Ingest one uploaded file under ``course``/``chapter`` and return the count.
 
@@ -303,11 +324,12 @@ def ingest_document(
     the uploaded material is filed under the user's chosen chapter; otherwise the
     pipeline's own chapter (the file stem for prose, ``None`` for slides) is kept.
     Every page is stamped with the document identity so distinct files in the same
-    course never collide or overwrite one another. Returns the number of indexed
-    chunks (``0`` when the file has no content).
+    course never collide or overwrite one another, and with ``owner`` (the
+    uploader's effective ``student_id``) so the material is scoped to that account.
+    Returns the number of indexed chunks (``0`` when the file has no content).
     """
     pages = _load_pages(path, course)
-    _stamp_pages(pages, chapter, _document_id(path))
+    _stamp_pages(pages, chapter, _document_id(path), owner)
     if not pages:
         return 0
     chunks = chunk_pages(pages)
@@ -322,6 +344,7 @@ def stream_ingest(
     course: str,
     chapter: str | None = None,
     *,
+    owner: str | None = None,
     batch_size: int = 3,
     sparse: bool = False,
 ) -> Iterator[dict[str, Any]]:
@@ -362,7 +385,7 @@ def stream_ingest(
                 "elapsed": round(time.time() - started, 1),
             }
             return
-        _stamp_pages(pages, chapter, document)
+        _stamp_pages(pages, chapter, document, owner)
         total = len(pages)
         yield {"type": "start", "total": total, "skipped": 0}
         chunks = chunk_pages(pages) if pages else []
@@ -404,7 +427,7 @@ def stream_ingest(
         # as a clean error event instead of an unhandled exception breaking the
         # SSE stream mid-flight.
         total = _pdf_page_count(path)
-        already = _indexed_pages(course, document)
+        already = _indexed_pages(course, document, owner)
         todo = [p for p in range(1, total + 1) if p not in already]
         skipped = total - len(todo)  # pages already indexed for THIS document
         done = skipped  # count already-indexed pages as done for the bar
@@ -417,7 +440,7 @@ def stream_ingest(
             # configured vision model is weak/absent; only math/figure-heavy pages
             # reach the vision model.
             pages = extract_pdf(path, course, pages=batch, hybrid=True)
-            _stamp_pages(pages, chapter, document)
+            _stamp_pages(pages, chapter, document, owner)
             chunks = chunk_pages(pages)
             if chunks:
                 index_chunks(chunks, sparse=sparse)
@@ -451,12 +474,15 @@ def stream_ingest(
     }
 
 
-def delete_documents(course: str, chapter: str | None = None) -> int:
+def delete_documents(course: str, chapter: str | None = None, owner: str | None = None) -> int:
     """Delete a course's points (optionally one chapter) and return how many.
 
     Builds a payload filter on ``course`` (plus ``chapter`` when given), counts
-    the matching points, then deletes them with that filter. Returns the number
-    of points removed; a missing collection or any error yields ``0`` rather than
+    the matching points, then deletes them with that filter. When ``owner`` is
+    given the deletion is scoped to ``owner``'s OWN points only (an exact
+    ``owner`` match, never the shared/legacy branch), so an account can never
+    delete the shared corpus or another account's material. Returns the number of
+    points removed; a missing collection or any error yields ``0`` rather than
     raising, so the endpoint degrades gracefully.
     """
     from qdrant_client.models import FieldCondition, Filter, FilterSelector, MatchValue
@@ -468,6 +494,10 @@ def delete_documents(course: str, chapter: str | None = None) -> int:
     conditions: list[Any] = [FieldCondition(key="course", match=MatchValue(value=course))]
     if chapter is not None:
         conditions.append(FieldCondition(key="chapter", match=MatchValue(value=chapter)))
+    if owner is not None:
+        # Mine-only: an exact owner match (not the shared/legacy OR branch), so a
+        # user can never delete owner-less (shared) points or another account's.
+        conditions.append(FieldCondition(key="owner", match=MatchValue(value=owner)))
     payload_filter = Filter(must=conditions)
 
     try:

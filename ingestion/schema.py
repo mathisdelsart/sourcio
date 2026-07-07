@@ -20,6 +20,10 @@ class Page:
     # Stable per-document identifier (usually the uploaded filename). ``None`` for
     # material ingested via the CLI, keeping chunk ids/payloads backward-compatible.
     document: str | None = None
+    # Owner of the material: the effective ``student_id`` (``u<id>`` when logged in,
+    # the device id when anonymous). ``None`` for material ingested without an owner
+    # (CLI, or the legacy shared corpus), which stays visible to everyone.
+    owner: str | None = None
 
 
 @dataclass
@@ -34,6 +38,9 @@ class Chunk:
     # Document the chunk came from (see :class:`Page.document`). ``None`` when the
     # source document is unknown (CLI ingestion), preserving the legacy chunk id.
     document: str | None = None
+    # Owner of the chunk (see :class:`Page.owner`). ``None`` for owner-less material,
+    # which is treated as shared/legacy and stays visible to every account.
+    owner: str | None = None
 
 
 @dataclass

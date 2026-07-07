@@ -52,7 +52,7 @@ def _stub_answer(monkeypatch):
     monkeypatch.setattr(
         api_main,
         "answer",
-        lambda question, *, k=5, course=None, chapter=None, language=None: {
+        lambda question, *, k=5, course=None, chapter=None, owner=None, language=None: {
             "answer": "ok",
             "refused": False,
             "sources": [],
@@ -153,7 +153,7 @@ def test_first_authenticated_caller_claims_unclaimed_student(client, monkeypatch
 
 
 def test_stream_rejects_foreign_student_before_streaming(client, monkeypatch):
-    def _fake_stream(question, *, k=5, course=None, chapter=None, language=None):
+    def _fake_stream(question, *, k=5, course=None, chapter=None, owner=None, language=None):
         yield {"type": "sources", "sources": [], "refused": False, "answer": "ok"}
 
     monkeypatch.setattr(api_main, "stream_answer", _fake_stream)

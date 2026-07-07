@@ -61,18 +61,19 @@ def _ensure_collection(client: QdrantClient, name: str, *, sparse: bool) -> None
 
 
 def _ensure_payload_indexes(client: QdrantClient, name: str) -> None:
-    """Ensure keyword payload indexes exist on ``course`` and ``document``.
+    """Ensure keyword payload indexes exist on ``course``, ``document`` and ``owner``.
 
     A keyword index on ``course`` lets Qdrant's facet API aggregate distinct
-    courses server-side (otherwise it 400s and callers fall back to a scroll),
-    and an index on ``document`` keeps per-document filtering fast. Both calls are
-    idempotent and best-effort: creating an index that already exists, or a client
-    that lacks the method, is swallowed so indexing never fails over this.
+    courses server-side (otherwise it 400s and callers fall back to a scroll), an
+    index on ``document`` keeps per-document filtering fast, and one on ``owner``
+    keeps per-account scoping fast. All calls are idempotent and best-effort:
+    creating an index that already exists, or a client that lacks the method, is
+    swallowed so indexing never fails over this.
     """
     create = getattr(client, "create_payload_index", None)
     if create is None:
         return
-    for field in ("course", "document"):
+    for field in ("course", "document", "owner"):
         try:
             create(
                 collection_name=name,
@@ -109,6 +110,7 @@ def index_chunks(chunks: list[Chunk], *, sparse: bool = False) -> None:
             "chapter": c.chapter,
             "page": c.page,
             "document": c.document,
+            "owner": c.owner,
         }
         for c in chunks
     ]

@@ -197,6 +197,7 @@ export function AskPanel({
               value={course}
               onChange={selectCourse}
               config={config}
+              studentId={studentId}
               refreshKey={coursesRefreshKey}
             />
             <TextField

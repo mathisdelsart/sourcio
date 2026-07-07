@@ -318,6 +318,24 @@ def _student_for_read(session: Any, external_id: str, user: UserOut | None) -> S
     return student
 
 
+def _scoped_read_owner(external_id: str | None, user: UserOut | None) -> str | None:
+    """Return the owner id to scope a read by, enforcing ownership when authenticated.
+
+    ``external_id`` is the request's effective ``student_id`` (``u<id>`` when
+    logged in, the device id when anonymous). When ``None`` (existing callers that
+    do not scope) the read stays global (returns ``None``). Otherwise, when the
+    caller is authenticated, a student that belongs to a *different* account is
+    rejected with 403 (via :func:`_student_for_read`), so one account can never
+    read another's material by passing its id. The owner string is returned
+    unchanged so the core layer scopes retrieval/listing to "mine or shared".
+    """
+    if external_id is None:
+        return None
+    with get_session(_engine) as session:
+        _student_for_read(session, external_id, user)
+    return external_id
+
+
 def _resolve_session_id(session: Any, student_id: int, session_id: int | None) -> int | None:
     """Validate that ``session_id`` is a thread owned by ``student_id``.
 
@@ -894,6 +912,7 @@ def ask(request: AskRequest, user: UserOut | None = DataUser) -> dict[str, Any]:
         k=request.k,
         course=request.course,
         chapter=request.chapter,
+        owner=request.student_id,
         language=request.language,
     )
     with get_session(_engine) as session:
@@ -936,6 +955,7 @@ def _stream_ask_events(request: AskRequest, user: UserOut | None = None) -> Iter
         k=request.k,
         course=request.course,
         chapter=request.chapter,
+        owner=request.student_id,
         language=request.language,
     ):
         if event.get("type") == "sources":
@@ -1365,14 +1385,18 @@ def quiz_review(quiz_id: int, student_id: str, user: UserOut | None = DataUser) 
     response_model=CoursesResponse,
     dependencies=[Depends(require_api_key)],
 )
-def courses() -> dict[str, list[str]]:
+def courses(student_id: str | None = None, user: UserOut | None = DataUser) -> dict[str, list[str]]:
     """List the distinct courses currently indexed in Qdrant.
 
     Lets a client discover the available courses dynamically (e.g. to populate a
-    picker) instead of hardcoding them. Returns an empty list when nothing is
-    indexed yet; it never reaches the LLM and runs no retrieval.
+    picker) instead of hardcoding them. When ``student_id`` is given the list is
+    scoped to that account's own courses plus the owner-less (shared/legacy)
+    corpus; without it the whole collection is listed (unchanged). Returns an
+    empty list when nothing is indexed yet; it never reaches the LLM and runs no
+    retrieval.
     """
-    return {"courses": list_courses()}
+    owner = _scoped_read_owner(student_id, user)
+    return {"courses": list_courses(owner=owner)}
 
 
 @app.get(
@@ -1380,15 +1404,21 @@ def courses() -> dict[str, list[str]]:
     response_model=list[DocumentCourse],
     dependencies=[Depends(require_api_key)],
 )
-def documents() -> list[dict[str, Any]]:
+def documents(
+    student_id: str | None = None, user: UserOut | None = DataUser
+) -> list[dict[str, Any]]:
     """Return the indexed material organized by course and chapter.
 
     Lets a client show what is indexed (and how much) so a user can manage it.
     The shape is ``[{course, total_pages, chapters: [{chapter, pages}]}]`` with a
-    ``null`` chapter for material indexed without one. Returns an empty list when
-    nothing is indexed yet; it never reaches the LLM and runs no retrieval.
+    ``null`` chapter for material indexed without one. When ``student_id`` is
+    given the inventory is scoped to that account's own material plus the
+    owner-less (shared/legacy) corpus; without it everything is listed
+    (unchanged). Returns an empty list when nothing is indexed yet; it never
+    reaches the LLM and runs no retrieval.
     """
-    return list_documents()
+    owner = _scoped_read_owner(student_id, user)
+    return list_documents(owner=owner)
 
 
 @app.post(
@@ -1400,6 +1430,8 @@ async def upload_document(
     file: Annotated[UploadFile, File()],
     course: Annotated[str, Form()],
     chapter: Annotated[str | None, Form()] = None,
+    student_id: Annotated[str | None, Form()] = None,
+    user: UserOut | None = DataUser,
 ) -> dict[str, str]:
     """Start ingesting an uploaded file as a background job and return its id.
 
@@ -1424,6 +1456,15 @@ async def upload_document(
     registry is in-process — see the multi-worker caveat in ``core.jobs``.
     """
     normalized_chapter = chapter.strip() if chapter and chapter.strip() else None
+    # Resolve (and, when authenticated, enforce ownership of) the uploader so the
+    # material is stamped with their owner id and scoped to their account. When no
+    # student_id is sent (e.g. CLI-style callers) the upload stays owner-less
+    # (shared/legacy), preserving the previous behaviour.
+    owner: str | None = None
+    if student_id is not None:
+        with get_session(_engine) as session:
+            _resolve_student(session, student_id, user)
+        owner = student_id
     contents = await file.read()
     # Persist the original so the user can re-open the intact file later; ingest
     # from that stored path (its extension drives prose/PDF routing).
@@ -1433,7 +1474,7 @@ async def upload_document(
     def run() -> None:
         """Drive the (blocking) ingest, mirroring each event into the job store."""
         try:
-            for event in stream_ingest(stored_path, course, normalized_chapter):
+            for event in stream_ingest(stored_path, course, normalized_chapter, owner=owner):
                 update_job(job_id, event)
                 if event.get("type") == "error":
                     # stream_ingest reports a failed batch as an error event then
@@ -1482,15 +1523,29 @@ def document_file(course: str, name: str) -> FileResponse:
     response_model=DocumentDeleteResponse,
     dependencies=[Depends(require_api_key)],
 )
-def remove_documents(course: str, chapter: str | None = None) -> dict[str, int]:
+def remove_documents(
+    course: str,
+    chapter: str | None = None,
+    student_id: str | None = None,
+    user: UserOut | None = DataUser,
+) -> dict[str, int]:
     """Delete a course's indexed points, optionally narrowed to one chapter.
 
     ``course`` is required; ``chapter`` (a query parameter) restricts the deletion
-    to a single chapter when given. Returns how many points were removed. A
-    missing collection or an unknown course yields ``{"deleted": 0}`` rather than
-    an error; it never reaches the LLM and runs no retrieval.
+    to a single chapter when given. When ``student_id`` is given the deletion is
+    scoped to that account's OWN points only (never the owner-less shared corpus
+    or another account's material); the student is resolved and ownership enforced
+    exactly as elsewhere. Without a ``student_id`` the deletion is unscoped
+    (unchanged). Returns how many points were removed. A missing collection or an
+    unknown course yields ``{"deleted": 0}`` rather than an error; it never
+    reaches the LLM and runs no retrieval.
     """
-    return {"deleted": delete_documents(course, chapter)}
+    owner: str | None = None
+    if student_id is not None:
+        with get_session(_engine) as session:
+            _resolve_student(session, student_id, user)
+        owner = student_id
+    return {"deleted": delete_documents(course, chapter, owner)}
 
 
 @app.get(

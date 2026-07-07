@@ -46,7 +46,7 @@ def _stub_answer(monkeypatch):
     monkeypatch.setattr(
         api_main,
         "answer",
-        lambda question, *, k=5, course=None, chapter=None, language=None: {
+        lambda question, *, k=5, course=None, chapter=None, owner=None, language=None: {
             "answer": "ok",
             "refused": False,
             "sources": [],

@@ -39,7 +39,9 @@ from qdrant_client.models import (
     Filter,
     Fusion,
     FusionQuery,
+    IsEmptyCondition,
     MatchValue,
+    PayloadField,
     Prefetch,
     Range,
     SparseVector,
@@ -60,17 +62,42 @@ Scorer = Callable[[str, list[str]], list[float]]
 _MAX_NEIGHBORS = 20
 
 
-def _build_filter(course: str | None, chapter: str | None) -> Filter | None:
+def owner_scope_filter(owner: str) -> Filter:
+    """Sub-filter matching material owned by ``owner`` OR with no owner set.
+
+    "Owner is mine OR owner is unset" — the ``should`` (logical OR) keeps an
+    account's own uploads private while leaving owner-less points (the legacy /
+    shared corpus ingested before per-account scoping, or via the CLI) visible to
+    everyone. Nesting this ``Filter`` inside another filter's ``must`` requires
+    that at least one branch of the ``should`` matches, so it scopes reads to
+    "mine or shared" without hiding the pre-existing corpus.
+    """
+    return Filter(
+        should=[
+            FieldCondition(key="owner", match=MatchValue(value=owner)),
+            IsEmptyCondition(is_empty=PayloadField(key="owner")),
+        ]
+    )
+
+
+def _build_filter(
+    course: str | None, chapter: str | None, owner: str | None = None
+) -> Filter | None:
     """Build a Qdrant payload filter, or None when no scope is requested.
 
     Only matching chunks are returned, so the answer stays inside the chosen
-    course/chapter. With both None the query is unfiltered (full collection).
+    course/chapter. When ``owner`` is given, the results are further scoped to the
+    caller's own material or owner-less (shared/legacy) material via
+    :func:`owner_scope_filter`. With course, chapter and owner all None the query
+    is unfiltered (full collection).
     """
     conditions: list[Condition] = []
     if course is not None:
         conditions.append(FieldCondition(key="course", match=MatchValue(value=course)))
     if chapter is not None:
         conditions.append(FieldCondition(key="chapter", match=MatchValue(value=chapter)))
+    if owner is not None:
+        conditions.append(owner_scope_filter(owner))
     if not conditions:
         return None
     return Filter(must=conditions)
@@ -304,13 +331,15 @@ def _record_to_retrieved(record) -> Retrieved:
     return Retrieved(chunk=chunk, score=0.0)
 
 
-def _neighbor_filter(result: Retrieved, window: int) -> Filter:
+def _neighbor_filter(result: Retrieved, window: int, owner: str | None = None) -> Filter:
     """Build the payload filter selecting a result's page-window neighbors.
 
     Same course and (when present) chapter as the result, with ``page`` in
     ``[page - window, page + window]`` and the result's own page excluded. This
     keeps neighbors inside the same course/chapter so expansion never pulls in
-    unrelated material.
+    unrelated material. When ``owner`` is given the neighbors are further scoped
+    to the caller's own or owner-less (shared/legacy) material, so expansion never
+    leaks another account's adjacent slides.
     """
     page = result.chunk.page
     must: list[Condition] = [
@@ -319,6 +348,8 @@ def _neighbor_filter(result: Retrieved, window: int) -> Filter:
     ]
     if result.chunk.chapter is not None:
         must.append(FieldCondition(key="chapter", match=MatchValue(value=result.chunk.chapter)))
+    if owner is not None:
+        must.append(owner_scope_filter(owner))
     must_not: list[Condition] = [
         FieldCondition(key="page", match=MatchValue(value=page)),
     ]
@@ -332,15 +363,17 @@ def _fetch_neighbors(
     result: Retrieved,
     window: int,
     limit: int,
+    owner: str | None = None,
 ) -> list[Retrieved]:
     """Scroll the page-window neighbors of one result (no similarity threshold).
 
     Uses a payload-only ``scroll`` with the neighbor filter; ``limit`` caps how
     many records are pulled. Returns context-only :class:`Retrieved` (score 0).
+    ``owner`` scopes the neighbors to the caller's own or shared/legacy material.
     """
     records, _ = client.scroll(
         collection_name=collection,
-        scroll_filter=_neighbor_filter(result, window),
+        scroll_filter=_neighbor_filter(result, window, owner),
         limit=limit,
         with_payload=True,
         with_vectors=False,
@@ -354,6 +387,7 @@ def _expand_with_neighbors(
     *,
     collection: str,
     window: int,
+    owner: str | None = None,
 ) -> list[Retrieved]:
     """Append page-window neighbors of each result, de-duped and bounded.
 
@@ -380,6 +414,7 @@ def _expand_with_neighbors(
                 result=result,
                 window=window,
                 limit=remaining,
+                owner=owner,
             )
             for neighbor in fetched:
                 if neighbor.chunk.id in seen:
@@ -420,6 +455,7 @@ def retrieve(
     k: int = 5,
     course: str | None = None,
     chapter: str | None = None,
+    owner: str | None = None,
     scorer: Scorer | None = None,
     hyde: bool = False,
     expand_neighbors: bool | None = None,
@@ -464,12 +500,14 @@ def retrieve(
 
     In all paths, when ``course`` and/or ``chapter`` are given retrieval is
     restricted to chunks whose payload matches them; when both are None the
-    whole collection is searched. ``scorer`` is injectable for testing; when
-    None the configured cross-encoder model is used.
+    whole collection is searched. When ``owner`` is given, retrieval is further
+    scoped to the caller's own material or owner-less (shared/legacy) material.
+    ``scorer`` is injectable for testing; when None the configured cross-encoder
+    model is used.
     """
     settings = get_settings()
     client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
-    query_filter = _build_filter(course, chapter)
+    query_filter = _build_filter(course, chapter, owner)
 
     reranking = bool(settings.reranker_model)
     score_threshold = settings.similarity_threshold
@@ -514,6 +552,7 @@ def retrieve(
             results,
             collection=settings.qdrant_collection,
             window=int(getattr(settings, "neighbor_window", 1)),
+            owner=owner,
         )
     return results
 
@@ -524,6 +563,7 @@ def retrieve_multi(
     k: int = 5,
     course: str | None = None,
     chapter: str | None = None,
+    owner: str | None = None,
     scorer: Scorer | None = None,
 ) -> list[Retrieved]:
     """Multi-query retrieval: expand the question, retrieve per query, then fuse.
@@ -549,7 +589,7 @@ def retrieve_multi(
     queries = expand_query(question, n=settings.multi_query_n)
 
     client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
-    query_filter = _build_filter(course, chapter)
+    query_filter = _build_filter(course, chapter, owner)
 
     reranking = bool(settings.reranker_model)
     score_threshold = settings.similarity_threshold

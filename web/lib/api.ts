@@ -314,10 +314,18 @@ export async function getConfig(config?: ConnectionConfig): Promise<AppConfig> {
   }
 }
 
-/** List the distinct courses currently indexed, sorted. Empty when none. */
-export async function getCourses(config?: ConnectionConfig): Promise<string[]> {
+/**
+ * List the distinct courses currently indexed, sorted. Empty when none. When
+ * `studentId` is given the list is scoped to that account's own courses plus the
+ * shared/legacy corpus; without it the whole collection is listed.
+ */
+export async function getCourses(
+  config?: ConnectionConfig,
+  studentId?: string | null,
+): Promise<string[]> {
+  const query = studentId ? `?student_id=${encodeURIComponent(studentId)}` : "";
   const data = await request<{ courses?: string[] }>(
-    "/courses",
+    `/courses${query}`,
     { method: "GET", headers: buildHeaders(config) },
     config,
   );
@@ -968,10 +976,18 @@ export interface DocumentDeleteResult {
   deleted: number;
 }
 
-/** List the indexed material organized by course and chapter. Empty when none. */
-export async function listDocuments(config?: ConnectionConfig): Promise<DocumentCourse[]> {
+/**
+ * List the indexed material organized by course and chapter. Empty when none.
+ * When `studentId` is given the inventory is scoped to that account's own
+ * material plus the shared/legacy corpus; without it everything is listed.
+ */
+export async function listDocuments(
+  config?: ConnectionConfig,
+  studentId?: string | null,
+): Promise<DocumentCourse[]> {
+  const query = studentId ? `?student_id=${encodeURIComponent(studentId)}` : "";
   return request<DocumentCourse[]>(
-    "/documents",
+    `/documents${query}`,
     { method: "GET", headers: buildHeaders(config) },
     config,
   );
@@ -992,11 +1008,15 @@ export async function startUpload(
   course: string,
   chapter: string | null,
   config?: ConnectionConfig,
+  studentId?: string | null,
 ): Promise<StartUploadResult> {
   const form = new FormData();
   form.append("file", file);
   form.append("course", course);
   if (chapter && chapter.trim()) form.append("chapter", chapter.trim());
+  // Stamp the uploader so the material is scoped to their account (owner); when
+  // absent the upload stays owner-less (shared/legacy).
+  if (studentId) form.append("student_id", studentId);
 
   const url = `${resolveBaseUrl(config)}/documents/upload`;
   let response: Response;
@@ -1033,14 +1053,20 @@ export async function fetchDocumentFile(
   return response.blob();
 }
 
-/** Delete a course's indexed points, optionally narrowed to one chapter. */
+/**
+ * Delete a course's indexed points, optionally narrowed to one chapter. When
+ * `studentId` is given the deletion is scoped to that account's OWN points only
+ * (never the shared/legacy corpus or another account's material).
+ */
 export async function deleteDocument(
   course: string,
   chapter: string | null,
   config?: ConnectionConfig,
+  studentId?: string | null,
 ): Promise<DocumentDeleteResult> {
   const params = new URLSearchParams({ course });
   if (chapter) params.set("chapter", chapter);
+  if (studentId) params.set("student_id", studentId);
   return request<DocumentDeleteResult>(
     `/documents?${params.toString()}`,
     { method: "DELETE", headers: buildHeaders(config) },

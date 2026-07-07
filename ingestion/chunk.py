@@ -17,7 +17,13 @@ from ingestion.schema import Chunk, Page
 logger = logging.getLogger(__name__)
 
 
-def _chunk_id(course: str, page: int, chapter: str | None, document: str | None = None) -> str:
+def _chunk_id(
+    course: str,
+    page: int,
+    chapter: str | None,
+    document: str | None = None,
+    owner: str | None = None,
+) -> str:
     """Stable UUID so re-ingesting a course overwrites rather than duplicates.
 
     Qdrant point ids must be unsigned ints or UUIDs, hence uuid5 over a stable
@@ -27,6 +33,11 @@ def _chunk_id(course: str, page: int, chapter: str | None, document: str | None 
     ``page`` is only a per-document window index, so the document's ``chapter`` is
     also folded in to keep windows from different files distinct.
 
+    When an ``owner`` is known (per-account uploads) it is also folded into the
+    key so two accounts uploading the same course + filename never collide on the
+    same point id (one would otherwise overwrite the other's chunk). When
+    ``owner`` is ``None`` (CLI / shared corpus) the key is unchanged.
+
     When ``document`` is ``None`` (CLI ingestion) the legacy key is kept, so
     existing slide ids stay byte-identical: ``course``+``page`` for slides
     (``chapter`` is None) and ``course``+``chapter``+``page`` for prose.
@@ -35,6 +46,8 @@ def _chunk_id(course: str, page: int, chapter: str | None, document: str | None 
         base = f"{course}-{document}"
     else:
         base = course
+    if owner is not None:
+        base = f"{owner}-{base}"
     key = f"{base}-p{page}" if chapter is None else f"{base}-{chapter}-p{page}"
     return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
 
@@ -56,12 +69,13 @@ def chunk_pages(pages: list[Page], *, log_sample: int = 3) -> list[Chunk]:
             continue
         chunks.append(
             Chunk(
-                id=_chunk_id(page.course, page.page, page.chapter, page.document),
+                id=_chunk_id(page.course, page.page, page.chapter, page.document, page.owner),
                 course=page.course,
                 page=page.page,
                 text=page.text,
                 chapter=page.chapter,
                 document=page.document,
+                owner=page.owner,
             )
         )
 

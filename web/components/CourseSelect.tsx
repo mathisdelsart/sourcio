@@ -23,6 +23,11 @@ interface CourseSelectProps {
   label?: string;
   hint?: string;
   /**
+   * The effective student id (owner). When set, the course list is scoped to
+   * this account's own courses plus the shared/legacy corpus.
+   */
+  studentId?: string;
+  /**
    * Bump this to force a re-fetch of the course list — e.g. after a document
    * upload adds a new course. Any change of value re-runs the fetch effect, so
    * a freshly indexed course appears without a manual page refresh.
@@ -44,6 +49,7 @@ export function CourseSelect({
   config,
   label,
   hint,
+  studentId,
   refreshKey,
 }: CourseSelectProps) {
   const { t } = useT();
@@ -57,7 +63,7 @@ export function CourseSelect({
   useEffect(() => {
     let active = true;
     setState("loading");
-    getCourses(configRef.current)
+    getCourses(configRef.current, studentId)
       .then((list) => {
         if (!active) return;
         setCourses(list);
@@ -71,9 +77,9 @@ export function CourseSelect({
     return () => {
       active = false;
     };
-    // Re-run when the connection target changes, or when refreshKey is bumped
-    // (e.g. after a document upload indexes a new course).
-  }, [config.baseUrl, config.apiKey, config.token, refreshKey]);
+    // Re-run when the connection target or owner changes, or when refreshKey is
+    // bumped (e.g. after a document upload indexes a new course).
+  }, [config.baseUrl, config.apiKey, config.token, studentId, refreshKey]);
 
   const resolvedLabel = label ?? t("ask.courseLabel");
 

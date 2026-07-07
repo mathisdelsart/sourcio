@@ -19,7 +19,7 @@ class _FakeFacetClient:
     def __init__(self, *args, **kwargs):
         pass
 
-    def facet(self, *, collection_name, key, limit):  # noqa: ARG002
+    def facet(self, *, collection_name, key, limit, facet_filter=None):  # noqa: ARG002
         hits = [
             SimpleNamespace(value="Wavelet Transform", count=10),
             SimpleNamespace(value="Algebra", count=3),
@@ -33,7 +33,7 @@ class _RaisingFacetClient:
     def __init__(self, *args, **kwargs):
         pass
 
-    def facet(self, *, collection_name, key, limit):  # noqa: ARG002
+    def facet(self, *, collection_name, key, limit, facet_filter=None):  # noqa: ARG002
         raise RuntimeError("collection not found")
 
     def scroll(self, **kwargs):  # noqa: ARG002
@@ -52,7 +52,9 @@ class _ScrollOnlyClient:
     def __init__(self, *args, **kwargs):
         self.calls = 0
 
-    def scroll(self, *, collection_name, limit, with_payload, with_vectors, offset):  # noqa: ARG002
+    def scroll(  # noqa: ARG002
+        self, *, collection_name, limit, with_payload, with_vectors, offset, scroll_filter=None
+    ):
         self.calls += 1
         if offset is None:
             points = [
@@ -80,6 +82,28 @@ def test_list_courses_uses_facet_sorted_distinct(monkeypatch):
     assert courses_mod.list_courses() == ["Algebra", "Wavelet Transform"]
 
 
+def test_list_courses_scopes_facet_by_owner(monkeypatch):
+    class _CapturingFacetClient:
+        last_filter = "unset"
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def facet(self, *, collection_name, key, facet_filter, limit):  # noqa: ARG002
+            type(self).last_filter = facet_filter
+            return SimpleNamespace(hits=[SimpleNamespace(value="C", count=1)])
+
+    _use_client(monkeypatch, _CapturingFacetClient)
+    courses_mod.list_courses(owner="uA")
+    flt = _CapturingFacetClient.last_filter
+    # Owner scope is "mine OR unset" (a should of two conditions).
+    assert flt is not None and len(flt.should) == 2
+
+    # Without an owner the facet stays unscoped (global), unchanged.
+    courses_mod.list_courses()
+    assert _CapturingFacetClient.last_filter is None
+
+
 def test_list_courses_scroll_fallback_when_no_facet(monkeypatch):
     _use_client(monkeypatch, _ScrollOnlyClient)
     assert courses_mod.list_courses() == ["Algebra", "Wavelet Transform"]
@@ -96,7 +120,7 @@ def test_list_courses_empty_facet_response(monkeypatch):
         def __init__(self, *args, **kwargs):
             pass
 
-        def facet(self, *, collection_name, key, limit):  # noqa: ARG002
+        def facet(self, *, collection_name, key, limit, facet_filter=None):  # noqa: ARG002
             return SimpleNamespace(hits=[])
 
     _use_client(monkeypatch, _EmptyFacetClient)
@@ -146,7 +170,9 @@ def _set_api_key(monkeypatch, key):
 
 @requires_api
 def test_courses_route_returns_list(client, monkeypatch):
-    monkeypatch.setattr(api_main, "list_courses", lambda: ["Algebra", "Wavelet Transform"])
+    monkeypatch.setattr(
+        api_main, "list_courses", lambda owner=None: ["Algebra", "Wavelet Transform"]
+    )
     response = client.get("/courses")
     assert response.status_code == 200
     assert response.json() == {"courses": ["Algebra", "Wavelet Transform"]}
@@ -154,7 +180,7 @@ def test_courses_route_returns_list(client, monkeypatch):
 
 @requires_api
 def test_courses_route_empty(client, monkeypatch):
-    monkeypatch.setattr(api_main, "list_courses", lambda: [])
+    monkeypatch.setattr(api_main, "list_courses", lambda owner=None: [])
     response = client.get("/courses")
     assert response.status_code == 200
     assert response.json() == {"courses": []}
@@ -163,7 +189,7 @@ def test_courses_route_empty(client, monkeypatch):
 @requires_api
 def test_courses_open_when_no_key(client, monkeypatch):
     _set_api_key(monkeypatch, "")
-    monkeypatch.setattr(api_main, "list_courses", lambda: ["Algebra"])
+    monkeypatch.setattr(api_main, "list_courses", lambda owner=None: ["Algebra"])
     response = client.get("/courses")
     assert response.status_code == 200
 
@@ -171,7 +197,7 @@ def test_courses_open_when_no_key(client, monkeypatch):
 @requires_api
 def test_courses_rejects_missing_key(client, monkeypatch):
     _set_api_key(monkeypatch, "secret-key")
-    monkeypatch.setattr(api_main, "list_courses", lambda: ["Algebra"])
+    monkeypatch.setattr(api_main, "list_courses", lambda owner=None: ["Algebra"])
     response = client.get("/courses")
     assert response.status_code == 401
 
@@ -179,7 +205,7 @@ def test_courses_rejects_missing_key(client, monkeypatch):
 @requires_api
 def test_courses_rejects_wrong_key(client, monkeypatch):
     _set_api_key(monkeypatch, "secret-key")
-    monkeypatch.setattr(api_main, "list_courses", lambda: ["Algebra"])
+    monkeypatch.setattr(api_main, "list_courses", lambda owner=None: ["Algebra"])
     response = client.get("/courses", headers={"X-API-Key": "wrong"})
     assert response.status_code == 401
 
@@ -187,7 +213,7 @@ def test_courses_rejects_wrong_key(client, monkeypatch):
 @requires_api
 def test_courses_accepts_correct_key(client, monkeypatch):
     _set_api_key(monkeypatch, "secret-key")
-    monkeypatch.setattr(api_main, "list_courses", lambda: ["Algebra"])
+    monkeypatch.setattr(api_main, "list_courses", lambda owner=None: ["Algebra"])
     response = client.get("/courses", headers={"X-API-Key": "secret-key"})
     assert response.status_code == 200
     assert response.json() == {"courses": ["Algebra"]}

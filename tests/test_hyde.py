@@ -248,12 +248,12 @@ def test_retrieve_hyde_uses_hypothetical_for_dense_question_for_sparse(monkeypat
 def test_answer_uses_hyde_when_enabled(monkeypatch):
     called = {"single": 0, "multi": 0, "hyde_flag": None}
 
-    def fake_retrieve(q, *, k=5, course=None, chapter=None, hyde=False):
+    def fake_retrieve(q, *, k=5, course=None, chapter=None, owner=None, hyde=False):
         called["single"] += 1
         called["hyde_flag"] = hyde
         return []
 
-    def fake_multi(q, *, k=5, course=None, chapter=None):
+    def fake_multi(q, *, k=5, course=None, chapter=None, owner=None):
         called["multi"] += 1
         return []
 
@@ -273,11 +273,11 @@ def test_answer_uses_hyde_when_enabled(monkeypatch):
 def test_answer_multi_query_takes_precedence_over_hyde(monkeypatch):
     called = {"single": 0, "multi": 0}
 
-    def fake_retrieve(q, *, k=5, course=None, chapter=None, hyde=False):
+    def fake_retrieve(q, *, k=5, course=None, chapter=None, owner=None, hyde=False):
         called["single"] += 1
         return []
 
-    def fake_multi(q, *, k=5, course=None, chapter=None):
+    def fake_multi(q, *, k=5, course=None, chapter=None, owner=None):
         called["multi"] += 1
         return []
 
@@ -297,12 +297,12 @@ def test_answer_multi_query_takes_precedence_over_hyde(monkeypatch):
 def test_answer_default_off_uses_plain_single_query(monkeypatch):
     called = {"single": 0, "multi": 0, "hyde_flag": None}
 
-    def fake_retrieve(q, *, k=5, course=None, chapter=None, hyde=False):
+    def fake_retrieve(q, *, k=5, course=None, chapter=None, owner=None, hyde=False):
         called["single"] += 1
         called["hyde_flag"] = hyde
         return []
 
-    def fake_multi(q, *, k=5, course=None, chapter=None):
+    def fake_multi(q, *, k=5, course=None, chapter=None, owner=None):
         called["multi"] += 1
         return []
 

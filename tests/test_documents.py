@@ -88,7 +88,9 @@ class _ScrollClient:
     def __init__(self, *args, **kwargs):
         pass
 
-    def scroll(self, *, collection_name, limit, with_payload, with_vectors, offset):  # noqa: ARG002
+    def scroll(  # noqa: ARG002
+        self, *, collection_name, limit, with_payload, with_vectors, offset, scroll_filter=None
+    ):
         if offset is None:
             points = [
                 SimpleNamespace(payload={"course": "Wavelets", "chapter": "Intro", "page": 1}),
@@ -245,7 +247,7 @@ def _fake_pdf_env(monkeypatch, *, page_count, indexed):
     monkeypatch.setattr(
         documents_mod,
         "_indexed_pages",
-        lambda course, document=None: set(indexed.get(document, set())),  # noqa: ARG005
+        lambda course, document=None, owner=None: set(indexed.get(document, set())),  # noqa: ARG005
     )
 
     captured: list = []
@@ -347,7 +349,11 @@ def test_stream_ingest_pdf_routes_through_hybrid(monkeypatch, tmp_path):
 
     monkeypatch.setattr(ingestion.run, "_pdf_page_count", lambda path: 1)  # noqa: ARG005
     monkeypatch.setattr(ingestion.extract, "extract_pdf", fake_extract)
-    monkeypatch.setattr(documents_mod, "_indexed_pages", lambda course, document=None: set())  # noqa: ARG005
+    monkeypatch.setattr(
+        documents_mod,
+        "_indexed_pages",
+        lambda course, document=None, owner=None: set(),  # noqa: ARG005
+    )
     monkeypatch.setattr(documents_mod, "index_chunks", lambda chunks, **_: None)
 
     events = list(documents_mod.stream_ingest(str(path), "Wavelets"))
@@ -451,6 +457,88 @@ def test_delete_documents_degrades_on_error(monkeypatch):
     assert documents_mod.delete_documents("Wavelets") == 0
 
 
+# --- Per-account owner scoping -----------------------------------------------
+
+
+def test_stamp_pages_sets_owner():
+    pages = [
+        Page(course="C", page=1, text="a", doc_type="slides"),
+        Page(course="C", page=2, text="b", doc_type="slides"),
+    ]
+    documents_mod._stamp_pages(pages, None, "deck.pdf", "uA")
+    assert all(p.owner == "uA" and p.document == "deck.pdf" for p in pages)
+
+
+def test_stamp_pages_owner_none_stays_shared():
+    pages = [Page(course="C", page=1, text="a", doc_type="slides")]
+    documents_mod._stamp_pages(pages, None, "deck.pdf")
+    assert pages[0].owner is None
+
+
+def test_chunk_pages_copies_owner_and_ids_differ_per_owner():
+    from ingestion.chunk import chunk_pages
+
+    pa = Page(course="C", page=1, text="x", doc_type="slides", document="d", owner="uA")
+    pb = Page(course="C", page=1, text="x", doc_type="slides", document="d", owner="uB")
+    a = chunk_pages([pa])
+    b = chunk_pages([pb])
+    assert a[0].owner == "uA" and b[0].owner == "uB"
+    # Different owners never collide on the same point id (no cross-account overwrite).
+    assert a[0].id != b[0].id
+
+
+def test_indexed_pages_scopes_to_owner(monkeypatch):
+    class _CapturingScroll:
+        last_filter = None
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def scroll(self, *, scroll_filter, **kwargs):  # noqa: ARG002
+            type(self).last_filter = scroll_filter
+            return [SimpleNamespace(payload={"page": 1})], None
+
+    _use_client(monkeypatch, _CapturingScroll)
+    documents_mod._indexed_pages("Wavelets", "deck.pdf", "uA")
+    # course + document + owner -> three conditions.
+    assert len(_CapturingScroll.last_filter.must) == 3
+
+
+def test_list_documents_scopes_scroll_by_owner(monkeypatch):
+    class _CapturingScroll:
+        last_filter = "unset"
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def scroll(self, *, scroll_filter, **kwargs):  # noqa: ARG002
+            type(self).last_filter = scroll_filter
+            return [], None
+
+    _use_client(monkeypatch, _CapturingScroll)
+    documents_mod.list_documents(owner="uA")
+    flt = _CapturingScroll.last_filter
+    # The owner-scope sub-filter is "mine OR unset" (a should of two conditions).
+    assert flt is not None and len(flt.should) == 2
+
+    # Without an owner the scroll stays unscoped (global), unchanged.
+    documents_mod.list_documents()
+    assert _CapturingScroll.last_filter is None
+
+
+def test_delete_documents_owner_is_mine_only(monkeypatch):
+    from qdrant_client.models import FieldCondition, Filter
+
+    _use_client(monkeypatch, _DeleteClient)
+    documents_mod.delete_documents("Wavelets", None, "uA")
+    conds = _DeleteClient.last_count_filter.must
+    # course + a MINE-ONLY owner condition: an exact FieldCondition match, never
+    # a nested shared/legacy OR filter, so shared/other points are never deleted.
+    owner_conds = [c for c in conds if isinstance(c, FieldCondition) and c.key == "owner"]
+    assert len(owner_conds) == 1 and owner_conds[0].match.value == "uA"
+    assert all(not isinstance(c, Filter) for c in conds)
+
+
 # --- /documents routes -------------------------------------------------------
 # Gated on the optional `api` extra (FastAPI). The core tests above always run.
 
@@ -493,7 +581,7 @@ def test_documents_route_returns_inventory(client, monkeypatch):
             "files": ["notes.pdf"],
         }
     ]
-    monkeypatch.setattr(api_main, "list_documents", lambda: inventory)
+    monkeypatch.setattr(api_main, "list_documents", lambda owner=None: inventory)
     response = client.get("/documents")
     assert response.status_code == 200
     assert response.json() == inventory
@@ -501,7 +589,7 @@ def test_documents_route_returns_inventory(client, monkeypatch):
 
 @requires_api
 def test_documents_route_empty(client, monkeypatch):
-    monkeypatch.setattr(api_main, "list_documents", lambda: [])
+    monkeypatch.setattr(api_main, "list_documents", lambda owner=None: [])
     response = client.get("/documents")
     assert response.status_code == 200
     assert response.json() == []
@@ -655,7 +743,7 @@ def test_document_file_route_404_when_missing(client, monkeypatch):
 def test_delete_route_returns_count(client, monkeypatch):
     seen: dict = {}
 
-    def fake_delete(course, chapter=None):
+    def fake_delete(course, chapter=None, owner=None):
         seen["course"] = course
         seen["chapter"] = chapter
         return 5

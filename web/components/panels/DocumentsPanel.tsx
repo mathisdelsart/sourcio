@@ -75,7 +75,7 @@ function fmtTime(seconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-export function DocumentsPanel({ config, onCoursesChanged }: DocumentsPanelProps) {
+export function DocumentsPanel({ studentId, config, onCoursesChanged }: DocumentsPanelProps) {
   const toast = useToast();
   const { t } = useT();
   const [items, setItems] = useState<DocumentCourse[]>([]);
@@ -120,13 +120,13 @@ export function DocumentsPanel({ config, onCoursesChanged }: DocumentsPanelProps
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setItems(await listDocuments(config));
+      setItems(await listDocuments(config, studentId));
     } catch (err) {
       toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
     } finally {
       setLoading(false);
     }
-  }, [config, toast, t]);
+  }, [config, studentId, toast, t]);
 
   useEffect(() => {
     load();
@@ -204,7 +204,13 @@ export function DocumentsPanel({ config, onCoursesChanged }: DocumentsPanelProps
     setUploading(true);
     setProgress({ type: "start" });
     try {
-      const { job_id } = await startUpload(file, course.trim(), chapter.trim() || null, config);
+      const { job_id } = await startUpload(
+        file,
+        course.trim(),
+        chapter.trim() || null,
+        config,
+        studentId,
+      );
       // Persist the job so a refresh/navigation re-attaches to it, then hand off
       // to the polling effect. Clearing the inputs frees the user to do other
       // things (or queue nothing) while ingestion runs server-side.
@@ -243,7 +249,7 @@ export function DocumentsPanel({ config, onCoursesChanged }: DocumentsPanelProps
     setConfirmKey(null);
     setDeleting(key);
     try {
-      const result = await deleteDocument(courseName, chapterName, config);
+      const result = await deleteDocument(courseName, chapterName, config, studentId);
       toast.push(t("doc.delete.success", { count: result.deleted, target: label }), "success");
       await load();
     } catch (err) {

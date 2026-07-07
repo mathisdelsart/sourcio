@@ -264,11 +264,11 @@ def test_answer_uses_single_query_when_multi_query_off(monkeypatch):
     # retrieve_multi(). Real get_settings is used; the default is off.
     called = {"single": 0, "multi": 0}
 
-    def fake_retrieve(q, *, k=5, course=None, chapter=None):
+    def fake_retrieve(q, *, k=5, course=None, chapter=None, owner=None):
         called["single"] += 1
         return []
 
-    def fake_multi(q, *, k=5, course=None, chapter=None):
+    def fake_multi(q, *, k=5, course=None, chapter=None, owner=None):
         called["multi"] += 1
         return []
 
@@ -282,11 +282,11 @@ def test_answer_uses_single_query_when_multi_query_off(monkeypatch):
 def test_answer_uses_multi_query_when_enabled(monkeypatch):
     called = {"single": 0, "multi": 0}
 
-    def fake_retrieve(q, *, k=5, course=None, chapter=None):
+    def fake_retrieve(q, *, k=5, course=None, chapter=None, owner=None):
         called["single"] += 1
         return []
 
-    def fake_multi(q, *, k=5, course=None, chapter=None):
+    def fake_multi(q, *, k=5, course=None, chapter=None, owner=None):
         called["multi"] += 1
         return []
 

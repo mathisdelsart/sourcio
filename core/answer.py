@@ -123,7 +123,14 @@ def _citations(raw: str, results: list[Retrieved]) -> list[dict]:
     ]
 
 
-def _retrieve(question: str, *, k: int, course: str | None, chapter: str | None) -> list[Retrieved]:
+def _retrieve(
+    question: str,
+    *,
+    k: int,
+    course: str | None,
+    chapter: str | None,
+    owner: str | None = None,
+) -> list[Retrieved]:
     """Dispatch to single-, multi-query or HyDE retrieval based on settings.
 
     With both ``multi_query`` and ``hyde`` off (the default) this calls
@@ -134,14 +141,15 @@ def _retrieve(question: str, *, k: int, course: str | None, chapter: str | None)
     strategy from embedding a single HyDE probe; rather than nesting the two we
     keep it simple and let multi-query take over. Otherwise, when only ``hyde``
     is set, :func:`retrieve` runs with ``hyde=True``. In every case the
-    threshold/refusal and reranker behave identically.
+    threshold/refusal and reranker behave identically. ``owner`` scopes retrieval
+    to the caller's own or shared/legacy material.
     """
     settings = get_settings()
     if settings.multi_query:
-        return retrieve_multi(question, k=k, course=course, chapter=chapter)
+        return retrieve_multi(question, k=k, course=course, chapter=chapter, owner=owner)
     if settings.hyde:
-        return retrieve(question, k=k, course=course, chapter=chapter, hyde=True)
-    return retrieve(question, k=k, course=course, chapter=chapter)
+        return retrieve(question, k=k, course=course, chapter=chapter, owner=owner, hyde=True)
+    return retrieve(question, k=k, course=course, chapter=chapter, owner=owner)
 
 
 def _cited_indices(text: str, count: int) -> list[int]:
@@ -160,6 +168,7 @@ def answer(
     k: int = 5,
     course: str | None = None,
     chapter: str | None = None,
+    owner: str | None = None,
     language: str | None = None,
 ) -> dict:
     """Answer a question grounded in the course, or refuse if uncovered.
@@ -175,12 +184,13 @@ def answer(
     ``retrieved`` is an empty list, for shape consistency.
 
     ``course`` and ``chapter`` optionally restrict retrieval to a single course
-    (and chapter); when both are None the whole collection is searched.
+    (and chapter); when both are None the whole collection is searched. ``owner``
+    scopes retrieval to the caller's own or shared/legacy material.
     ``language`` (a locale code) sets the default answer language; when None the
     model answers in the question's own language.
     """
     with timer("retrieval"):
-        results = _retrieve(question, k=k, course=course, chapter=chapter)
+        results = _retrieve(question, k=k, course=course, chapter=chapter, owner=owner)
     if not results:
         return {
             "answer": REFUSAL,
@@ -248,6 +258,7 @@ def stream_answer(
     k: int = 5,
     course: str | None = None,
     chapter: str | None = None,
+    owner: str | None = None,
     language: str | None = None,
 ) -> Iterator[dict]:
     """Stream a grounded answer token by token, mirroring :func:`answer`.
@@ -276,7 +287,7 @@ def stream_answer(
     # about to write. These reflect actual work, not a timer.
     yield {"type": "stage", "stage": "retrieving"}
     with timer("retrieval"):
-        results = _retrieve(question, k=k, course=course, chapter=chapter)
+        results = _retrieve(question, k=k, course=course, chapter=chapter, owner=owner)
     if not results:
         yield {"type": "token", "text": REFUSAL}
         yield {

@@ -23,42 +23,55 @@ _SCROLL_MAX_POINTS = 100_000
 _FACET_LIMIT = 1_000
 
 
-def list_courses() -> list[str]:
+def list_courses(owner: str | None = None) -> list[str]:
     """Return the sorted, distinct course names indexed in Qdrant.
 
     Builds a Qdrant client from settings (same construction as retrieval) and
     enumerates the distinct ``course`` payload values in the configured
     collection. Prefers the facet aggregation API and falls back to a paged
-    scroll when it is unavailable. Returns ``[]`` for an empty or missing
-    collection, and never raises on a connection or collection error.
+    scroll when it is unavailable. When ``owner`` is given, the aggregation is
+    scoped to the caller's own or owner-less (shared/legacy) material, so an
+    account only discovers its own courses plus the shared corpus. Returns ``[]``
+    for an empty or missing collection, and never raises on a connection or
+    collection error.
     """
     # Imported lazily so importing this module stays cheap and the heavy client
     # is only loaded when courses are actually requested, matching the codebase
     # style for optional/heavy dependencies.
     from qdrant_client import QdrantClient
 
+    from core.retrieval import owner_scope_filter
+
     settings = get_settings()
     client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
     collection = settings.qdrant_collection
+    owner_filter = owner_scope_filter(owner) if owner is not None else None
 
-    courses = _facet_courses(client, collection)
+    courses = _facet_courses(client, collection, owner_filter)
     if courses is None:
-        courses = _scroll_courses(client, collection)
+        courses = _scroll_courses(client, collection, owner_filter)
     return sorted(courses)
 
 
-def _facet_courses(client, collection: str) -> set[str] | None:
+def _facet_courses(client, collection: str, owner_filter=None) -> set[str] | None:
     """Collect distinct course values via the facet API, or None if unavailable.
 
     Returns the distinct values as a set, an empty set for an empty or missing
     collection, or ``None`` when the facet API cannot be used (e.g. the client
-    lacks it), signalling the caller to fall back to scrolling.
+    lacks it), signalling the caller to fall back to scrolling. ``owner_filter``,
+    when given, scopes the aggregation to the caller's own or shared/legacy
+    material.
     """
     facet = getattr(client, "facet", None)
     if facet is None:
         return None
     try:
-        response = facet(collection_name=collection, key="course", limit=_FACET_LIMIT)
+        response = facet(
+            collection_name=collection,
+            key="course",
+            facet_filter=owner_filter,
+            limit=_FACET_LIMIT,
+        )
     except Exception:
         # The collection may not exist yet, or the server may not support facet:
         # fall back to the scroll path rather than failing the request.
@@ -66,12 +79,13 @@ def _facet_courses(client, collection: str) -> set[str] | None:
     return {str(hit.value) for hit in response.hits}
 
 
-def _scroll_courses(client, collection: str) -> set[str]:
+def _scroll_courses(client, collection: str, owner_filter=None) -> set[str]:
     """Collect distinct course values by paging through points with payload.
 
     Bounded by ``_SCROLL_MAX_POINTS`` so the scan can never run unbounded.
     Returns an empty set for an empty or missing collection (any error is
-    treated as "nothing indexed").
+    treated as "nothing indexed"). ``owner_filter``, when given, scopes the scan
+    to the caller's own or shared/legacy material.
     """
     courses: set[str] = set()
     offset = None
@@ -80,6 +94,7 @@ def _scroll_courses(client, collection: str) -> set[str]:
         while scanned < _SCROLL_MAX_POINTS:
             points, offset = client.scroll(
                 collection_name=collection,
+                scroll_filter=owner_filter,
                 limit=_SCROLL_PAGE,
                 with_payload=True,
                 with_vectors=False,
