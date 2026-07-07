@@ -47,18 +47,20 @@ export function StatsBand() {
           onDark
         />
 
-        {/* Thin vertical dividers separate the figures on wider viewports. */}
+        {/* Thin vertical dividers separate the figures on wider viewports.
+            Each stat renders its figure once (dd) and its label once (dt),
+            with column-reverse so the big figure sits above the label. */}
         <dl className="mt-14 grid grid-cols-2 gap-y-12 lg:grid-cols-4 lg:divide-x lg:divide-white/10">
           {STATS.map((stat) => (
-            <div key={stat.value} className="px-4 text-center sm:px-6">
-              <dt className="sr-only">{t(stat.label)}</dt>
-              <dd>
-                <span className="block text-4xl font-bold tracking-tight text-white tabular-nums sm:text-5xl">
-                  <CountUp value={t(stat.value)} />
-                </span>
-                <span className="mx-auto mt-3 block max-w-[16rem] text-sm leading-snug text-zinc-300">
-                  {t(stat.label)}
-                </span>
+            <div
+              key={stat.value}
+              className="flex flex-col-reverse items-center px-4 text-center sm:px-6"
+            >
+              <dt className="mt-3 max-w-[15rem] text-sm leading-snug text-zinc-300">
+                {t(stat.label)}
+              </dt>
+              <dd className="text-4xl font-bold tracking-tight text-white tabular-nums sm:text-5xl">
+                <CountUp value={t(stat.value)} />
               </dd>
             </div>
           ))}
