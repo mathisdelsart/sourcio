@@ -387,3 +387,9 @@ def test_effective_rate_limit_explicit_override_wins_regardless_of_auth():
 
 def test_max_upload_mb_default():
     assert config.Settings().max_upload_mb == 100
+
+
+def test_ingest_parallelism_defaults():
+    settings = config.Settings()
+    assert settings.ingest_concurrency == 12
+    assert settings.ingest_batch_size == 16
