@@ -9,8 +9,10 @@ URL is the only thing that changes.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
+    JSON,
     DateTime,
     Float,
     ForeignKey,
@@ -283,3 +285,26 @@ class Review(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     student: Mapped[Student] = relationship(back_populates="reviews")
+
+
+class IngestJob(Base):
+    """A background document-ingestion job, persisted so it survives restarts.
+
+    Ingesting a document runs on a daemon thread and can take minutes; the client
+    polls to follow it and re-attaches after a page refresh. Keeping the record in
+    the database instead of only in process memory means a server restart — common
+    on free hosting tiers that sleep idle apps — no longer loses an in-flight job,
+    so the client sees the real status instead of a spurious "reset". The full
+    record is stored as JSON in ``data`` (the exact shape the API returns); a few
+    columns are mirrored for ordering (``created_at``) and retention pruning
+    (``finished_at``). Answer jobs stay in memory (they update per token, which
+    would be far too write-heavy to persist) — see :mod:`core.jobs`.
+    """
+
+    __tablename__ = "ingest_jobs"
+
+    job_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    data: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

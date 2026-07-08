@@ -16,10 +16,34 @@ import pytest
 import core.documents as documents_mod
 from ingestion.schema import Page
 
-# --- core.jobs: the in-memory background-job registry ------------------------
+# --- core.jobs: the background-job registry ----------------------------------
 
 
-def test_jobs_create_update_get_and_terminal_stamp():
+@pytest.fixture
+def jobs_db():
+    """Bind an in-memory SQLite database for the persisted ingestion-job helpers.
+
+    Ingestion jobs live in the database, so these direct ``core.jobs`` tests need
+    a configured session factory of their own rather than relying on another test
+    having configured the engine first (which made them order-dependent).
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import StaticPool
+
+    from db.session import SessionLocal, init_db
+
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        future=True,
+    )
+    init_db(engine)
+    SessionLocal.configure(bind=engine)
+    yield
+
+
+def test_jobs_create_update_get_and_terminal_stamp(jobs_db):
     import core.jobs as jobs_mod
 
     job_id = jobs_mod.create_job("Wavelets", "Intro", "notes.pdf")
@@ -50,24 +74,28 @@ def test_jobs_create_update_get_and_terminal_stamp():
     assert jobs_mod.get_job(job_id)["indexed"] == 3
 
 
-def test_jobs_update_unknown_id_is_noop():
+def test_jobs_update_unknown_id_is_noop(jobs_db):
     import core.jobs as jobs_mod
 
     jobs_mod.update_job("nope", {"status": "done"})  # must not raise
     assert jobs_mod.get_job("nope") is None
 
 
-def test_jobs_prune_drops_stale_finished_jobs(monkeypatch):
+def test_jobs_prune_drops_stale_finished_jobs(jobs_db):
     from datetime import UTC, datetime, timedelta
 
     import core.jobs as jobs_mod
+    from db.models import IngestJob
+    from db.session import get_session
 
     old_id = jobs_mod.create_job("Old", None, "old.pdf")
     jobs_mod.update_job(old_id, {"status": "done"})
-    # Backdate its completion beyond the retention window.
+    # Backdate its completion beyond the retention window. Ingestion jobs are
+    # persisted, so backdate the stored row's ``finished_at`` column (not the old
+    # in-memory dict, which now only holds answer jobs).
     stale = datetime.now(UTC) - jobs_mod._RETENTION - timedelta(minutes=1)
-    with jobs_mod._lock:
-        jobs_mod._jobs[old_id]["finished_at"] = stale.isoformat()
+    with get_session() as session:
+        session.get(IngestJob, old_id).finished_at = stale
 
     # Creating a new job prunes stale finished ones.
     new_id = jobs_mod.create_job("New", None, "new.pdf")

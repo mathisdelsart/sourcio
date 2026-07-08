@@ -1,4 +1,4 @@
-"""In-memory, thread-safe registry of background jobs (ingestion and answers).
+"""Registry of background jobs (document ingestion and streamed answers).
 
 Ingesting a document (extract -> chunk -> embed -> index) can take minutes for a
 large PDF, and must not be tied to the lifetime of the upload HTTP request: a
@@ -15,18 +15,30 @@ sources and citations) while the client polls to follow or re-attach after a
 refresh. Answer jobs are owner-scoped (:func:`get_answer_job` verifies the caller
 owns the job) so one user can never read another's answer.
 
-The registry is a module-level ``dict`` guarded by a single ``threading.Lock``.
-This is correct for the app's single-process deployment (the Makefile runs one
-``uvicorn --reload`` and the Dockerfile runs a single ``uvicorn``). It is NOT
-shared across worker processes: under a multi-worker gunicorn/uvicorn deployment
-a job created in one worker would be invisible to another, so a shared store
-(e.g. Redis) would be required — see this multi-worker caveat before scaling out.
+Two storage backends, chosen per job kind:
+
+- **Ingestion jobs are persisted in the database** (:class:`db.models.IngestJob`).
+  Ingestion is long (minutes) and updates infrequently (once per page/batch), so
+  a durable store is both cheap and valuable: it survives a server restart, which
+  free hosting tiers do routinely when they sleep an idle app. Without this, a
+  restart mid-ingest lost the in-memory record and the client's re-attach got a
+  404, surfacing as a spurious "the upload reset". Persisting fixes that.
+- **Answer jobs stay in a module-level dict** guarded by a lock. An answer grows
+  token by token (``update_job`` is called on every token), which is far too
+  write-heavy to persist to a database; and an answer takes seconds, not minutes,
+  so the window for a restart to lose one is small. A refresh mid-answer simply
+  re-asks.
+
+Neither store is shared across worker processes: the app runs a single uvicorn
+process (Makefile and Dockerfile both run one), so the in-memory dict is correct;
+the database-backed ingest jobs would additionally survive across processes, but
+answer jobs would not — a multi-worker deployment would need a shared store (e.g.
+Redis) for answers. See this caveat before scaling out.
 
 A job record is a plain ``dict`` so it serializes straight to JSON from the API.
 Fields:
 
-- ``job_id``: the job's own id (also the registry key), so a listed record is
-  self-identifying.
+- ``job_id``: the job's own id (also the store key), so a record is self-identifying.
 - ``status``: ``"running"`` -> ``"done"`` | ``"error"`` (lifecycle).
 - ``type``: the kind of the latest progress event (``"start"`` / ``"progress"``
   / ``"done"`` / ``"error"``), mirrored from :func:`core.documents.stream_ingest`
@@ -45,13 +57,19 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from sqlalchemy import delete, select
+
+from db.models import IngestJob
+from db.session import get_session
+
 # Finished jobs are retained briefly so a client that reconnects right after
-# completion still sees the terminal status, then pruned to bound memory.
+# completion still sees the terminal status, then pruned to bound growth.
 _RETENTION = timedelta(minutes=30)
 
 # Statuses that mean the job will not change again.
 _TERMINAL = ("done", "error")
 
+# Answer jobs only (ingestion jobs live in the database — see the module docstring).
 _lock = threading.Lock()
 _jobs: dict[str, dict[str, Any]] = {}
 
@@ -61,17 +79,9 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _prune_locked() -> None:
-    """Drop finished jobs older than the retention window. Caller holds the lock."""
-    now = datetime.now(UTC)
-    stale = [
-        job_id
-        for job_id, record in _jobs.items()
-        if record.get("finished_at")
-        and now - datetime.fromisoformat(record["finished_at"]) > _RETENTION
-    ]
-    for job_id in stale:
-        del _jobs[job_id]
+# ---------------------------------------------------------------------------
+# Ingestion jobs — persisted in the database so they survive a server restart.
+# ---------------------------------------------------------------------------
 
 
 def create_job(course: str, chapter: str | None, filename: str) -> str:
@@ -79,7 +89,7 @@ def create_job(course: str, chapter: str | None, filename: str) -> str:
 
     The record starts in ``"running"`` with zeroed counters so a client polling
     immediately (before the first event) sees a coherent "starting" state. Old
-    finished jobs are pruned on creation to keep the registry bounded.
+    finished jobs are pruned on creation to keep the table bounded.
     """
     job_id = uuid.uuid4().hex
     record: dict[str, Any] = {
@@ -100,47 +110,97 @@ def create_job(course: str, chapter: str | None, filename: str) -> str:
         "created_at": _now_iso(),
         "finished_at": None,
     }
-    with _lock:
-        _prune_locked()
-        _jobs[job_id] = record
+    with get_session() as session:
+        _prune_ingest(session)
+        session.add(IngestJob(job_id=job_id, status="running", data=record))
     return job_id
+
+
+def _update_ingest_job(job_id: str, event: dict[str, Any]) -> bool:
+    """Merge ``event`` into a persisted ingestion job. Return whether it existed.
+
+    ``event`` is either a raw progress event from ``stream_ingest`` (carrying
+    ``type`` and counters) or a lifecycle patch such as ``{"status": "done"}``.
+    Reaching a terminal ``status`` stamps ``finished_at`` once. The JSON blob is
+    reassigned (not mutated in place) so SQLAlchemy detects the change.
+    """
+    with get_session() as session:
+        row = session.get(IngestJob, job_id)
+        if row is None:
+            return False
+        data = dict(row.data)
+        data.update(event)
+        if data.get("status") in _TERMINAL and data.get("finished_at") is None:
+            data["finished_at"] = _now_iso()
+        row.data = data
+        if "status" in event:
+            row.status = str(data.get("status"))
+        if data.get("status") in _TERMINAL and row.finished_at is None:
+            row.finished_at = datetime.now(UTC)
+        return True
+
+
+def get_job(job_id: str) -> dict[str, Any] | None:
+    """Return a copy of the ingestion job record, or ``None`` if unknown/pruned."""
+    with get_session() as session:
+        row = session.get(IngestJob, job_id)
+        return dict(row.data) if row is not None else None
+
+
+def list_jobs() -> list[dict[str, Any]]:
+    """Return the current ingestion job records, newest first."""
+    with get_session() as session:
+        rows = session.scalars(select(IngestJob).order_by(IngestJob.created_at.desc()))
+        return [dict(row.data) for row in rows]
+
+
+def _prune_ingest(session: Any) -> None:
+    """Delete finished ingestion jobs older than the retention window."""
+    cutoff = datetime.now(UTC) - _RETENTION
+    session.execute(
+        delete(IngestJob).where(IngestJob.finished_at.is_not(None), IngestJob.finished_at < cutoff)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Shared update entry point — dispatches by where the job lives.
+# ---------------------------------------------------------------------------
 
 
 def update_job(job_id: str, event: dict[str, Any]) -> None:
     """Merge ``event`` into the job record (no-op for an unknown/pruned id).
 
-    ``event`` is either a raw progress event from ``stream_ingest`` (carrying
-    ``type`` and counters) or a lifecycle patch such as ``{"status": "done"}``.
-    Reaching a terminal ``status`` stamps ``finished_at`` once.
+    Answer jobs live in memory and ingestion jobs in the database, so this
+    dispatches by which store holds the id (ids are unique across both). Callers
+    stay agnostic: the upload worker and the answer worker both just call this.
     """
     with _lock:
         record = _jobs.get(job_id)
-        if record is None:
+        if record is not None:
+            record.update(event)
+            if record.get("status") in _TERMINAL and record.get("finished_at") is None:
+                record["finished_at"] = _now_iso()
             return
-        record.update(event)
-        if record.get("status") in _TERMINAL and record.get("finished_at") is None:
-            record["finished_at"] = _now_iso()
+    # Not an in-memory answer job — try the persisted ingestion jobs.
+    _update_ingest_job(job_id, event)
 
 
-def get_job(job_id: str) -> dict[str, Any] | None:
-    """Return a copy of the job record, or ``None`` if unknown/pruned."""
-    with _lock:
-        record = _jobs.get(job_id)
-        return dict(record) if record is not None else None
+# ---------------------------------------------------------------------------
+# Answer jobs — kept in memory (per-token updates are too write-heavy for a DB).
+# ---------------------------------------------------------------------------
 
 
-def list_jobs() -> list[dict[str, Any]]:
-    """Return copies of the current ingestion job records (newest first).
-
-    Only ``kind == "ingest"`` records are listed, so answer jobs (which are
-    owner-scoped and read one at a time) never leak into the documents view.
-    """
-    with _lock:
-        return sorted(
-            (dict(record) for record in _jobs.values() if record.get("kind") == "ingest"),
-            key=lambda r: r["created_at"],
-            reverse=True,
-        )
+def _prune_answers_locked() -> None:
+    """Drop finished answer jobs older than the retention window (holds the lock)."""
+    now = datetime.now(UTC)
+    stale = [
+        job_id
+        for job_id, record in _jobs.items()
+        if record.get("finished_at")
+        and now - datetime.fromisoformat(record["finished_at"]) > _RETENTION
+    ]
+    for job_id in stale:
+        del _jobs[job_id]
 
 
 def create_answer_job(owner: str | None, question: str) -> str:
@@ -172,7 +232,7 @@ def create_answer_job(owner: str | None, question: str) -> str:
         "finished_at": None,
     }
     with _lock:
-        _prune_locked()
+        _prune_answers_locked()
         _jobs[job_id] = record
     return job_id
 
