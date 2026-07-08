@@ -44,6 +44,10 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
   // Submit failures render INLINE in the card (a page toast would sit behind the
   // modal, invisible). Cleared whenever the user edits a field or switches mode.
   const [error, setError] = useState<string | null>(null);
+  // A transient success line shown INLINE too (e.g. "account created, signing you
+  // in…"), so the confirmation is visible in the card during the auto sign-in
+  // rather than as a page toast that flashes behind the closing modal.
+  const [success, setSuccess] = useState<string | null>(null);
 
   const canSubmit = usernameInput.trim().length > 0 && password.length > 0 && !loading;
 
@@ -51,6 +55,7 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
     if (next === mode) return;
     setMode(next);
     setError(null);
+    setSuccess(null);
     // Start the other form clean: keeping the typed username/password when
     // toggling login <-> register feels wrong (e.g. a login attempt's values
     // bleeding into the register form), so reset the fields on every switch.
@@ -63,11 +68,14 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
     if (!canSubmit) return;
     setLoading(true);
     setError(null);
+    setSuccess(null);
     try {
       const trimmedUsername = usernameInput.trim();
       if (mode === "register") {
         await register(trimmedUsername, password, config);
-        toast.push(t("auth.accountCreated"), "success");
+        // Confirm INLINE (visible in the card during the auto sign-in that
+        // follows) rather than via a page toast hidden behind the modal.
+        setSuccess(t("auth.accountCreated"));
       }
       const { access_token } = await login(trimmedUsername, password, config);
       // Confirm the token resolves and read back the canonical identity.
@@ -195,6 +203,15 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
               </button>
             </div>
           </FieldShell>
+
+          {success && !error && (
+            <p
+              role="status"
+              className="rounded-lg bg-emerald-50 px-3.5 py-2.5 text-sm font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+            >
+              {success}
+            </p>
+          )}
 
           {error && (
             <p

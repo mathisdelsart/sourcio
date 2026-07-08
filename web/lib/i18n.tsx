@@ -56,7 +56,7 @@ const en = {
   "stats.eyebrow": "Why students trust it",
   "stats.title": "Built for answers you can rely on",
   "stats.subtitle":
-    "Every answer comes from your own courses and shows where it's from — so you can revise without second-guessing.",
+    "Every answer comes from your own course and cites its source.",
   "stats.cited.value": "100%",
   "stats.cited.label": "Answers cited — never invented",
   "stats.refuses.value": "0",
@@ -70,7 +70,7 @@ const en = {
   "how.eyebrow": "How it works",
   "how.title": "From your course to a cited answer",
   "how.subtitle":
-    "Three steps from raw slides to an answer you can trust — add once, ask anything, get the source.",
+    "From your slides to a cited answer, in three steps.",
   "how.step1.title": "Add your course",
   "how.step1.body":
     "Drop in your slides, notes and exercises. They become a private space only your tutor can read.",
@@ -85,7 +85,7 @@ const en = {
   "features.eyebrow": "Why it's different",
   "features.title": "Reliable answers, every time",
   "features.subtitle":
-    "Every answer comes from your course and shows its source — so you can revise with peace of mind.",
+    "Answers from your course — cited, or an honest refusal.",
   "features.cited.title": "Every answer cites its source",
   "features.cited.body":
     "You always see where an answer comes from — the course, the chapter, the page. Never an answer out of nowhere.",
@@ -110,7 +110,7 @@ const en = {
   // Landing CTA / footer
   "landing.cta.title": "Ready to revise from your own course?",
   "landing.cta.body":
-    "No setup to read this far. Open the tutor below, point it at your material, and ask your first question.",
+    "Create an account in two clicks, add your course, and ask your first question.",
   "landing.cta.button": "Start now",
   "landing.footer.tagline": "An AI tutor grounded strictly in your course — cited, or honest about what it can't answer.",
   "footer.explore": "Explore",
@@ -229,7 +229,7 @@ const en = {
   "ask.questionPlaceholder": "e.g. What does the Pythagorean theorem state?",
   "ask.courseLabel": "Course filter",
   "ask.courseHint": "Optional — restrict retrieval to one course.",
-  "ask.coursePlaceholder": "e.g. ELEC2885 Wavelet Transform",
+  "ask.coursePlaceholder": "e.g. Mathematics",
 
   // Course picker
   "course.allCourses": "All courses",
@@ -365,7 +365,7 @@ const en = {
   "threads.list.title": "Threads",
   "threads.new": "New thread",
   "threads.newTitleLabel": "Thread title",
-  "threads.newTitlePlaceholder": "Optional — e.g. Wavelet basics",
+  "threads.newTitlePlaceholder": "Optional — e.g. The Pythagorean theorem",
   "threads.create": "Create",
   "threads.created": "Thread created.",
   "threads.createFailed": "Could not create the thread.",
@@ -405,7 +405,7 @@ const en = {
   "review.dueCount": "{count} due",
   "review.add.title": "Add a notion",
   "review.add.label": "Notion to review",
-  "review.add.placeholder": "e.g. continuous wavelet transform",
+  "review.add.placeholder": "e.g. the Pythagorean theorem",
   "review.add.button": "Add",
   "review.add.hint": "Adds the notion to your review queue, due immediately.",
   "review.added": "Added “{notion}” to your review queue.",
@@ -448,11 +448,11 @@ const en = {
   "doc.upload.selectedFile": "Selected: {name}",
   "doc.upload.unsupported": "Unsupported file type. Use a PDF, Markdown (.md) or text (.txt) file.",
   "doc.upload.course": "Course",
-  "doc.upload.coursePlaceholder": "e.g. Wavelet Transform",
+  "doc.upload.coursePlaceholder": "e.g. Mathematics",
   "doc.upload.courseRequired": "Enter a course name to import.",
   "doc.upload.chapter": "Chapter (optional)",
   "doc.upload.chapterHint": "Groups the material; leave empty for none.",
-  "doc.upload.chapterPlaceholder": "e.g. Chapter 1",
+  "doc.upload.chapterPlaceholder": "e.g. The Pythagorean theorem",
   "doc.upload.openaiKey": "Your OpenAI or Anthropic API key (optional)",
   "doc.upload.openaiKeyHint":
     "The same key as in the account menu. Works with an OpenAI or an Anthropic key (auto-detected). When set it powers every answer with a premium model AND reads scanned/image PDFs — it replaces the free model and runs on your own OpenAI or Anthropic credit. Stored in your browser only; never on our server. Text PDFs and .md/.txt files import for free without a key.",
@@ -554,7 +554,7 @@ const fr: Record<TranslationKey, string> = {
   "stats.eyebrow": "Pourquoi lui faire confiance",
   "stats.title": "Conçu pour des réponses fiables",
   "stats.subtitle":
-    "Chaque réponse vient de vos propres cours et indique sa source — pour réviser sans douter.",
+    "Chaque réponse vient de votre cours et cite sa source.",
   "stats.cited.value": "100 %",
   "stats.cited.label": "Réponses sourcées — jamais inventées",
   "stats.refuses.value": "0",
@@ -568,7 +568,7 @@ const fr: Record<TranslationKey, string> = {
   "how.eyebrow": "Comment ça marche",
   "how.title": "De votre cours à une réponse citée",
   "how.subtitle":
-    "Trois étapes, de vos slides à une réponse fiable — ajoutez une fois, demandez tout, obtenez la source.",
+    "De vos slides à une réponse citée, en trois étapes.",
   "how.step1.title": "Ajoutez votre cours",
   "how.step1.body":
     "Déposez vos slides, notes et exercices. Ils deviennent un espace privé que seul votre tuteur peut consulter.",
@@ -583,7 +583,7 @@ const fr: Record<TranslationKey, string> = {
   "features.eyebrow": "Ce qui le distingue",
   "features.title": "Des réponses fiables, à chaque fois",
   "features.subtitle":
-    "Chaque réponse vient de votre cours et indique sa source — pour réviser l'esprit tranquille.",
+    "Des réponses citées de vos cours — ou un refus honnête.",
   "features.cited.title": "Chaque réponse cite sa source",
   "features.cited.body":
     "Vous voyez toujours d'où vient la réponse : le cours, le chapitre, la page. Jamais de réponse sortie de nulle part.",
@@ -609,7 +609,7 @@ const fr: Record<TranslationKey, string> = {
   // Landing CTA / footer
   "landing.cta.title": "Prêt à réviser à partir de votre propre cours ?",
   "landing.cta.body":
-    "Aucune configuration nécessaire pour en arriver là. Ouvrez le tuteur ci-dessous, pointez-le vers votre matériel et posez votre première question.",
+    "Créez un compte en deux clics, importez votre cours, et posez votre première question.",
   "landing.cta.button": "Commencer",
   "landing.footer.tagline": "Un tuteur IA strictement ancré dans votre cours — cité, ou honnête sur ce qu'il ne peut pas répondre.",
   "footer.explore": "Explorer",
@@ -733,7 +733,7 @@ const fr: Record<TranslationKey, string> = {
   "ask.questionPlaceholder": "ex. Que dit le théorème de Pythagore ?",
   "ask.courseLabel": "Filtre par cours",
   "ask.courseHint": "Optionnel — restreindre la récupération à un seul cours.",
-  "ask.coursePlaceholder": "ex. ELEC2885 Wavelet Transform",
+  "ask.coursePlaceholder": "ex. Mathématiques",
 
   // Course picker
   "course.allCourses": "Tous les cours",
@@ -873,7 +873,7 @@ const fr: Record<TranslationKey, string> = {
   "threads.list.title": "Fils",
   "threads.new": "Nouveau fil",
   "threads.newTitleLabel": "Titre du fil",
-  "threads.newTitlePlaceholder": "Optionnel — ex. Bases des ondelettes",
+  "threads.newTitlePlaceholder": "Optionnel — ex. Le théorème de Pythagore",
   "threads.create": "Créer",
   "threads.created": "Fil créé.",
   "threads.createFailed": "Impossible de créer le fil.",
@@ -913,7 +913,7 @@ const fr: Record<TranslationKey, string> = {
   "review.dueCount": "{count} à réviser",
   "review.add.title": "Ajouter une notion",
   "review.add.label": "Notion à réviser",
-  "review.add.placeholder": "ex. transformée en ondelettes continue",
+  "review.add.placeholder": "ex. le théorème de Pythagore",
   "review.add.button": "Ajouter",
   "review.add.hint": "Ajoute la notion à votre file de révision, à réviser immédiatement.",
   "review.added": "« {notion} » ajoutée à votre file de révision.",
@@ -957,11 +957,11 @@ const fr: Record<TranslationKey, string> = {
   "doc.upload.selectedFile": "Sélectionné : {name}",
   "doc.upload.unsupported": "Type de fichier non pris en charge. Utilisez un fichier PDF, Markdown (.md) ou texte (.txt).",
   "doc.upload.course": "Cours",
-  "doc.upload.coursePlaceholder": "ex. Transformée en ondelettes",
+  "doc.upload.coursePlaceholder": "ex. Mathématiques",
   "doc.upload.courseRequired": "Indiquez le nom du cours pour importer.",
   "doc.upload.chapter": "Chapitre (optionnel)",
   "doc.upload.chapterHint": "Regroupe le contenu ; laissez vide si aucun.",
-  "doc.upload.chapterPlaceholder": "ex. Chapitre 1",
+  "doc.upload.chapterPlaceholder": "ex. Le théorème de Pythagore",
   "doc.upload.openaiKey": "Votre clé API OpenAI ou Anthropic (optionnel)",
   "doc.upload.openaiKeyHint":
     "La même clé que dans le menu du compte. Fonctionne avec une clé OpenAI ou Anthropic (détectée automatiquement). Lorsqu’elle est définie, elle alimente chaque réponse avec un modèle premium ET permet de lire les PDF scannés ou basés sur des images : elle remplace le modèle gratuit et utilise votre propre crédit OpenAI ou Anthropic. Conservée uniquement dans votre navigateur, jamais sur notre serveur. Les PDF texte et les fichiers .md/.txt s’importent gratuitement, sans clé.",
@@ -1056,7 +1056,7 @@ const nl: Record<TranslationKey, string> = {
   "stats.eyebrow": "Waarom studenten erop vertrouwen",
   "stats.title": "Gebouwd voor antwoorden waarop je kunt bouwen",
   "stats.subtitle":
-    "Elk antwoord komt uit je eigen cursussen en toont waar het vandaan komt — zodat je kunt studeren zonder te twijfelen.",
+    "Elk antwoord komt uit je cursus en vermeldt de bron.",
   "stats.cited.value": "100%",
   "stats.cited.label": "Antwoorden met bron — nooit verzonnen",
   "stats.refuses.value": "0",
@@ -1070,7 +1070,7 @@ const nl: Record<TranslationKey, string> = {
   "how.eyebrow": "Hoe het werkt",
   "how.title": "Van je cursus naar een geciteerd antwoord",
   "how.subtitle":
-    "Drie stappen van ruwe slides naar een betrouwbaar antwoord — voeg één keer toe, vraag alles, krijg de bron.",
+    "Van je slides naar een geciteerd antwoord, in drie stappen.",
   "how.step1.title": "Voeg je cursus toe",
   "how.step1.body":
     "Zet je slides, notities en oefeningen erin. Ze worden een privéruimte die alleen je tutor kan lezen.",
@@ -1085,7 +1085,7 @@ const nl: Record<TranslationKey, string> = {
   "features.eyebrow": "Wat het anders maakt",
   "features.title": "Betrouwbare antwoorden, elke keer",
   "features.subtitle":
-    "Elk antwoord komt uit je cursus en toont zijn bron — zodat je met een gerust hart kunt studeren.",
+    "Antwoorden uit je cursus — geciteerd, of een eerlijke weigering.",
   "features.cited.title": "Elk antwoord vermeldt zijn bron",
   "features.cited.body":
     "Je ziet altijd waar een antwoord vandaan komt — de cursus, het hoofdstuk, de pagina. Nooit een antwoord uit het niets.",
@@ -1109,7 +1109,7 @@ const nl: Record<TranslationKey, string> = {
   // Landing CTA / footer
   "landing.cta.title": "Klaar om vanuit je eigen cursus te studeren?",
   "landing.cta.body":
-    "Geen installatie om tot hier te lezen. Open de tutor hieronder, richt hem op je materiaal en stel je eerste vraag.",
+    "Maak in twee klikken een account, voeg je cursus toe en stel je eerste vraag.",
   "landing.cta.button": "Begin nu",
   "landing.footer.tagline":
     "Een AI-tutor strikt verankerd in je cursus — geciteerd, of eerlijk over wat hij niet kan beantwoorden.",
@@ -1229,7 +1229,7 @@ const nl: Record<TranslationKey, string> = {
   "ask.questionPlaceholder": "bijv. Wat zegt de stelling van Pythagoras?",
   "ask.courseLabel": "Cursusfilter",
   "ask.courseHint": "Optioneel — beperk tot één cursus.",
-  "ask.coursePlaceholder": "bijv. ELEC2885 Wavelet Transform",
+  "ask.coursePlaceholder": "bijv. Wiskunde",
 
   // Course picker
   "course.allCourses": "Alle cursussen",
@@ -1364,7 +1364,7 @@ const nl: Record<TranslationKey, string> = {
   "threads.list.title": "Gesprekken",
   "threads.new": "Nieuw gesprek",
   "threads.newTitleLabel": "Gesprekstitel",
-  "threads.newTitlePlaceholder": "Optioneel — bijv. Wavelet-basis",
+  "threads.newTitlePlaceholder": "Optioneel — bijv. De stelling van Pythagoras",
   "threads.create": "Aanmaken",
   "threads.created": "Gesprek aangemaakt.",
   "threads.createFailed": "Kon het gesprek niet aanmaken.",
@@ -1404,7 +1404,7 @@ const nl: Record<TranslationKey, string> = {
   "review.dueCount": "{count} te doen",
   "review.add.title": "Voeg een begrip toe",
   "review.add.label": "Te herhalen begrip",
-  "review.add.placeholder": "bijv. continue wavelettransformatie",
+  "review.add.placeholder": "bijv. de stelling van Pythagoras",
   "review.add.button": "Toevoegen",
   "review.add.hint": "Voegt het begrip toe aan je herhalingswachtrij, direct te doen.",
   "review.added": "“{notion}” toegevoegd aan je herhalingswachtrij.",
@@ -1446,11 +1446,11 @@ const nl: Record<TranslationKey, string> = {
   "doc.upload.selectedFile": "Geselecteerd: {name}",
   "doc.upload.unsupported": "Niet-ondersteund bestandstype. Gebruik een PDF-, Markdown- (.md) of tekstbestand (.txt).",
   "doc.upload.course": "Vak",
-  "doc.upload.coursePlaceholder": "bijv. Wavelet-transformatie",
+  "doc.upload.coursePlaceholder": "bijv. Wiskunde",
   "doc.upload.courseRequired": "Voer een cursusnaam in om te importeren.",
   "doc.upload.chapter": "Hoofdstuk (optioneel)",
   "doc.upload.chapterHint": "Groepeert het materiaal; laat leeg voor geen.",
-  "doc.upload.chapterPlaceholder": "bijv. Hoofdstuk 1",
+  "doc.upload.chapterPlaceholder": "bijv. De stelling van Pythagoras",
   "doc.upload.openaiKey": "Uw OpenAI- of Anthropic-API-sleutel (optioneel)",
   "doc.upload.openaiKeyHint":
     "Dezelfde sleutel als in het accountmenu. Werkt met een OpenAI- of Anthropic-sleutel (automatisch gedetecteerd). Wanneer ingesteld, voedt hij elk antwoord met een premium-model ÉN leest hij gescande of op afbeeldingen gebaseerde PDF’s — hij vervangt het gratis model en gebruikt uw eigen OpenAI- of Anthropic-tegoed. Alleen opgeslagen in uw browser, nooit op onze server. Tekst-PDF’s en .md/.txt-bestanden worden gratis geïmporteerd, zonder sleutel.",
