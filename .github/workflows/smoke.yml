@@ -1,0 +1,45 @@
+name: Smoke (live deployment)
+
+# End-to-end smoke test against a RUNNING deployment (not a per-PR gate).
+#
+# This is deliberately NOT part of the required `quality` check: a smoke test
+# needs a live API + Qdrant + an ingested course + a working LLM, whereas the
+# `quality` job is hermetic (ruff/pytest/pyright) and the pytest suite already
+# integration-tests every endpoint with a mocked LLM. Here we verify the actual
+# deployment is healthy end-to-end.
+#
+# Trigger it manually (Actions -> Smoke -> Run workflow), optionally overriding
+# the target URL. A daily schedule is provided but commented out, because each
+# run registers a throwaway account and ingests a tiny course in the target's
+# database -- fine on demand, but you may not want that happening unattended
+# against production. Uncomment the schedule if you accept that.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "API base URL to smoke-test"
+        required: false
+        default: "https://mathis003-sourcio-api.hf.space"
+  # schedule:
+  #   - cron: "0 7 * * *"  # daily at 07:00 UTC
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the smoke test
+        env:
+          # Priority: manual input -> repo variable SMOKE_BASE_URL -> the HF URL.
+          BASE_URL: ${{ github.event.inputs.base_url || vars.SMOKE_BASE_URL || 'https://mathis003-sourcio-api.hf.space' }}
+          # Reuse a single account across runs (register returns 409 -> reused)
+          # so a scheduled run does not create a new account every time.
+          SMOKE_USER: smoke-ci
+          # Optional: set a premium API key as the SMOKE_PREMIUM_KEY secret to
+          # also exercise the bring-your-own-key premium path.
+          PREMIUM_KEY: ${{ secrets.SMOKE_PREMIUM_KEY }}
+          # Optional: set API_KEY (repo secret) if the deployment is X-API-Key gated.
+          API_KEY: ${{ secrets.SMOKE_API_KEY }}
+        run: bash scripts/smoke.sh
