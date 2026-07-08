@@ -2,12 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { getConfig, me, type AskResponse, type ConnectionConfig } from "@/lib/api";
+import { me, type AskResponse, type ConnectionConfig } from "@/lib/api";
 import { KEYS, generateStudentId, readLocal, writeLocal } from "@/lib/storage";
 import { Tabs, type TabItem } from "@/components/Tabs";
 import { HealthBadge } from "@/components/HealthBadge";
 import { AuthMenu } from "@/components/AuthMenu";
-import { AuthGate } from "@/components/AuthGate";
 import { AuthCard } from "@/components/AuthCard";
 import { Button } from "@/components/Button";
 import { BrandMark } from "@/components/Logo";
@@ -58,13 +57,9 @@ export default function Home() {
   // Opens the shared sign-in / register card as a centered modal from the
   // locked tool area (the header AuthMenu owns its own separate modal).
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  // Enforced multi-user mode, learned from GET /config. When true and the user
-  // is not signed in, a blocking login gate replaces the app. Defaults to false
-  // so an unreachable backend never locks the anonymous MVP flow.
-  const [requireAuth, setRequireAuth] = useState(false);
   // The signed-in user's id, used to derive an account-scoped student id so two
   // accounts on one browser never share data. Resolved whenever a token exists,
-  // independently of `requireAuth`, so being logged in always isolates the view.
+  // so being logged in always isolates the view.
   const [authUserId, setAuthUserId] = useState<number | null>(null);
   // True while a stored token is being resolved to a user (the `me()` call is in
   // flight). The tool's data render is gated behind this so the first requests
@@ -133,24 +128,8 @@ export default function Home() {
     writeLocal(KEYS.openaiKey, trimmed);
   }
 
-  // Learn whether the backend enforces authentication (once ready, and whenever
-  // the connection target changes). getConfig swallows errors and returns
-  // require_auth:false, so a down backend keeps the anonymous flow usable.
-  useEffect(() => {
-    if (!ready) return;
-    let cancelled = false;
-    getConfig({ baseUrl: baseUrl || undefined, apiKey: apiKey || undefined })
-      .then((cfg) => {
-        if (!cancelled) setRequireAuth(cfg.require_auth);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [ready, baseUrl, apiKey]);
-
-  // Resolve the signed-in user's id whenever a token exists (independently of
-  // `requireAuth`), so being logged in always isolates the view. The resolved
+  // Resolve the signed-in user's id whenever a token exists, so being logged in
+  // always isolates the view. The resolved
   // username is refreshed from the canonical `me()` response. A stored token
   // that no longer resolves is treated as logged-out (cleared) rather than
   // silently falling back to the device id.
@@ -224,6 +203,10 @@ export default function Home() {
     setAuthUsername("");
     writeLocal(KEYS.authToken, "");
     writeLocal(KEYS.authUsername, "");
+    // Clear the visitor's own OpenAI key on sign-out so their paid credential
+    // never lingers in this browser for the next person on a shared machine to
+    // read from storage and spend against.
+    updateOpenaiKey("");
     // Drop the active thread so a stale account thread id never lingers into the
     // anonymous (device-scoped) view after signing out.
     selectSession(null);
@@ -239,12 +222,6 @@ export default function Home() {
 
   if (!ready) {
     return <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950" />;
-  }
-
-  // Enforced multi-user mode: block the whole app behind a sign-in gate until
-  // the visitor has a token. Signing in sets `token`, which removes the gate.
-  if (requireAuth && !token) {
-    return <AuthGate config={config} onLogin={onLogin} />;
   }
 
   return (

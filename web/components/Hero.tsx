@@ -83,21 +83,28 @@ export function Hero({ targetId = "tool" }: { targetId?: string }) {
       <div className="relative grid items-center gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
         {/* Left column: copy + CTA. */}
         <div className="text-left">
-          <ul className="flex flex-wrap gap-2" aria-label={t("hero.principles")}>
-            {BADGES.map((badge) => (
-              <li
-                key={badge.key}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${badgeTone[badge.tone]}`}
-              >
-                {badge.check ? (
-                  <Check />
-                ) : (
-                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-brand-500" />
-                )}
-                {t(badge.key)}
-              </li>
+          {/* Two explicit rows so the layout is always 2 + 2 (the green
+              "success" pair on top, the blue "brand" pair below) instead of a
+              width-dependent 3 + 1 wrap. */}
+          <div className="flex flex-col gap-2" aria-label={t("hero.principles")}>
+            {(["success", "brand"] as const).map((tone) => (
+              <ul key={tone} className="flex flex-wrap gap-2">
+                {BADGES.filter((badge) => badge.tone === tone).map((badge) => (
+                  <li
+                    key={badge.key}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${badgeTone[badge.tone]}`}
+                  >
+                    {badge.check ? (
+                      <Check />
+                    ) : (
+                      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+                    )}
+                    {t(badge.key)}
+                  </li>
+                ))}
+              </ul>
             ))}
-          </ul>
+          </div>
 
           <h1
             id="hero-heading"
@@ -150,7 +157,17 @@ function WindowDots() {
  */
 function AppMockup() {
   const { t } = useT();
-  const tabs = [t("hero.app.tab.ask"), t("hero.app.tab.exercise"), t("hero.app.tab.grade")];
+  // Mirror the real tool's tab strip so the mockup advertises what actually
+  // ships today (Quiz, Threads, History, Documents) rather than the old
+  // Ask/Exercise/Grade set. Reuses the live `tabs.*` labels so it never drifts.
+  const tabs = [
+    t("tabs.ask"),
+    t("tabs.exercise"),
+    t("tabs.quiz"),
+    t("tabs.threads"),
+    t("tabs.history"),
+    t("tabs.documents"),
+  ];
   return (
     <div className="relative" aria-hidden>
       {/* Brand glow pooled behind the window. */}
@@ -173,15 +190,16 @@ function AppMockup() {
           <span aria-hidden className="w-[52px]" />
         </div>
 
-        {/* Tab strip. */}
-        <div className="flex items-center gap-1 border-b border-zinc-200 px-3 pt-2.5">
+        {/* Tab strip. Clipped so the real (6-tab) set never overflows the
+            mockup on narrow screens; the first tab reads as active. */}
+        <div className="flex items-center gap-0.5 overflow-hidden border-b border-zinc-200 px-2 pt-2.5">
           {tabs.map((label, i) => (
             <span
               key={label}
               className={
                 i === 0
-                  ? "rounded-t-md border-b-2 border-brand-500 px-3 pb-2 text-xs font-semibold text-ink"
-                  : "px-3 pb-2 text-xs font-medium text-zinc-400"
+                  ? "whitespace-nowrap rounded-t-md border-b-2 border-brand-500 px-2 pb-2 text-xs font-semibold text-ink"
+                  : "whitespace-nowrap px-2 pb-2 text-xs font-medium text-zinc-400"
               }
             >
               {label}

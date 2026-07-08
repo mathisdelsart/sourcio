@@ -4,8 +4,10 @@ export const KEYS = {
   studentId: "grounded-rag:student_id",
   baseUrl: "grounded-rag:base_url",
   apiKey: "grounded-rag:api_key",
-  // The visitor's own OpenAI key, used ONLY to import scanned/image PDFs. Sent
-  // with the upload request when set; kept in the browser, never on the server.
+  // The visitor's own OpenAI key. When set it is sent on every request so all
+  // LLM calls (Ask, re-explain, exercises, quizzes, grading, the router and
+  // scanned-PDF import) run on their premium model. Kept in the browser only,
+  // never stored on the server; cleared on sign-out.
   openaiKey: "grounded-rag:openai_key",
   authToken: "grounded-rag:auth_token",
   authUsername: "grounded-rag:auth_username",

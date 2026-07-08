@@ -28,9 +28,9 @@ type Mode = "login" | "register";
  *
  * A single source of truth for the auth form: the segmented login/register
  * toggle, username (pseudo) + password, the full-width primary action, and the
- * register→login→me submit flow with toast feedback. Reused by both the
- * full-screen {@link AuthGate} and the header account menu (as a centered
- * modal), so the two never drift apart.
+ * register→login→me submit flow with toast feedback. Reused by both the locked
+ * tool CTA (as a centered modal) and the header account menu, so the two never
+ * drift apart.
  */
 export function AuthCard({ config, onLogin, onSuccess, onClose, className }: AuthCardProps) {
   const toast = useToast();
