@@ -207,6 +207,31 @@ def test_hybrid_routes_plain_and_vision_pages(fake_fitz):
     assert len(seen) == 2
 
 
+def test_hybrid_falls_back_to_free_text_when_vision_unavailable(fake_fitz, monkeypatch):
+    # No visitor key, no process OPENAI_API_KEY, and no local vision model: vision
+    # cannot run, so a math-heavy but text-based page must still import for free via
+    # PyMuPDF instead of being pushed to vision (which would fail with an auth error).
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_EXTRACT", raising=False)
+    monkeypatch.setattr(extract, "get_settings", lambda: types.SimpleNamespace(llm_provider=""))
+
+    class _Boom:
+        def invoke(self, *_args, **_kwargs):
+            raise AssertionError("vision must not be called when it is unavailable")
+
+    monkeypatch.setattr(extract, "get_llm", lambda *_a, **_k: _Boom())
+
+    mathy = _FakePage("E = mc^2 and more prose " * 20, images=0)  # math symbols, text-rich
+    fake_fitz([mathy])
+
+    # No transcriber injected -> availability is decided by key/env/provider (all absent).
+    result = extract.extract_pdf("x.pdf", "Course", hybrid=True, api_key=None)
+
+    assert len(result) == 1
+    # The page came back as free PyMuPDF text, not a vision transcription.
+    assert "mc^2" in result[0].text
+
+
 def test_default_mode_sends_every_page_to_vision(fake_fitz):
     pages = [_FakePage("word " * 100, images=0) for _ in range(3)]
     fake_fitz(pages)

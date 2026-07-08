@@ -17,6 +17,7 @@ Two optimizations keep ingestion fast and cheap:
 
 import base64
 import logging
+import os
 import re
 import time
 from collections.abc import Callable
@@ -25,7 +26,7 @@ from dataclasses import dataclass
 
 from langchain_core.messages import HumanMessage
 
-from core.config import get_llm
+from core.config import get_llm, get_settings
 from ingestion.schema import Page
 
 logger = logging.getLogger(__name__)
@@ -278,6 +279,22 @@ def extract_pdf(
     """
     import fitz  # PyMuPDF, imported lazily so non-ingestion code can import this module.
 
+    # Whether the vision transcriber can actually run. When it cannot — no
+    # visitor key, no process OPENAI_API_KEY, and not a local Ollama vision model
+    # — routing a page to vision would only fail with an auth error. In that case
+    # hybrid mode extracts EVERY page for free with PyMuPDF instead: a math-heavy
+    # but text-based PDF (e.g. a thesis) still imports, just with lower-fidelity
+    # math, and the visitor can re-import with a key for full fidelity. An
+    # injected transcriber (tests) always counts as available.
+    settings = get_settings()
+    vision_available = (
+        transcriber is not None
+        or bool(api_key)
+        or bool(os.getenv("OPENAI_API_KEY"))
+        or settings.llm_provider.strip().lower() == "ollama"
+        or (os.getenv("LLM_EXTRACT") or "").startswith("ollama:")
+    )
+
     if transcriber is None:
         llm = get_llm("extract", api_key=api_key)
 
@@ -319,7 +336,10 @@ def extract_pdf(
         # against PyMuPDF's broad get_text() overloads.
         raw = page.get_text()
         text = (raw if isinstance(raw, str) else "").strip()
-        if hybrid and not needs_vision(_page_features(page)):
+        # Keep a page on the free PyMuPDF path when it is plain text OR when
+        # vision is not available at all, so a math/scanned page never fails the
+        # import for lack of a working key — it is imported as best-effort text.
+        if hybrid and (not vision_available or not needs_vision(_page_features(page))):
             plain[page_no] = text
         else:
             vision_fallback[page_no] = text
