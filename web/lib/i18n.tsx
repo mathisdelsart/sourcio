@@ -152,6 +152,7 @@ const en = {
   "auth.signedInToast": "Signed in as {username}.",
   "auth.signedOutToast": "Signed out.",
   "auth.failed": "Authentication failed.",
+  "auth.incomplete": "Enter a username and password.",
   "auth.cardTitle": "Sign in to your tutor",
   "auth.cardSubtitle": "Ask questions and get answers grounded in your own courses.",
   "auth.close": "Close",
@@ -651,6 +652,7 @@ const fr: Record<TranslationKey, string> = {
   "auth.signedInToast": "Connecté en tant que {username}.",
   "auth.signedOutToast": "Déconnecté.",
   "auth.failed": "Échec de l'authentification.",
+  "auth.incomplete": "Entrez un pseudo et un mot de passe.",
   "auth.cardTitle": "Connectez-vous à votre tuteur",
   "auth.cardSubtitle":
     "Posez vos questions et obtenez des réponses ancrées dans vos propres cours.",
@@ -1152,6 +1154,7 @@ const nl: Record<TranslationKey, string> = {
   "auth.signedInToast": "Ingelogd als {username}.",
   "auth.signedOutToast": "Uitgelogd.",
   "auth.failed": "Authenticatie mislukt.",
+  "auth.incomplete": "Voer een gebruikersnaam en wachtwoord in.",
   "auth.cardTitle": "Log in bij je tutor",
   "auth.cardSubtitle": "Stel vragen en krijg antwoorden op basis van je eigen cursussen.",
   "auth.close": "Sluiten",

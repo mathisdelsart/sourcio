@@ -49,8 +49,6 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
   // rather than as a page toast that flashes behind the closing modal.
   const [success, setSuccess] = useState<string | null>(null);
 
-  const canSubmit = usernameInput.trim().length > 0 && password.length > 0 && !loading;
-
   function switchMode(next: Mode) {
     if (next === mode) return;
     setMode(next);
@@ -65,7 +63,14 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
   }
 
   async function submit() {
-    if (!canSubmit) return;
+    if (loading) return;
+    // Validate on submit so the primary button can stay solid (a clear, premium
+    // call to action) rather than sitting in a washed-out disabled state until
+    // both fields are filled; if something is missing, say so inline.
+    if (usernameInput.trim().length === 0 || password.length === 0) {
+      setError(t("auth.incomplete"));
+      return;
+    }
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -110,9 +115,16 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
       )}
       <CardBody className="p-7 sm:p-9">
         <div className="flex flex-col items-center text-center">
-          <BrandMark className="h-14 w-14" />
-          <span className="mt-4 text-2xl font-bold tracking-tight text-ink">{t("app.name")}</span>
-          <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+          <div className="relative">
+            {/* Soft periwinkle halo: a premium focal point behind the mark. */}
+            <div
+              aria-hidden
+              className="absolute left-1/2 top-1/2 -z-10 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-500/20 blur-2xl"
+            />
+            <BrandMark className="h-16 w-16 ring-1 ring-black/5" />
+          </div>
+          <h2 className="mt-5 text-[1.7rem] font-bold tracking-tight text-ink">{t("app.name")}</h2>
+          <p className="mt-2 max-w-[17rem] text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
             {t("auth.cardSubtitle")}
           </p>
         </div>
@@ -226,7 +238,6 @@ export function AuthCard({ config, onLogin, onSuccess, onClose, className }: Aut
             className="mt-1 h-11 w-full rounded-xl text-sm"
             onClick={submit}
             loading={loading}
-            disabled={!canSubmit}
           >
             {mode === "login" ? t("auth.signIn") : t("auth.createAccount")}
           </Button>
