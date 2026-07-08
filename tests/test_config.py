@@ -386,4 +386,4 @@ def test_effective_rate_limit_explicit_override_wins_regardless_of_auth():
 
 
 def test_max_upload_mb_default():
-    assert config.Settings().max_upload_mb == 25
+    assert config.Settings().max_upload_mb == 100

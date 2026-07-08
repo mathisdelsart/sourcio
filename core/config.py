@@ -153,7 +153,7 @@ class Settings(BaseSettings):
     # Maximum size, in megabytes, accepted by the document upload endpoint. Guards
     # the public deployment against oversized/abusive uploads; a file larger than
     # this is rejected with HTTP 413 before ingestion. Override via MAX_UPLOAD_MB.
-    max_upload_mb: int = 25
+    max_upload_mb: int = 100
 
     # Send HTTP Strict-Transport-Security on every response. Off by default
     # because HSTS only makes sense behind HTTPS/TLS; enabling it on a plain-HTTP
