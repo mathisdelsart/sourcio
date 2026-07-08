@@ -10,9 +10,12 @@ const inter = Inter({
   display: "swap",
 });
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sourcio.app";
+// Public site URL — used as the metadataBase so the Open Graph image resolves to
+// an absolute URL. Defaults to the live Vercel URL; override with
+// NEXT_PUBLIC_SITE_URL on the host if you later attach a custom domain.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sourcio-tutor.vercel.app";
 const DESCRIPTION =
-  "An AI tutor that answers strictly from your own courses — every answer cited to its source, or honestly refused when the course doesn't cover it.";
+  "An AI study tutor that answers only from your own course materials — every answer cited to its source, or honestly refused when your notes don't cover it.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -32,8 +35,8 @@ export const metadata: Metadata = {
     url: SITE_URL,
   },
   twitter: {
-    card: "summary",
-    title: "Sourcio",
+    card: "summary_large_image",
+    title: "Sourcio — cited answers from your own courses",
     description: DESCRIPTION,
   },
 };
