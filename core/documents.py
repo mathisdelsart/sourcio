@@ -305,7 +305,13 @@ def _load_pages(path: str, course: str, *, extract_api_key: str | None = None) -
     from ingestion.extract import extract_pdf
 
     try:
-        return extract_pdf(path, course, hybrid=True, api_key=extract_api_key)
+        return extract_pdf(
+            path,
+            course,
+            hybrid=True,
+            api_key=extract_api_key,
+            concurrency=get_settings().ingest_concurrency,
+        )
     except ValueError:
         raise
     except Exception as exc:
@@ -395,7 +401,7 @@ def stream_ingest(
     chapter: str | None = None,
     *,
     owner: str | None = None,
-    batch_size: int = 3,
+    batch_size: int | None = None,
     sparse: bool = False,
     extract_api_key: str | None = None,
 ) -> Iterator[dict[str, Any]]:
@@ -474,6 +480,11 @@ def stream_ingest(
     from ingestion.extract import extract_pdf
     from ingestion.run import _pdf_page_count
 
+    settings = get_settings()
+    # Larger batches + concurrent vision (see Settings.ingest_*) import a big PDF
+    # far faster; callers may still pass an explicit batch_size (e.g. tests).
+    if batch_size is None:
+        batch_size = settings.ingest_batch_size
     total = 0
     done = 0
     indexed = 0
@@ -495,7 +506,14 @@ def stream_ingest(
             # (deterministic, no model), so a text PDF indexes even when the
             # configured vision model is weak/absent; only math/figure-heavy pages
             # reach the vision model.
-            pages = extract_pdf(path, course, pages=batch, hybrid=True, api_key=extract_api_key)
+            pages = extract_pdf(
+                path,
+                course,
+                pages=batch,
+                hybrid=True,
+                api_key=extract_api_key,
+                concurrency=settings.ingest_concurrency,
+            )
             _stamp_pages(pages, chapter, document, owner)
             chunks = chunk_pages(pages)
             if chunks:

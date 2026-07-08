@@ -155,6 +155,15 @@ class Settings(BaseSettings):
     # this is rejected with HTTP 413 before ingestion. Override via MAX_UPLOAD_MB.
     max_upload_mb: int = 100
 
+    # Document-ingestion parallelism. A PDF is imported by transcribing pages
+    # through the vision model concurrently and indexing them in batches; larger
+    # values import a big PDF much faster (the old 4/3 defaults meant a 123-page
+    # thesis crawled through ~41 near-serial rounds). The rate-limit retry/backoff
+    # absorbs any 429s, so a high concurrency self-throttles to the provider's
+    # limit rather than failing. Override via INGEST_CONCURRENCY / INGEST_BATCH_SIZE.
+    ingest_concurrency: int = 12
+    ingest_batch_size: int = 16
+
     # Send HTTP Strict-Transport-Security on every response. Off by default
     # because HSTS only makes sense behind HTTPS/TLS; enabling it on a plain-HTTP
     # local setup would be wrong. Enable it only when the API is served over TLS.
