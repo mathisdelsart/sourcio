@@ -155,12 +155,21 @@ export function AuthMenu({
               <div className="relative">
                 <input
                   id={openaiKeyId}
-                  type={showKey ? "text" : "password"}
+                  // A plain text input masked with CSS (not type="password"), plus
+                  // anti-autofill hints, so the browser never offers to "save this
+                  // password" — this is an API key, not a credential.
+                  type="text"
+                  name="sourcio-openai-key"
                   autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-1p-ignore
+                  data-lpignore="true"
                   placeholder="sk-…"
                   value={openaiKey}
                   onChange={(e) => onOpenaiKeyChange(e.target.value)}
-                  className={cn(baseField, "pr-11")}
+                  className={cn(baseField, "pr-11", !showKey && "[-webkit-text-security:disc]")}
                 />
                 <button
                   type="button"

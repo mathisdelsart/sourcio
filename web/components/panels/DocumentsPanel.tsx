@@ -430,13 +430,21 @@ export function DocumentsPanel({
               <div className="relative">
                 <input
                   id={openaiKeyId}
-                  type={showKey ? "text" : "password"}
+                  // Masked text input (not type="password") + anti-autofill hints,
+                  // so the browser never prompts to save this API key as a password.
+                  type="text"
+                  name="sourcio-openai-key"
                   autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-1p-ignore
+                  data-lpignore="true"
                   placeholder="sk-…"
                   value={openaiKey}
                   disabled={uploading}
                   onChange={(e) => onOpenaiKeyChange(e.target.value)}
-                  className={cn(baseField, "pr-11")}
+                  className={cn(baseField, "pr-11", !showKey && "[-webkit-text-security:disc]")}
                 />
                 <button
                   type="button"
