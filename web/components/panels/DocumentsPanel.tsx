@@ -12,7 +12,7 @@ import {
   startUpload,
   type ConnectionConfig,
   type DocumentCourse,
-  type DocumentProgress,
+  type DocumentJob,
 } from "@/lib/api";
 import { Card, CardBody, CardHeader } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -48,26 +48,40 @@ function rowKey(course: string, chapter: string | null): string {
 }
 
 /**
- * localStorage key holding the currently running upload, so a page refresh or
- * navigation can re-attach to the background server job instead of losing it.
+ * localStorage key holding the currently running uploads (a batch may have
+ * several), so a page refresh or navigation can re-attach to each background
+ * server job instead of losing it.
  */
 const ACTIVE_JOB_KEY = "activeUploadJob";
 
-/** What we persist about a running upload: the job id plus a label for the UI. */
+/** What we persist about one running upload: the job id plus a label for the UI. */
 interface ActiveJob {
   job_id: string;
   course: string;
   filename: string;
 }
 
-function loadActiveJob(): ActiveJob | null {
+/**
+ * Runtime state for one file's in-flight (or just-finished) upload: the
+ * persisted identity plus its latest polled record and a smoothly ticking
+ * elapsed clock. `job` is null until the first poll resolves.
+ */
+interface JobRow extends ActiveJob {
+  job: DocumentJob | null;
+  liveElapsed: number;
+}
+
+function loadActiveJobs(): ActiveJob[] {
   try {
     const raw = localStorage.getItem(ACTIVE_JOB_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as ActiveJob;
-    return parsed && typeof parsed.job_id === "string" ? parsed : null;
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (j): j is ActiveJob => !!j && typeof j.job_id === "string",
+    );
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -98,7 +112,7 @@ export function DocumentsPanel({
   const openaiKeyId = useId();
   const [items, setItems] = useState<DocumentCourse[]>([]);
   const [loading, setLoading] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [course, setCourse] = useState("");
   const [chapter, setChapter] = useState("");
   // The OpenAI key is lifted to the page (props) so it stays in sync with the
@@ -108,32 +122,40 @@ export function DocumentsPanel({
   // Row currently awaiting an explicit red confirmation before deletion.
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
-  // Live ingestion progress; null when no upload is running.
-  const [progress, setProgress] = useState<DocumentProgress | null>(null);
-  const [uploading, setUploading] = useState(false);
-  // The background job being polled; null when none is active. Set on upload and
-  // on mount (resume) — it is what drives the polling effect below.
-  const [activeJob, setActiveJob] = useState<ActiveJob | null>(null);
+  // One row per file currently uploading (or briefly showing its done/error
+  // result). Set on submit and on mount (resume) — it drives the polling effect.
+  const [activeJobs, setActiveJobs] = useState<JobRow[]>([]);
+  // Mirrors `activeJobs` for the polling/tick intervals below, so their closures
+  // always read the latest list without needing to restart on every tick.
+  const activeJobsRef = useRef<JobRow[]>([]);
+  useEffect(() => {
+    activeJobsRef.current = activeJobs;
+  }, [activeJobs]);
+  // True briefly while the batch's startUpload calls are in flight, before any
+  // job row exists yet.
+  const [submitting, setSubmitting] = useState(false);
   // True while a file is being dragged over the dropzone (drives the accent styling).
   const [dragging, setDragging] = useState(false);
-  // Live elapsed seconds, ticked by a client interval so the clock counts up
-  // continuously rather than only when an SSE progress event arrives.
-  const [liveElapsed, setLiveElapsed] = useState(0);
+  // Per-job anchor for the live elapsed clock (performance.now() offset such
+  // that (now - anchor) / 1000 == the last known server elapsed). Not state:
+  // it only feeds the tick effect below, which writes the derived seconds.
+  const elapsedAnchors = useRef<Map<string, { at: number; server: number }>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Set the file into the shared state used by the button flow, rejecting
-  // obviously unsupported types with a gentle message.
-  const acceptFile = useCallback(
-    (candidate: File | null) => {
-      if (!candidate) {
-        setFile(null);
-        return;
-      }
-      if (!isSupportedFile(candidate.name)) {
+  const hasRunning = activeJobs.some((j) => (j.job?.status ?? "running") === "running");
+
+  // Add the picked/dropped files to the batch, rejecting obviously unsupported
+  // types with a gentle message. A new selection replaces the previous one
+  // (matches how the native file dialog reports "the files you just chose").
+  const acceptFiles = useCallback(
+    (candidates: FileList | File[] | null) => {
+      if (!candidates) return;
+      const list = Array.from(candidates);
+      const valid = list.filter((f) => isSupportedFile(f.name));
+      if (valid.length < list.length) {
         toast.push(t("doc.upload.unsupported"), "error");
-        return;
       }
-      setFile(candidate);
+      if (valid.length > 0) setFiles(valid);
     },
     [toast, t],
   );
@@ -151,52 +173,90 @@ export function DocumentsPanel({
 
   useEffect(() => {
     load();
-    // On mount, re-attach to a background job left running by a previous visit
-    // (started before a refresh/navigation). The polling effect takes over.
-    const resumed = loadActiveJob();
-    if (resumed) setActiveJob(resumed);
+    // On mount, re-attach to any background jobs left running by a previous
+    // visit (started before a refresh/navigation). The polling effect takes over.
+    const resumed = loadActiveJobs();
+    if (resumed.length > 0) {
+      setActiveJobs(resumed.map((r) => ({ ...r, job: null, liveElapsed: 0 })));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Poll the background ingestion job once one is active. This is the single
-  // place progress is fed, whether the job was just started or resumed after a
-  // refresh, so both paths render identically. On a terminal status it stops,
-  // clears the persisted job, and refreshes the inventory + course selectors. A
-  // 404 means the server restarted or pruned the job: clear it and just reload.
+  // Persist only the still-running jobs, so a refresh re-attaches to them but
+  // doesn't try to resume a row that's just lingering to show its result.
   useEffect(() => {
-    if (!activeJob) return;
-    setUploading(true);
+    const running: ActiveJob[] = activeJobs
+      .filter((j) => (j.job?.status ?? "running") === "running")
+      .map(({ job_id, course: c, filename }) => ({ job_id, course: c, filename }));
+    if (running.length === 0) {
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+    } else {
+      localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify(running));
+    }
+  }, [activeJobs]);
+
+  // Poll every running job once at least one is active. This is the single
+  // place progress is fed, whether a job was just started or resumed after a
+  // refresh, so both paths render identically. Each job independently retires to
+  // "done"/"error" as it finishes — the slowest file never blocks the others.
+  // Finished rows linger briefly (so their result is visible) before dropping
+  // off the list. Side effects (reload inventory, notify the parent) are fired
+  // at most once per tick even if several jobs finish together.
+  useEffect(() => {
+    if (!hasRunning) return;
     let cancelled = false;
 
-    const finish = (clear: boolean) => {
-      if (clear) localStorage.removeItem(ACTIVE_JOB_KEY);
-      setUploading(false);
-      setActiveJob(null);
-    };
-
     const poll = async () => {
-      try {
-        const job = await getJob(activeJob.job_id, config);
-        if (cancelled) return;
-        setProgress(job);
-        if (job.status === "done" || job.status === "error") {
-          finish(true);
-          if (job.status === "done") {
-            await load();
-            // A new course may now be indexed: let the parent refresh its pickers.
-            onCoursesChanged?.();
+      const running = activeJobsRef.current.filter((j) => (j.job?.status ?? "running") === "running");
+      if (running.length === 0) return;
+      const settled = await Promise.allSettled(running.map((row) => getJob(row.job_id, config)));
+      if (cancelled) return;
+
+      let anyDone = false;
+      let anyTerminal = false;
+      const updates = new Map<string, DocumentJob>();
+      const drop404 = new Set<string>();
+
+      settled.forEach((res, i) => {
+        const row = running[i];
+        if (res.status === "fulfilled") {
+          updates.set(row.job_id, res.value);
+          if (res.value.status === "done" || res.value.status === "error") {
+            anyTerminal = true;
+            if (res.value.status === "done") anyDone = true;
+            if (res.value.status === "error") {
+              toast.push(t("doc.progress.error", { message: res.value.message ?? "" }), "error");
+            }
           }
+        } else if (res.reason instanceof ApiError && res.reason.status === 404) {
+          // Server restarted or pruned this job: drop it silently and reconcile.
+          drop404.add(row.job_id);
+          anyTerminal = true;
         }
-      } catch (err) {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status === 404) {
-          // Server restarted or job pruned: drop it and reconcile the inventory.
-          setProgress(null);
-          finish(true);
-          await load();
+        // Other (transient) errors: leave the row as-is, retry next tick.
+      });
+
+      if (cancelled) return;
+      setActiveJobs((prev) =>
+        prev
+          .filter((j) => !drop404.has(j.job_id))
+          .map((j) => {
+            const record = updates.get(j.job_id);
+            return record ? { ...j, job: record } : j;
+          }),
+      );
+
+      // Let a completed/failed row stay visible for a moment, then remove it.
+      updates.forEach((record, jobId) => {
+        if (record.status === "done" || record.status === "error") {
+          window.setTimeout(() => {
+            setActiveJobs((prev) => prev.filter((j) => j.job_id !== jobId));
+          }, 4000);
         }
-        // Other (transient) errors: keep polling on the next tick.
-      }
+      });
+
+      if (anyTerminal || drop404.size > 0) await load();
+      if (anyDone) onCoursesChanged?.();
     };
 
     poll();
@@ -205,50 +265,82 @@ export function DocumentsPanel({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [activeJob, config, load, onCoursesChanged]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRunning, config, load, onCoursesChanged, toast.push]);
 
-  // Live elapsed clock. Anchor to the SERVER-reported elapsed (the job keeps
-  // running server-side), so a page refresh mid-import shows the REAL elapsed and
-  // keeps counting instead of restarting from 0. Between the per-batch server
-  // updates it ticks smoothly on its own; each new server `elapsed` re-anchors it.
+  // Live elapsed clock, one per job. Anchored to the SERVER-reported elapsed (the
+  // job keeps running server-side), so a page refresh mid-import shows the REAL
+  // elapsed and keeps counting instead of restarting from 0. Between the
+  // per-batch server updates each clock ticks smoothly on its own; a new server
+  // `elapsed` re-anchors it.
   useEffect(() => {
-    if (!uploading) return;
-    const serverElapsed = progress?.elapsed ?? 0;
-    const anchor = performance.now() - serverElapsed * 1000;
-    const tick = () => setLiveElapsed(Math.max(serverElapsed, (performance.now() - anchor) / 1000));
+    if (!hasRunning) return;
+    const tick = () => {
+      const now = performance.now();
+      setActiveJobs((prev) =>
+        prev.map((row) => {
+          const server = row.job?.elapsed ?? 0;
+          const anchor = elapsedAnchors.current.get(row.job_id);
+          if (!anchor || anchor.server !== server) {
+            elapsedAnchors.current.set(row.job_id, { at: now - server * 1000, server });
+            return { ...row, liveElapsed: server };
+          }
+          return { ...row, liveElapsed: Math.max(server, (now - anchor.at) / 1000) };
+        }),
+      );
+    };
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [uploading, progress?.elapsed]);
+  }, [hasRunning]);
 
   async function upload() {
-    if (!file || !course.trim() || uploading) return;
-    setUploading(true);
-    setProgress({ type: "start" });
+    if (files.length === 0 || !course.trim() || hasRunning || submitting) return;
+    const batch = files;
+    const courseName = course.trim();
+    const chapterName = chapter.trim() || null;
+    setSubmitting(true);
+    setFiles([]);
+    setChapter("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
     try {
-      const { job_id } = await startUpload(
-        file,
-        course.trim(),
-        chapter.trim() || null,
-        config,
-        studentId,
-        openaiKey.trim() || null,
+      // Kick off every upload concurrently — none is awaited before the next
+      // starts, so the server ingests the whole batch in parallel.
+      const started = await Promise.allSettled(
+        batch.map((f) =>
+          startUpload(f, courseName, chapterName, config, studentId, openaiKey.trim() || null).then(
+            (result) => ({ job_id: result.job_id, filename: f.name }),
+          ),
+        ),
       );
-      // Persist the job so a refresh/navigation re-attaches to it, then hand off
-      // to the polling effect. Clearing the inputs frees the user to do other
-      // things (or queue nothing) while ingestion runs server-side.
-      const job: ActiveJob = { job_id, course: course.trim(), filename: file.name };
-      localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify(job));
-      setActiveJob(job);
-      setFile(null);
-      setChapter("");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch (err) {
-      setProgress({
-        type: "error",
-        message: err instanceof Error ? err.message : t("common.requestFailed"),
-      });
-      setUploading(false);
+
+      const newRows: JobRow[] = [];
+      let failed = 0;
+      for (const result of started) {
+        if (result.status === "fulfilled") {
+          newRows.push({
+            job_id: result.value.job_id,
+            course: courseName,
+            filename: result.value.filename,
+            job: null,
+            liveElapsed: 0,
+          });
+        } else {
+          failed += 1;
+        }
+      }
+      if (newRows.length > 0) setActiveJobs((prev) => [...prev, ...newRows]);
+      if (failed > 0) {
+        toast.push(
+          failed === batch.length
+            ? t("common.requestFailed")
+            : t("doc.upload.batchFailed", { count: failed }),
+          "error",
+        );
+      }
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -341,18 +433,7 @@ export function DocumentsPanel({
     );
   }
 
-  const canUpload = !!file && course.trim().length > 0 && !uploading;
-
-  // Derived progress numbers for the bar.
-  const total = progress?.total ?? 0;
-  const done = progress?.done ?? (progress?.type === "start" ? (progress.skipped ?? 0) : 0);
-  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : progress ? 5 : 0;
-  const elapsed = progress?.elapsed ?? 0;
-  // Show the continuously ticking client clock while uploading (never behind the
-  // per-page SSE elapsed); fall back to the SSE value once the run has ended.
-  const displayElapsed = uploading ? Math.max(liveElapsed, elapsed) : elapsed;
-  const fresh = done - (progress?.skipped ?? 0); // pages actually processed this run
-  const eta = fresh > 0 && elapsed > 0 ? (elapsed / fresh) * (total - done) : null;
+  const canUpload = files.length > 0 && course.trim().length > 0 && !hasRunning && !submitting;
 
   return (
     <div className="space-y-5">
@@ -368,14 +449,14 @@ export function DocumentsPanel({
               {/* Drag-and-drop zone; clicking or Enter/Space opens the native picker. */}
               <div
                 role="button"
-                tabIndex={uploading ? -1 : 0}
+                tabIndex={hasRunning ? -1 : 0}
                 aria-label={t("doc.upload.dropzoneAria")}
-                aria-disabled={uploading}
+                aria-disabled={hasRunning}
                 onClick={() => {
-                  if (!uploading) fileInputRef.current?.click();
+                  if (!hasRunning) fileInputRef.current?.click();
                 }}
                 onKeyDown={(e) => {
-                  if (uploading) return;
+                  if (hasRunning) return;
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     fileInputRef.current?.click();
@@ -383,7 +464,7 @@ export function DocumentsPanel({
                 }}
                 onDragOver={(e) => {
                   e.preventDefault();
-                  if (!uploading) setDragging(true);
+                  if (!hasRunning) setDragging(true);
                 }}
                 onDragLeave={(e) => {
                   // Ignore leave events fired when moving between child elements.
@@ -394,12 +475,12 @@ export function DocumentsPanel({
                 onDrop={(e) => {
                   e.preventDefault();
                   setDragging(false);
-                  if (uploading) return;
-                  acceptFile(e.dataTransfer.files?.[0] ?? null);
+                  if (hasRunning) return;
+                  acceptFiles(e.dataTransfer.files);
                 }}
                 className={cn(
                   "flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2",
-                  uploading
+                  hasRunning
                     ? "cursor-not-allowed border-zinc-200 opacity-60"
                     : dragging
                       ? "cursor-copy border-brand-500 bg-brand-50"
@@ -408,10 +489,27 @@ export function DocumentsPanel({
               >
                 <UploadIcon />
                 <p className="text-sm font-medium text-zinc-700">{t("doc.upload.dropzone")}</p>
-                {file ? (
-                  <p className="text-xs font-medium text-brand-700">
-                    {t("doc.upload.selectedFile", { name: file.name })}
-                  </p>
+                {files.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-brand-700">
+                      {files.length === 1
+                        ? t("doc.upload.selectedFile", { name: files[0].name })
+                        : t("doc.upload.selectedFiles", { count: files.length })}
+                    </p>
+                    {files.length > 1 && (
+                      <ul className="flex flex-wrap justify-center gap-1.5">
+                        {files.map((f) => (
+                          <li
+                            key={f.name}
+                            className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-white px-2.5 py-0.5 text-[11px] font-medium text-brand-700"
+                          >
+                            <FileIcon />
+                            {f.name}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 ) : (
                   <p className="text-xs text-zinc-500">{t("doc.upload.fileHint")}</p>
                 )}
@@ -422,8 +520,9 @@ export function DocumentsPanel({
                 ref={fileInputRef}
                 type="file"
                 accept=".pdf,.md,.txt"
-                disabled={uploading}
-                onChange={(e) => acceptFile(e.target.files?.[0] ?? null)}
+                multiple
+                disabled={hasRunning}
+                onChange={(e) => acceptFiles(e.target.files)}
                 className="block w-full text-sm text-zinc-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3.5 file:py-2 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100"
               />
             </div>
@@ -433,7 +532,7 @@ export function DocumentsPanel({
                   label={`${t("doc.upload.course")} *`}
                   placeholder={t("doc.upload.coursePlaceholder")}
                   value={course}
-                  disabled={uploading}
+                  disabled={hasRunning}
                   onChange={(e) => setCourse(e.target.value)}
                 />
               </div>
@@ -443,7 +542,7 @@ export function DocumentsPanel({
                   hint={t("doc.upload.chapterHint")}
                   placeholder={t("doc.upload.chapterPlaceholder")}
                   value={chapter}
-                  disabled={uploading}
+                  disabled={hasRunning}
                   onChange={(e) => setChapter(e.target.value)}
                 />
               </div>
@@ -473,7 +572,7 @@ export function DocumentsPanel({
                   data-lpignore="true"
                   placeholder="sk-…"
                   value={openaiKey}
-                  disabled={uploading}
+                  disabled={hasRunning}
                   onChange={(e) => onOpenaiKeyChange(e.target.value)}
                   className={cn(baseField, "pr-11", !showKey && "[-webkit-text-security:disc]")}
                 />
@@ -506,69 +605,25 @@ export function DocumentsPanel({
               </div>
             </FieldShell>
 
-            {/* Live ingestion progress. */}
-            {progress && (
-              <div
-                className={cn(
-                  "rounded-xl border p-4",
-                  progress.type === "error"
-                    ? "border-red-200 bg-red-50"
-                    : progress.type === "done" && (progress.indexed ?? 0) === 0
-                      ? "border-amber-200 bg-amber-50"
-                      : progress.type === "done"
-                        ? "border-emerald-200 bg-emerald-50"
-                        : "border-brand-200 bg-brand-50/60",
-                )}
-                aria-live="polite"
-              >
-                {progress.type === "error" ? (
-                  <p className="text-sm font-medium text-red-700">
-                    {t("doc.progress.error", { message: progress.message ?? "" })}
-                  </p>
-                ) : progress.type === "done" && (progress.indexed ?? 0) === 0 ? (
-                  <p className="text-sm font-medium text-amber-700">
-                    {progress.reason === "already_indexed"
-                      ? t("doc.progress.alreadyIndexed")
-                      : t("doc.progress.empty")}
-                  </p>
-                ) : progress.type === "done" ? (
-                  <p className="flex items-center gap-2 text-sm font-medium text-emerald-700">
-                    <CheckIcon />
-                    {t("doc.progress.done", { indexed: progress.indexed ?? 0 })}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm font-medium text-brand-700">
-                      <span>
-                        {total > 0
-                          ? t("doc.progress.pages", { done, total })
-                          : t("doc.progress.starting")}
-                      </span>
-                      <span className="tabular-nums text-brand-600">{pct}%</span>
-                    </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-brand-100">
-                      <div
-                        className="h-full rounded-full bg-brand-500 transition-[width] duration-700 ease-out"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
-                      <span>{t("doc.progress.elapsed", { time: fmtTime(displayElapsed) })}</span>
-                      {eta != null && <span>{t("doc.progress.eta", { time: fmtTime(eta) })}</span>}
-                      {(progress.skipped ?? 0) > 0 && (
-                        <span>{t("doc.progress.skipped", { count: progress.skipped ?? 0 })}</span>
-                      )}
-                    </div>
-                  </div>
-                )}
+            {/* Live ingestion progress, one row per in-flight (or just-finished) file. */}
+            {activeJobs.length > 0 && (
+              <div className="space-y-3">
+                {activeJobs.map((row) => (
+                  <JobProgressCard
+                    key={row.job_id}
+                    filename={row.filename}
+                    job={row.job}
+                    liveElapsed={row.liveElapsed}
+                  />
+                ))}
               </div>
             )}
 
             <div className="flex flex-wrap items-center justify-end gap-3">
-              {!!file && !course.trim() && !uploading && (
+              {files.length > 0 && !course.trim() && !hasRunning && !submitting && (
                 <p className="text-xs text-amber-600">{t("doc.upload.courseRequired")}</p>
               )}
-              <Button onClick={upload} loading={uploading} disabled={!canUpload}>
+              <Button onClick={upload} loading={hasRunning || submitting} disabled={!canUpload}>
                 {t("doc.upload.button")}
               </Button>
             </div>
@@ -662,6 +717,84 @@ export function DocumentsPanel({
           )}
         </CardBody>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * One row of the in-flight upload list: a single file's own progress, styled
+ * like the original single-upload card. `job` is null until the first poll
+ * resolves, which renders as the "starting" state below.
+ */
+function JobProgressCard({
+  filename,
+  job,
+  liveElapsed,
+}: {
+  filename: string;
+  job: DocumentJob | null;
+  liveElapsed: number;
+}) {
+  const { t } = useT();
+  const total = job?.total ?? 0;
+  const done = job?.done ?? (job?.type === "start" ? (job.skipped ?? 0) : 0);
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 5;
+  const elapsed = job?.elapsed ?? 0;
+  const displayElapsed = Math.max(liveElapsed, elapsed);
+  const fresh = done - (job?.skipped ?? 0); // pages actually processed this run
+  const eta = fresh > 0 && elapsed > 0 ? (elapsed / fresh) * (total - done) : null;
+
+  return (
+    <div
+      className={cn(
+        "rounded-xl border p-4",
+        job?.type === "error"
+          ? "border-red-200 bg-red-50"
+          : job?.type === "done" && (job.indexed ?? 0) === 0
+            ? "border-amber-200 bg-amber-50"
+            : job?.type === "done"
+              ? "border-emerald-200 bg-emerald-50"
+              : "border-brand-200 bg-brand-50/60",
+      )}
+      aria-live="polite"
+    >
+      <p className="mb-2 truncate text-xs font-semibold text-zinc-500">{filename}</p>
+      {job?.type === "error" ? (
+        <p className="text-sm font-medium text-red-700">
+          {t("doc.progress.error", { message: job.message ?? "" })}
+        </p>
+      ) : job?.type === "done" && (job.indexed ?? 0) === 0 ? (
+        <p className="text-sm font-medium text-amber-700">
+          {job.reason === "already_indexed" ? t("doc.progress.alreadyIndexed") : t("doc.progress.empty")}
+        </p>
+      ) : job?.type === "done" ? (
+        <p className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+          <CheckIcon />
+          {t("doc.progress.done", { indexed: job.indexed ?? 0 })}
+        </p>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm font-medium text-brand-700">
+            <span>
+              {total > 0 ? t("doc.progress.pages", { done, total }) : t("doc.progress.starting")}
+            </span>
+            <span className="tabular-nums text-brand-600">{pct}%</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-brand-100">
+            <div
+              className="h-full rounded-full bg-brand-500 transition-[width] duration-700 ease-out"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+            <span>{t("doc.progress.elapsed", { time: fmtTime(displayElapsed) })}</span>
+            {eta != null && <span>{t("doc.progress.eta", { time: fmtTime(eta) })}</span>}
+            {(job?.skipped ?? 0) > 0 && (
+              <span>{t("doc.progress.skipped", { count: job?.skipped ?? 0 })}</span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
