@@ -43,9 +43,15 @@ const BARE_ENV_RE = new RegExp(
  * fenced code blocks, inline code, and already-delimited math spans.
  * The capturing group makes `String.prototype.split` keep these regions,
  * so we can transform only the plain segments between them.
+ *
+ * The single-`$` alternative requires at least one inner character
+ * (`[^$\n]+`, not `*`): otherwise a bare, unpaired `$$` (e.g. a restated
+ * formula missing its opening `$$`) matches here as an "empty" inline span
+ * and is protected verbatim, skipping `escapeStrayDoubleDollar` below and
+ * leaking as an unterminated KaTeX delimiter.
  */
 const PROTECTED_RE =
-  /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`|\$\$[\s\S]*?\$\$|\$[^$\n]*\$)/g;
+  /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`|\$\$[\s\S]*?\$\$|\$[^$\n]+\$)/g;
 
 /**
  * Wrap common bare LaTeX (not already inside `$`/`$$`) in math delimiters so
@@ -55,6 +61,22 @@ const PROTECTED_RE =
  *   - `\( ... \)`  -> `$ ... $`    (inline math)
  *   - standalone `\begin{env}...\end{env}` -> `$$ ... $$`
  */
+/**
+ * Guard against a stray, unpaired `$$` (e.g. the model restates a formula in
+ * prose and appends a closing `$$` for it but forgets the opening one) opening
+ * a display-math span that never closes and swallowing the rest of the answer
+ * as raw text. Balanced `$$...$$` spans are already split out as PROTECTED
+ * regions before this runs, so any `$$` reaching here is unpaired within its
+ * segment: if the count of `$$` tokens is odd, escape the last one so it
+ * renders literally instead of opening an unterminated KaTeX block.
+ */
+function escapeStrayDoubleDollar(segment: string): string {
+  const matches = Array.from(segment.matchAll(/\$\$/g));
+  if (matches.length % 2 === 0) return segment;
+  const at = matches[matches.length - 1].index;
+  return `${segment.slice(0, at)}\\$\\$${segment.slice(at + 2)}`;
+}
+
 /**
  * Guard against a single stray `$` in plain text (e.g. a price, or an unclosed
  * inline-math delimiter) opening a math span that never closes. Balanced
@@ -76,7 +98,7 @@ function escapeStrayDollar(segment: string): string {
 }
 
 function normalizePlainSegment(segment: string): string {
-  return escapeStrayDollar(segment)
+  return escapeStrayDollar(escapeStrayDoubleDollar(segment))
     .replace(BRACKET_DISPLAY_RE, (_match, inner: string) => `$$${inner}$$`)
     .replace(BRACKET_INLINE_RE, (_match, inner: string) => `$${inner}$`)
     .replace(BARE_ENV_RE, (match: string) => `$$\n${match}\n$$`);
