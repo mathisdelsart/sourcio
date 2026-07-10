@@ -29,6 +29,7 @@ import time
 from collections.abc import Iterator
 from typing import Any
 
+from core import storage
 from core.config import get_settings
 from core.errors import describe_capacity_error
 from ingestion.chunk import chunk_pages
@@ -114,6 +115,11 @@ def _course_dir(course: str) -> str:
     return os.path.join(UPLOADS_DIR, _slug(course))
 
 
+def _r2_key(course: str, filename: str) -> str:
+    """R2 object key for a course file, mirroring the local ``<course>/<file>`` layout."""
+    return f"{_slug(course)}/{_safe_filename(filename)}"
+
+
 def _document_id(path: str) -> str:
     """Stable per-document identifier derived from the uploaded file name.
 
@@ -126,18 +132,37 @@ def _document_id(path: str) -> str:
 
 
 def save_upload(data: bytes, course: str, filename: str) -> str:
-    """Persist an uploaded file under ``uploads/<course>/<filename>`` and return its path."""
+    """Persist an uploaded file under ``uploads/<course>/<filename>`` and return its path.
+
+    Always writes a local copy: ingestion reads the file straight off disk right
+    after this call (PyMuPDF's ``fitz.open`` and the prose loader both need a
+    real filesystem path), well before any container restart could matter, so
+    the local write happens unconditionally regardless of the durable backend.
+
+    When Cloudflare R2 is configured (see :func:`core.storage.configured`) the
+    same bytes are ALSO uploaded to R2 under the equivalent key. That R2 copy --
+    not the local one -- is what makes the stored original survive a
+    redeploy/sleep-wake cycle in production (see :func:`read_stored_file`). The
+    R2 upload is best-effort: a failure there is silently swallowed rather than
+    failing the upload/ingest request, which has already succeeded locally.
+    """
     directory = _course_dir(course)
     os.makedirs(directory, exist_ok=True)
     path = os.path.join(directory, _safe_filename(filename))
     with open(path, "wb") as handle:
         handle.write(data)
+    if storage.configured():
+        try:
+            storage.put_object(_r2_key(course, filename), data)
+        except Exception:
+            pass
     return path
 
 
 def stored_file_path(course: str, name: str) -> str | None:
     """Resolve a previously stored original by course + filename, or None.
 
+    Local-disk lookup only (the R2-aware read path is :func:`read_stored_file`).
     Guards against path traversal: the resolved path must stay inside the
     course's upload directory.
     """
@@ -148,13 +173,56 @@ def stored_file_path(course: str, name: str) -> str | None:
     return path if os.path.isfile(path) else None
 
 
+def read_stored_file(course: str, name: str) -> bytes | None:
+    """Return the bytes of a previously stored original, or ``None`` if not found.
+
+    When R2 is configured it is tried first: it is the durable copy in
+    production (the local copy written by :func:`save_upload` is a working copy
+    for ingestion and does not survive a container restart there). Any local
+    copy is used as a fallback when the R2 lookup misses -- e.g. a file uploaded
+    before R2 was configured, or a transient R2 error -- so nothing that used to
+    be viewable stops being viewable. When R2 is not configured this reduces to
+    exactly the previous local-disk-only behavior.
+    """
+    if storage.configured():
+        data = storage.get_object(_r2_key(course, name))
+        if data is not None:
+            return data
+    path = stored_file_path(course, name)
+    if path is None:
+        return None
+    with open(path, "rb") as handle:
+        return handle.read()
+
+
 def list_course_files(course: str) -> list[str]:
-    """Names of the original files stored for a course (newest first)."""
+    """Names of the original files stored for a course (newest first).
+
+    When R2 is configured its objects for this course are listed first (they
+    are the durable, authoritative set in production); any name present only on
+    local disk (e.g. uploaded before R2 was configured) is still appended, so
+    nothing already visible becomes hidden. When R2 is not configured this
+    reduces to exactly the previous local-disk-only behavior.
+    """
+    names: list[str] = []
+    seen: set[str] = set()
+    if storage.configured():
+        prefix = _slug(course) + "/"
+        for key in storage.list_keys(prefix):
+            name = key[len(prefix) :]
+            if name and name not in seen:
+                names.append(name)
+                seen.add(name)
     directory = _course_dir(course)
-    if not os.path.isdir(directory):
-        return []
-    names = [n for n in os.listdir(directory) if os.path.isfile(os.path.join(directory, n))]
-    names.sort(key=lambda n: os.path.getmtime(os.path.join(directory, n)), reverse=True)
+    if os.path.isdir(directory):
+        local_names = [
+            n for n in os.listdir(directory) if os.path.isfile(os.path.join(directory, n))
+        ]
+        local_names.sort(key=lambda n: os.path.getmtime(os.path.join(directory, n)), reverse=True)
+        for name in local_names:
+            if name not in seen:
+                names.append(name)
+                seen.add(name)
     return names
 
 
@@ -670,13 +738,21 @@ def _set_payload_scoped(
 
 
 def _move_course_dir(old_course: str, new_course: str) -> None:
-    """Best-effort rename of the on-disk upload folder so stored files follow.
+    """Best-effort rename of the stored originals so they follow a renamed course.
 
-    Renaming the Qdrant payloads is what the app relies on; this keeps the stored
-    originals viewable under the new course name too. It is best-effort: it only
-    renames when the source exists and the destination does not (a merge into an
-    existing course leaves the files where they are), and never raises — a failure
-    here must not fail the payload rename that already succeeded.
+    Renaming the Qdrant payloads is what the app relies on; this keeps the
+    stored originals viewable under the new course name too, on whichever
+    backend(s) hold them. Both moves are independently best-effort and never
+    raise — a failure here must not fail the payload rename that already
+    succeeded:
+
+    - local disk: only renames when the source dir exists and the destination
+      does not (a merge into an existing course leaves the files where they
+      are);
+    - R2 (when configured): copies every object under the old course's key
+      prefix to the new prefix, then deletes the old ones (S3/R2 has no atomic
+      rename); a destination key that already exists is overwritten, matching
+      the "merge into an existing course" behavior of the local-disk move.
     """
     try:
         source = _course_dir(old_course)
@@ -686,6 +762,11 @@ def _move_course_dir(old_course: str, new_course: str) -> None:
             os.rename(source, dest)
     except Exception:
         pass
+    if storage.configured():
+        try:
+            storage.copy_prefix(_slug(old_course) + "/", _slug(new_course) + "/")
+        except Exception:
+            pass
 
 
 def rename_course(owner: str | None, old_course: str, new_course: str) -> int:

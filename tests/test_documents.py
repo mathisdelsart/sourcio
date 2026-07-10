@@ -950,6 +950,193 @@ def test_rename_documents_degrades_on_error(monkeypatch):
     assert documents_mod.rename_course("uA", "Old", "New") == 0
 
 
+# --- save_upload / stored_file_path / read_stored_file / list_course_files ---
+# Local disk is always written (ingestion needs a real path -- see save_upload's
+# docstring); R2 is an optional, best-effort DURABLE mirror activated only when
+# `core.storage.configured()` is True. These tests fake `core.storage` itself
+# (rather than boto3), the same seam `core.documents` calls through, matching how
+# the rest of this file fakes `QdrantClient` instead of a real Qdrant server.
+
+
+@pytest.fixture
+def local_uploads(monkeypatch, tmp_path):
+    """Point the local-disk upload root at an isolated tmp dir for this test."""
+    monkeypatch.setattr(documents_mod, "UPLOADS_DIR", str(tmp_path))
+    return tmp_path
+
+
+def _disable_r2(monkeypatch):
+    monkeypatch.setattr(documents_mod.storage, "configured", lambda: False)
+
+
+def test_save_upload_writes_local_disk_when_r2_not_configured(monkeypatch, local_uploads):
+    _disable_r2(monkeypatch)
+    monkeypatch.setattr(
+        documents_mod.storage,
+        "put_object",
+        lambda *a, **k: pytest.fail("R2 must not be touched when not configured"),
+    )
+
+    path = documents_mod.save_upload(b"hello", "Wavelets", "notes.pdf")
+
+    assert path == str(local_uploads / "Wavelets" / "notes.pdf")
+    assert (local_uploads / "Wavelets" / "notes.pdf").read_bytes() == b"hello"
+
+
+def test_save_upload_also_mirrors_to_r2_when_configured(monkeypatch, local_uploads):
+    uploaded = {}
+    monkeypatch.setattr(documents_mod.storage, "configured", lambda: True)
+    monkeypatch.setattr(
+        documents_mod.storage, "put_object", lambda key, data: uploaded.update(key=key, data=data)
+    )
+
+    path = documents_mod.save_upload(b"hello", "Wavelets", "notes.pdf")
+
+    # The local copy is still written unconditionally (ingestion reads it).
+    assert (local_uploads / "Wavelets" / "notes.pdf").read_bytes() == b"hello"
+    assert path == str(local_uploads / "Wavelets" / "notes.pdf")
+    # ...and mirrored to R2 under the equivalent <course>/<file> key.
+    assert uploaded == {"key": "Wavelets/notes.pdf", "data": b"hello"}
+
+
+def test_save_upload_swallows_r2_failure(monkeypatch, local_uploads):
+    # A durability hiccup must never fail the upload/ingest request: the local
+    # copy (and thus ingestion) already succeeded.
+    monkeypatch.setattr(documents_mod.storage, "configured", lambda: True)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("R2 unreachable")
+
+    monkeypatch.setattr(documents_mod.storage, "put_object", boom)
+
+    path = documents_mod.save_upload(b"hello", "Wavelets", "notes.pdf")
+    assert (local_uploads / "Wavelets" / "notes.pdf").read_bytes() == b"hello"
+    assert path == str(local_uploads / "Wavelets" / "notes.pdf")
+
+
+def test_stored_file_path_local_lookup_and_traversal_guard(monkeypatch, local_uploads):
+    (local_uploads / "Wavelets").mkdir()
+    (local_uploads / "Wavelets" / "notes.pdf").write_bytes(b"hi")
+
+    assert documents_mod.stored_file_path("Wavelets", "notes.pdf") == str(
+        local_uploads / "Wavelets" / "notes.pdf"
+    )
+    assert documents_mod.stored_file_path("Wavelets", "missing.pdf") is None
+    # A traversal attempt is sanitized by `_safe_filename` before resolution, so
+    # it never escapes the course directory.
+    assert documents_mod.stored_file_path("Wavelets", "../../etc/passwd") is None
+
+
+def test_read_stored_file_local_only_when_r2_not_configured(monkeypatch, local_uploads):
+    _disable_r2(monkeypatch)
+    (local_uploads / "Wavelets").mkdir()
+    (local_uploads / "Wavelets" / "notes.pdf").write_bytes(b"hi")
+
+    assert documents_mod.read_stored_file("Wavelets", "notes.pdf") == b"hi"
+    assert documents_mod.read_stored_file("Wavelets", "missing.pdf") is None
+
+
+def test_read_stored_file_prefers_r2_when_configured(monkeypatch, local_uploads):
+    # Local disk also has a (stale/different) copy; R2 wins, because it is the
+    # durable source of truth in production.
+    (local_uploads / "Wavelets").mkdir()
+    (local_uploads / "Wavelets" / "notes.pdf").write_bytes(b"stale-local-copy")
+    monkeypatch.setattr(documents_mod.storage, "configured", lambda: True)
+    monkeypatch.setattr(
+        documents_mod.storage,
+        "get_object",
+        lambda key: b"from-r2" if key == "Wavelets/notes.pdf" else None,
+    )
+
+    assert documents_mod.read_stored_file("Wavelets", "notes.pdf") == b"from-r2"
+
+
+def test_read_stored_file_falls_back_to_local_when_r2_misses(monkeypatch, local_uploads):
+    # A file uploaded before R2 was configured (or a transient R2 miss) must
+    # still be viewable via the local copy.
+    (local_uploads / "Wavelets").mkdir()
+    (local_uploads / "Wavelets" / "notes.pdf").write_bytes(b"local-only")
+    monkeypatch.setattr(documents_mod.storage, "configured", lambda: True)
+    monkeypatch.setattr(documents_mod.storage, "get_object", lambda key: None)
+
+    assert documents_mod.read_stored_file("Wavelets", "notes.pdf") == b"local-only"
+
+
+def test_read_stored_file_none_when_neither_backend_has_it(monkeypatch, local_uploads):
+    monkeypatch.setattr(documents_mod.storage, "configured", lambda: True)
+    monkeypatch.setattr(documents_mod.storage, "get_object", lambda key: None)
+
+    assert documents_mod.read_stored_file("Wavelets", "notes.pdf") is None
+
+
+def test_list_course_files_local_only_when_r2_not_configured(monkeypatch, local_uploads):
+    _disable_r2(monkeypatch)
+    (local_uploads / "Wavelets").mkdir()
+    (local_uploads / "Wavelets" / "a.pdf").write_bytes(b"1")
+    (local_uploads / "Wavelets" / "b.pdf").write_bytes(b"2")
+
+    names = documents_mod.list_course_files("Wavelets")
+    assert set(names) == {"a.pdf", "b.pdf"}
+
+
+def test_list_course_files_prefers_r2_and_appends_local_only_names(monkeypatch, local_uploads):
+    # "r2.pdf" is only in R2, "local-only.pdf" is only on local disk (e.g.
+    # uploaded before R2 was configured): both must remain visible.
+    (local_uploads / "Wavelets").mkdir()
+    (local_uploads / "Wavelets" / "local-only.pdf").write_bytes(b"x")
+    monkeypatch.setattr(documents_mod.storage, "configured", lambda: True)
+    monkeypatch.setattr(documents_mod.storage, "list_keys", lambda prefix: [f"{prefix}r2.pdf"])
+
+    names = documents_mod.list_course_files("Wavelets")
+    assert "r2.pdf" in names
+    assert "local-only.pdf" in names
+
+
+def test_list_course_files_no_course_dir_and_r2_disabled_is_empty(monkeypatch, local_uploads):
+    _disable_r2(monkeypatch)
+    assert documents_mod.list_course_files("NoSuchCourse") == []
+
+
+# --- _move_course_dir: local rename + R2 copy-prefix --------------------------
+
+
+def test_move_course_dir_renames_local_and_copies_r2_prefix(monkeypatch, local_uploads):
+    (local_uploads / "Old").mkdir()
+    (local_uploads / "Old" / "notes.pdf").write_bytes(b"hi")
+    calls = []
+    monkeypatch.setattr(documents_mod.storage, "configured", lambda: True)
+    monkeypatch.setattr(
+        documents_mod.storage, "copy_prefix", lambda old, new: calls.append((old, new))
+    )
+
+    documents_mod._move_course_dir("Old", "New")
+
+    assert not (local_uploads / "Old").exists()
+    assert (local_uploads / "New" / "notes.pdf").read_bytes() == b"hi"
+    assert calls == [("Old/", "New/")]
+
+
+def test_move_course_dir_skips_r2_copy_when_not_configured(monkeypatch, local_uploads):
+    _disable_r2(monkeypatch)
+    monkeypatch.setattr(
+        documents_mod.storage,
+        "copy_prefix",
+        lambda *a, **k: pytest.fail("R2 must not be touched when not configured"),
+    )
+    # No local source dir either: this must stay a total no-op, never raising.
+    documents_mod._move_course_dir("Old", "New")
+
+
+def test_move_course_dir_never_raises_when_r2_copy_fails(monkeypatch, local_uploads):
+    monkeypatch.setattr(documents_mod.storage, "configured", lambda: True)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("R2 unreachable")
+
+    monkeypatch.setattr(documents_mod.storage, "copy_prefix", boom)
+    documents_mod._move_course_dir("Old", "New")  # must not raise
+
+
 # --- /documents routes -------------------------------------------------------
 # Gated on the optional `api` extra (FastAPI). The core tests above always run.
 
@@ -1166,18 +1353,20 @@ def test_jobs_list_includes_started_job(client, monkeypatch):
 
 
 @requires_api
-def test_document_file_route_serves_stored_file(client, monkeypatch, tmp_path):
-    stored = tmp_path / "notes.pdf"
-    stored.write_bytes(b"%PDF-1.4 fake")
-    monkeypatch.setattr(api_main, "stored_file_path", lambda course, name: str(stored))
+def test_document_file_route_serves_stored_file(client, monkeypatch):
+    # The route now reads bytes via read_stored_file (R2-aware; local disk is
+    # just one of its possible sources), not a raw filesystem path -- so it
+    # works identically whether the bytes came from R2 or local disk.
+    monkeypatch.setattr(api_main, "read_stored_file", lambda course, name: b"%PDF-1.4 fake")
     response = client.get("/documents/file", params={"course": "Wavelets", "name": "notes.pdf"})
     assert response.status_code == 200
     assert response.content == b"%PDF-1.4 fake"
+    assert "notes.pdf" in response.headers["content-disposition"]
 
 
 @requires_api
 def test_document_file_route_404_when_missing(client, monkeypatch):
-    monkeypatch.setattr(api_main, "stored_file_path", lambda course, name: None)
+    monkeypatch.setattr(api_main, "read_stored_file", lambda course, name: None)
     response = client.get("/documents/file", params={"course": "X", "name": "y.pdf"})
     assert response.status_code == 404
 

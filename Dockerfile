@@ -47,6 +47,12 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.12.*"
 #      - python-multipart -> FastAPI multipart parsing for POST /documents/upload
 #      - pymupdf -> PDF text extraction for uploaded course PDFs (the online
 #        upload path, not just the offline CLI)
+#      - boto3 -> optional Cloudflare R2 (S3-compatible) client for durable
+#        storage of uploaded originals; only used when R2_* env vars are set
+#        (core/storage.py), but must be installed unconditionally since imports
+#        happen lazily at call time, not at boot -- omitting it would not crash
+#        boot, only silently break "view original file" the first time R2 is
+#        configured, which is worse to debug than a boot crash
 #      - `api`    -> FastAPI, uvicorn, sqlalchemy (the web layer)
 #      - `agent`  -> langgraph (the explain/generate/grade/reexplain nodes)
 #      - `obs`    -> langfuse (optional tracing; tiny, keeps observability working)
@@ -70,6 +76,7 @@ RUN pip install \
     "pyjwt>=2.8" \
     "python-multipart>=0.0.9" \
     "pymupdf>=1.24" \
+    "boto3>=1.34" \
     "pydantic-settings>=2.5" \
     "python-dotenv>=1.0" \
     "qdrant-client>=1.12" \

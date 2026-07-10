@@ -226,6 +226,20 @@ class Settings(BaseSettings):
     # `api_key` passed to `init_chat_model` (see `get_llm`).
     anthropic_chat_model: str = "claude-haiku-4-5"
 
+    # Durable object storage for uploaded course-file originals (Cloudflare R2,
+    # optional). All four must be set to activate it (see `core.storage.configured`);
+    # any left empty (the default) keeps the local-disk fallback used everywhere
+    # today. R2 is what makes an uploaded PDF's "view original" survive a
+    # container restart in production (HF Spaces' filesystem is ephemeral); local
+    # dev needs none of this. `r2_account_id` also derives the R2 S3-compatible
+    # endpoint (`https://<account_id>.r2.cloudflarestorage.com`), so no separate
+    # endpoint setting is needed. See docs/DEPLOY-API.md for the Cloudflare
+    # dashboard setup steps.
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket: str = ""
+
     @property
     def effective_rate_limit_per_minute(self) -> int:
         """Resolve the rate limit actually enforced by the middleware.

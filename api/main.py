@@ -37,6 +37,7 @@ are persisted as conversation history, and ``/history`` replays them.
 import hmac
 import json
 import logging
+import mimetypes
 import os
 import threading
 from collections.abc import AsyncIterator, Iterator
@@ -56,7 +57,7 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import Engine, func, select
 
@@ -89,10 +90,10 @@ from core.courses import list_chapters, list_courses
 from core.documents import (
     delete_documents,
     list_documents,
+    read_stored_file,
     rename_chapter,
     rename_course,
     save_upload,
-    stored_file_path,
     stream_ingest,
 )
 from core.errors import describe_capacity_error, raise_friendly_llm_error
@@ -1903,17 +1904,27 @@ def document_job(job_id: str) -> dict[str, Any]:
 
 
 @app.get("/documents/file", dependencies=[Depends(require_api_key)])
-def document_file(course: str, name: str) -> FileResponse:
+def document_file(course: str, name: str) -> Response:
     """Serve a stored original file so the user can re-open it intact.
 
-    ``course`` and ``name`` identify a file previously saved by an upload. The
-    path is resolved inside the course's upload directory with a traversal guard;
-    an unknown file yields 404.
+    ``course`` and ``name`` identify a file previously saved by an upload.
+    ``read_stored_file`` resolves the bytes from whichever backend actually
+    holds them -- Cloudflare R2 first when configured (the durable store in
+    production), local disk otherwise or as a fallback -- with the same
+    traversal guard as before on the local-disk side. The bytes are returned
+    directly (rather than via ``FileResponse``) since an R2-backed file has no
+    local path to stream from. An unknown file yields 404.
     """
-    path = stored_file_path(course, name)
-    if path is None:
+    data = read_stored_file(course, name)
+    if data is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found.")
-    return FileResponse(path, filename=os.path.basename(path))
+    media_type, _ = mimetypes.guess_type(name)
+    filename = os.path.basename(name)
+    return Response(
+        content=data,
+        media_type=media_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.delete(
