@@ -12,7 +12,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1 — builder: create a self-contained virtualenv with all runtime deps.
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 # Faster, quieter, reproducible Python/pip behavior.
 ENV PYTHONUNBUFFERED=1 \
@@ -92,7 +92,7 @@ RUN pip install \
 # ---------------------------------------------------------------------------
 # Stage 2 — runtime: slim image carrying only the venv and the app source.
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
