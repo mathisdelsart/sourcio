@@ -46,9 +46,6 @@ const en = {
   "hero.preview.refusal": "Not in the course material.",
   // App-window mockup (right of the hero).
   "hero.app.context": "Mathematics · Chapter 3",
-  "hero.app.tab.ask": "Ask",
-  "hero.app.tab.exercise": "Exercise",
-  "hero.app.tab.grade": "Grade",
   "hero.app.answered": "Answered from your material",
   "hero.app.refusalQuestion": "What's the weather tomorrow?",
 
@@ -122,13 +119,10 @@ const en = {
   // Tabs
   "tabs.aria": "Tutor sections",
   "tabs.ask": "Ask",
-  "tabs.reexplain": "Re-explain",
   "tabs.exercise": "Exercise",
-  "tabs.grade": "Grade",
   "tabs.quiz": "Quiz",
   "tabs.threads": "Threads",
   "tabs.history": "History",
-  "tabs.review": "Review",
   // Documents
   "tabs.documents": "Documents",
 
@@ -153,15 +147,12 @@ const en = {
   "auth.signedOutToast": "Signed out.",
   "auth.failed": "Authentication failed.",
   "auth.incomplete": "Enter a username and password.",
-  "auth.cardTitle": "Sign in to your tutor",
   "auth.cardSubtitle": "Ask questions and get answers grounded in your own courses.",
   "auth.close": "Close",
   "auth.showPassword": "Show password",
   "auth.hidePassword": "Hide password",
 
   // Blocking sign-in gate (shown when the backend enforces authentication).
-  "gate.title": "Sign in to continue",
-  "gate.subtitle": "This tutor requires an account. Sign in or create one to get started.",
 
   // Locked tool area (landing stays public; the tool requires an account).
   "toolGate.title": "Sign in to start",
@@ -232,9 +223,6 @@ const en = {
   "ask.title": "Ask a question",
   "ask.description": "Answers come strictly from your indexed course material.",
   // Pre-filled example (mirrors the hero) so the tool is instantly clear.
-  "ask.example.question": "What does the Pythagorean theorem state?",
-  "ask.example.course": "Mathematics",
-  "ask.example.chapter": "Chapter 3",
   "ask.questionLabel": "Question",
   "ask.questionPlaceholder": "e.g. What does the Pythagorean theorem state?",
   "ask.courseLabel": "Course filter",
@@ -247,13 +235,11 @@ const en = {
   "course.fetchFailed": "Could not load courses — enter a course name.",
   "ask.chapterLabel": "Chapter filter",
   "ask.chapterHint": "Optional — restrict to a single chapter.",
-  "ask.chapterPlaceholder": "e.g. Chapter 3",
   "chapter.all": "All chapters",
   "chapter.loading": "Loading chapters…",
   "chapter.selectCourseFirst": "Select a course first.",
   "chapter.none": "This course has no chapters.",
   "chapter.fetchFailed": "Could not load chapters.",
-  "ask.kLabel": "Sources to retrieve:",
   "ask.maxSources": "Max sources",
   "ask.maxSourcesHint": "How many passages to retrieve.",
   "ask.submit": "Ask",
@@ -276,13 +262,8 @@ const en = {
   "feedback.failed": "Could not send feedback.",
 
   // Re-explain panel
-  "reexplain.title": "Re-explain the last answer",
   "reexplain.description":
     "Hear your most recent answer again, tuned to a different audience level.",
-  "reexplain.lastAnswer": "Last answer",
-  "reexplain.action": "Re-explain",
-  "reexplain.resultTitle": "Re-explanation",
-  "reexplain.empty.title": "Nothing re-explained yet",
   "reexplain.empty.description":
     "Pick a level and press Re-explain. Ask a question first if you have not yet.",
 
@@ -303,13 +284,10 @@ const en = {
   "grade.title": "Correct your answer",
   "grade.description":
     "Get a detailed correction: a score, what you got right, what to fix, and a complete model answer.",
-  "grade.against": "Grading against exercise #{id}",
   "grade.answerLabel": "Your answer",
   "grade.answerPlaceholder": "Write your solution here…",
   "grade.submit": "Grade",
   "grade.verdictTitle": "Correction",
-  "grade.empty.title": "Not graded yet",
-  "grade.empty.description": "Submit an answer above to get a score and feedback.",
   "grade.score": "Score",
 
   // Quiz panel
@@ -346,11 +324,7 @@ const en = {
   "history.empty.title": "No history yet",
   "history.empty.description":
     "Ask a question or generate an exercise — your turns will appear here.",
-  "history.unthreaded": "Unthreaded",
-  "history.unthreadedHint": "Turns not attached to any thread.",
-  "history.turnCount": "{count} messages",
   "history.clear": "Clear history",
-  "history.clear.confirm": "Clear these messages?",
   "history.clear.yes": "Yes, clear",
   "history.cleared": "History cleared.",
   "history.clearFailed": "Could not clear the history.",
@@ -373,14 +347,12 @@ const en = {
   "threads.description.line2": "New questions in the Ask tab join the active thread.",
   "threads.refresh": "Refresh",
   "threads.list.title": "Threads",
-  "threads.new": "New thread",
   "threads.newTitleLabel": "Thread title",
   "threads.newTitlePlaceholder": "Optional — e.g. The Pythagorean theorem",
   "threads.create": "Create",
   "threads.created": "Thread created.",
   "threads.createFailed": "Could not create the thread.",
   "threads.delete": "Delete",
-  "threads.delete.confirm": "Delete this thread?",
   "threads.delete.yes": "Yes, delete",
   "threads.deleted": "Thread deleted, along with its messages.",
   "threads.deleteFailed": "Could not delete the thread.",
@@ -388,50 +360,22 @@ const en = {
   "threads.noneHint": "New questions are not attached to any thread.",
   "threads.untitled": "Untitled thread",
   "threads.active": "Active",
-  "threads.activeBanner": "New questions are attached to this thread.",
   "threads.select": "Select thread {title}",
   "threads.empty.title": "No threads yet",
   "threads.empty.description":
     "Create a thread to group related questions, or keep asking without one.",
-  "threads.messages.title": "Thread messages",
-  "threads.messages.empty.title": "No messages in this thread yet",
   "threads.messages.empty.description":
     "Select this thread, then ask a question in the Ask tab to start it.",
   "threads.loadFailed": "Could not load threads.",
-  "threads.messagesFailed": "Could not load the thread's messages.",
 
   // Thread selector
   "threadSelect.label": "Thread",
   "threadSelect.all": "All history (no thread)",
   "threadSelect.new": "+ New thread",
-  "threadSelect.created": "New thread created.",
 
   // Review panel (spaced repetition)
-  "review.title": "Spaced repetition",
   "review.description":
     "Rate how well you recalled each notion. Your rating reschedules it for the right time.",
-  "review.refresh": "Refresh",
-  "review.dueTitle": "Due now",
-  "review.dueCount": "{count} due",
-  "review.add.title": "Add a notion",
-  "review.add.label": "Notion to review",
-  "review.add.placeholder": "e.g. the Pythagorean theorem",
-  "review.add.button": "Add",
-  "review.add.hint": "Adds the notion to your review queue, due immediately.",
-  "review.added": "Added “{notion}” to your review queue.",
-  "review.rateLabel": "How well did you recall this?",
-  "review.rate.again": "Again",
-  "review.rate.hard": "Hard",
-  "review.rate.good": "Good",
-  "review.rate.easy": "Easy",
-  "review.rate.againAria": "Rate “{notion}” as forgotten",
-  "review.rate.hardAria": "Rate “{notion}” as hard",
-  "review.rate.goodAria": "Rate “{notion}” as good",
-  "review.rate.easyAria": "Rate “{notion}” as easy",
-  "review.rescheduled": "“{notion}” — next review in {days}.",
-  "review.day": "1 day",
-  "review.days": "{days} days",
-  "review.empty.title": "Nothing due — well done.",
   "review.empty.description":
     "You're all caught up. Add a notion above to start tracking it.",
   "review.helper":
@@ -486,7 +430,6 @@ const en = {
   "settings.openaiKey.badge": "Premium model",
   "settings.openaiKey.badgeTitle": "Your OpenAI or Anthropic key is active — answers use a premium model instead of the free one.",
   "doc.upload.button": "Upload & index",
-  "doc.upload.success": "Indexed {pages} page(s) into “{course}”.",
   "doc.library.title": "Indexed material",
   "doc.library.description": "Everything currently searchable, by course and chapter.",
   "doc.refresh": "Refresh",
@@ -496,7 +439,6 @@ const en = {
   "doc.uncategorized": "Uncategorized",
   "doc.delete.course": "Delete entire course",
   "doc.delete.chapter": "Delete chapter",
-  "doc.delete.confirm": "Delete “{target}” from the index? This cannot be undone.",
   "doc.delete.success": "Removed {count} item(s) from “{target}”.",
   "doc.progress.starting": "Preparing…",
   "doc.progress.pages": "{done} / {total} pages",
@@ -508,7 +450,6 @@ const en = {
   "doc.progress.empty":
     "Nothing indexed — no text could be extracted. This file looks image-only (scanned pages or images), which the current extractor cannot read. Configure an OpenAI extract model (set LLM_EXTRACT) to index files like this.",
   "doc.progress.error": "Import failed: {message}",
-  "doc.upToDate": "Up to date",
   "doc.viewFailed": "Could not open the file.",
   "doc.delete.confirmShort": "Delete?",
   "doc.delete.confirmYes": "Yes, delete",
@@ -572,9 +513,6 @@ const fr: Record<TranslationKey, string> = {
   "hero.preview.refusal": "Absent du matériel de cours.",
   // App-window mockup (right of the hero).
   "hero.app.context": "Mathématiques · Chapitre 3",
-  "hero.app.tab.ask": "Demander",
-  "hero.app.tab.exercise": "Exercice",
-  "hero.app.tab.grade": "Corriger",
   "hero.app.answered": "Répondu à partir de votre matériel",
   "hero.app.refusalQuestion": "Quel temps fera-t-il demain ?",
 
@@ -649,13 +587,10 @@ const fr: Record<TranslationKey, string> = {
   // Tabs
   "tabs.aria": "Sections du tuteur",
   "tabs.ask": "Demander",
-  "tabs.reexplain": "Réexpliquer",
   "tabs.exercise": "Exercice",
-  "tabs.grade": "Corriger",
   "tabs.quiz": "Quiz",
   "tabs.threads": "Fils",
   "tabs.history": "Historique",
-  "tabs.review": "Révision",
   // Documents
   "tabs.documents": "Documents",
 
@@ -680,7 +615,6 @@ const fr: Record<TranslationKey, string> = {
   "auth.signedOutToast": "Déconnecté.",
   "auth.failed": "Échec de l'authentification.",
   "auth.incomplete": "Entrez un pseudo et un mot de passe.",
-  "auth.cardTitle": "Connectez-vous à votre tuteur",
   "auth.cardSubtitle":
     "Posez vos questions et obtenez des réponses ancrées dans vos propres cours.",
   "auth.close": "Fermer",
@@ -688,9 +622,6 @@ const fr: Record<TranslationKey, string> = {
   "auth.hidePassword": "Masquer le mot de passe",
 
   // Blocking sign-in gate (shown when the backend enforces authentication).
-  "gate.title": "Connectez-vous pour continuer",
-  "gate.subtitle":
-    "Ce tuteur nécessite un compte. Connectez-vous ou créez-en un pour commencer.",
 
   // Locked tool area (landing stays public; the tool requires an account).
   "toolGate.title": "Connectez-vous pour commencer",
@@ -764,9 +695,6 @@ const fr: Record<TranslationKey, string> = {
   "ask.description":
     "Les réponses proviennent strictement de votre matériel de cours indexé.",
   // Exemple pré-rempli (identique au hero) pour que l'outil soit clair d'emblée.
-  "ask.example.question": "Que dit le théorème de Pythagore ?",
-  "ask.example.course": "Mathématiques",
-  "ask.example.chapter": "Chapitre 3",
   "ask.questionLabel": "Question",
   "ask.questionPlaceholder": "ex. Que dit le théorème de Pythagore ?",
   "ask.courseLabel": "Filtre par cours",
@@ -779,13 +707,11 @@ const fr: Record<TranslationKey, string> = {
   "course.fetchFailed": "Impossible de charger les cours — saisissez un nom de cours.",
   "ask.chapterLabel": "Filtre par chapitre",
   "ask.chapterHint": "Optionnel — restreindre à un seul chapitre.",
-  "ask.chapterPlaceholder": "ex. Chapitre 3",
   "chapter.all": "Tous les chapitres",
   "chapter.loading": "Chargement des chapitres…",
   "chapter.selectCourseFirst": "Sélectionnez d'abord un cours.",
   "chapter.none": "Ce cours n'a aucun chapitre.",
   "chapter.fetchFailed": "Impossible de charger les chapitres.",
-  "ask.kLabel": "Sources à récupérer :",
   "ask.maxSources": "Sources max",
   "ask.maxSourcesHint": "Nombre de passages à récupérer.",
   "ask.submit": "Demander",
@@ -809,13 +735,8 @@ const fr: Record<TranslationKey, string> = {
   "feedback.failed": "Impossible d'envoyer le retour.",
 
   // Re-explain panel
-  "reexplain.title": "Réexpliquer la dernière réponse",
   "reexplain.description":
     "Réécoutez votre réponse la plus récente, adaptée à un autre niveau d'audience.",
-  "reexplain.lastAnswer": "Dernière réponse",
-  "reexplain.action": "Réexpliquer",
-  "reexplain.resultTitle": "Réexplication",
-  "reexplain.empty.title": "Rien de réexpliqué pour l'instant",
   "reexplain.empty.description":
     "Choisissez un niveau et appuyez sur Réexpliquer. Posez d'abord une question si ce n'est pas déjà fait.",
 
@@ -838,14 +759,10 @@ const fr: Record<TranslationKey, string> = {
   "grade.title": "Corriger votre réponse",
   "grade.description":
     "Obtenez une correction détaillée : une note, ce qui est juste, ce qu'il faut corriger, et une réponse modèle complète.",
-  "grade.against": "Correction selon l'exercice #{id}",
   "grade.answerLabel": "Votre réponse",
   "grade.answerPlaceholder": "Rédigez votre solution ici…",
   "grade.submit": "Corriger",
   "grade.verdictTitle": "Correction",
-  "grade.empty.title": "Pas encore corrigé",
-  "grade.empty.description":
-    "Soumettez une réponse ci-dessus pour obtenir une note et un retour.",
   "grade.score": "Note",
 
   // Quiz panel
@@ -883,11 +800,7 @@ const fr: Record<TranslationKey, string> = {
   "history.empty.title": "Pas encore d'historique",
   "history.empty.description":
     "Posez une question ou générez un exercice — vos échanges apparaîtront ici.",
-  "history.unthreaded": "Sans fil",
-  "history.unthreadedHint": "Échanges rattachés à aucun fil.",
-  "history.turnCount": "{count} messages",
   "history.clear": "Effacer l'historique",
-  "history.clear.confirm": "Effacer ces messages ?",
   "history.clear.yes": "Oui, effacer",
   "history.cleared": "Historique effacé.",
   "history.clearFailed": "Impossible d'effacer l'historique.",
@@ -909,14 +822,12 @@ const fr: Record<TranslationKey, string> = {
   "threads.description.line2": "Le fil actif reçoit les nouvelles questions de l'onglet Demander.",
   "threads.refresh": "Actualiser",
   "threads.list.title": "Fils",
-  "threads.new": "Nouveau fil",
   "threads.newTitleLabel": "Titre du fil",
   "threads.newTitlePlaceholder": "Optionnel — ex. Le théorème de Pythagore",
   "threads.create": "Créer",
   "threads.created": "Fil créé.",
   "threads.createFailed": "Impossible de créer le fil.",
   "threads.delete": "Supprimer",
-  "threads.delete.confirm": "Supprimer ce fil ?",
   "threads.delete.yes": "Oui, supprimer",
   "threads.deleted": "Fil supprimé, ainsi que ses messages.",
   "threads.deleteFailed": "Impossible de supprimer le fil.",
@@ -924,50 +835,22 @@ const fr: Record<TranslationKey, string> = {
   "threads.noneHint": "Les nouvelles questions ne sont rattachées à aucun fil.",
   "threads.untitled": "Fil sans titre",
   "threads.active": "Actif",
-  "threads.activeBanner": "Les nouvelles questions sont rattachées à ce fil.",
   "threads.select": "Sélectionner le fil {title}",
   "threads.empty.title": "Pas encore de fil",
   "threads.empty.description":
     "Créez un fil pour regrouper des questions liées, ou continuez sans fil.",
-  "threads.messages.title": "Messages du fil",
-  "threads.messages.empty.title": "Pas encore de message dans ce fil",
   "threads.messages.empty.description":
     "Sélectionnez ce fil, puis posez une question dans l'onglet Demander pour le démarrer.",
   "threads.loadFailed": "Impossible de charger les fils.",
-  "threads.messagesFailed": "Impossible de charger les messages du fil.",
 
   // Thread selector
   "threadSelect.label": "Fil",
   "threadSelect.all": "Tout l'historique (aucun fil)",
   "threadSelect.new": "+ Nouveau fil",
-  "threadSelect.created": "Nouveau fil créé.",
 
   // Review panel (spaced repetition)
-  "review.title": "Répétition espacée",
   "review.description":
     "Évaluez votre rappel de chaque notion. Votre note la replanifie au bon moment.",
-  "review.refresh": "Actualiser",
-  "review.dueTitle": "À réviser",
-  "review.dueCount": "{count} à réviser",
-  "review.add.title": "Ajouter une notion",
-  "review.add.label": "Notion à réviser",
-  "review.add.placeholder": "ex. le théorème de Pythagore",
-  "review.add.button": "Ajouter",
-  "review.add.hint": "Ajoute la notion à votre file de révision, à réviser immédiatement.",
-  "review.added": "« {notion} » ajoutée à votre file de révision.",
-  "review.rateLabel": "À quel point vous en êtes-vous souvenu ?",
-  "review.rate.again": "À revoir",
-  "review.rate.hard": "Difficile",
-  "review.rate.good": "Bien",
-  "review.rate.easy": "Facile",
-  "review.rate.againAria": "Noter « {notion} » comme oubliée",
-  "review.rate.hardAria": "Noter « {notion} » comme difficile",
-  "review.rate.goodAria": "Noter « {notion} » comme bien",
-  "review.rate.easyAria": "Noter « {notion} » comme facile",
-  "review.rescheduled": "« {notion} » — prochaine révision dans {days}.",
-  "review.day": "1 jour",
-  "review.days": "{days} jours",
-  "review.empty.title": "Rien à réviser — bravo.",
   "review.empty.description":
     "Vous êtes à jour. Ajoutez une notion ci-dessus pour commencer à la suivre.",
   "review.helper":
@@ -1023,7 +906,6 @@ const fr: Record<TranslationKey, string> = {
   "settings.openaiKey.badge": "Modèle premium",
   "settings.openaiKey.badgeTitle": "Votre clé OpenAI ou Anthropic est active — les réponses utilisent un modèle premium au lieu du modèle gratuit.",
   "doc.upload.button": "Importer et indexer",
-  "doc.upload.success": "{pages} page(s) indexée(s) dans « {course} ».",
   "doc.library.title": "Contenu indexé",
   "doc.library.description": "Tout ce qui est consultable, par cours et chapitre.",
   "doc.refresh": "Actualiser",
@@ -1033,7 +915,6 @@ const fr: Record<TranslationKey, string> = {
   "doc.uncategorized": "Sans catégorie",
   "doc.delete.course": "Supprimer tout le cours",
   "doc.delete.chapter": "Supprimer le chapitre",
-  "doc.delete.confirm": "Supprimer « {target} » de l’index ? Cette action est irréversible.",
   "doc.delete.success": "{count} élément(s) retiré(s) de « {target} ».",
   "doc.progress.starting": "Préparation…",
   "doc.progress.pages": "{done} / {total} pages",
@@ -1045,7 +926,6 @@ const fr: Record<TranslationKey, string> = {
   "doc.progress.empty":
     "Rien indexé — aucun texte n'a pu être extrait. Ce fichier semble ne contenir que des images (pages scannées ou images), que l'extracteur actuel ne peut pas lire. Configurez un modèle d'extraction OpenAI (définissez LLM_EXTRACT) pour indexer ce type de fichier.",
   "doc.progress.error": "Échec de l'import : {message}",
-  "doc.upToDate": "À jour",
   "doc.viewFailed": "Impossible d'ouvrir le fichier.",
   "doc.delete.confirmShort": "Supprimer ?",
   "doc.delete.confirmYes": "Oui, supprimer",
@@ -1102,9 +982,6 @@ const nl: Record<TranslationKey, string> = {
   "hero.preview.citation": "(Wiskunde, H. 3, p.21)",
   "hero.preview.refusal": "Niet in het cursusmateriaal.",
   "hero.app.context": "Wiskunde · Hoofdstuk 3",
-  "hero.app.tab.ask": "Vragen",
-  "hero.app.tab.exercise": "Oefening",
-  "hero.app.tab.grade": "Beoordelen",
   "hero.app.answered": "Beantwoord vanuit je materiaal",
   "hero.app.refusalQuestion": "Wat voor weer wordt het morgen?",
 
@@ -1178,13 +1055,10 @@ const nl: Record<TranslationKey, string> = {
   // Tabs
   "tabs.aria": "Tutor-secties",
   "tabs.ask": "Vragen",
-  "tabs.reexplain": "Heruitleggen",
   "tabs.exercise": "Oefening",
-  "tabs.grade": "Beoordelen",
   "tabs.quiz": "Quiz",
   "tabs.threads": "Gesprekken",
   "tabs.history": "Geschiedenis",
-  "tabs.review": "Herhaling",
   // Documents
   "tabs.documents": "Documenten",
 
@@ -1209,16 +1083,12 @@ const nl: Record<TranslationKey, string> = {
   "auth.signedOutToast": "Uitgelogd.",
   "auth.failed": "Authenticatie mislukt.",
   "auth.incomplete": "Voer een gebruikersnaam en wachtwoord in.",
-  "auth.cardTitle": "Log in bij je tutor",
   "auth.cardSubtitle": "Stel vragen en krijg antwoorden op basis van je eigen cursussen.",
   "auth.close": "Sluiten",
   "auth.showPassword": "Wachtwoord tonen",
   "auth.hidePassword": "Wachtwoord verbergen",
 
   // Blocking sign-in gate (shown when the backend enforces authentication).
-  "gate.title": "Log in om verder te gaan",
-  "gate.subtitle":
-    "Deze tutor vereist een account. Log in of maak er een aan om te beginnen.",
 
   // Locked tool area (landing stays public; the tool requires an account).
   "toolGate.title": "Log in om te starten",
@@ -1288,9 +1158,6 @@ const nl: Record<TranslationKey, string> = {
   // Ask panel
   "ask.title": "Stel een vraag",
   "ask.description": "Antwoorden komen strikt uit je geïndexeerde cursusmateriaal.",
-  "ask.example.question": "Wat zegt de stelling van Pythagoras?",
-  "ask.example.course": "Wiskunde",
-  "ask.example.chapter": "Hoofdstuk 3",
   "ask.questionLabel": "Vraag",
   "ask.questionPlaceholder": "bijv. Wat zegt de stelling van Pythagoras?",
   "ask.courseLabel": "Cursusfilter",
@@ -1303,13 +1170,11 @@ const nl: Record<TranslationKey, string> = {
   "course.fetchFailed": "Kon cursussen niet laden — voer een cursusnaam in.",
   "ask.chapterLabel": "Hoofdstukfilter",
   "ask.chapterHint": "Optioneel — beperk tot één hoofdstuk.",
-  "ask.chapterPlaceholder": "bijv. Hoofdstuk 3",
   "chapter.all": "Alle hoofdstukken",
   "chapter.loading": "Hoofdstukken laden…",
   "chapter.selectCourseFirst": "Selecteer eerst een cursus.",
   "chapter.none": "Deze cursus heeft geen hoofdstukken.",
   "chapter.fetchFailed": "Kon hoofdstukken niet laden.",
-  "ask.kLabel": "Op te halen bronnen:",
   "ask.maxSources": "Max. bronnen",
   "ask.maxSourcesHint": "Hoeveel passages worden opgehaald.",
   "ask.submit": "Vragen",
@@ -1332,12 +1197,7 @@ const nl: Record<TranslationKey, string> = {
   "feedback.failed": "Kon feedback niet verzenden.",
 
   // Re-explain panel
-  "reexplain.title": "Leg het laatste antwoord opnieuw uit",
   "reexplain.description": "Hoor je meest recente antwoord opnieuw, afgestemd op een ander niveau.",
-  "reexplain.lastAnswer": "Laatste antwoord",
-  "reexplain.action": "Heruitleggen",
-  "reexplain.resultTitle": "Heruitleg",
-  "reexplain.empty.title": "Nog niets heruitgelegd",
   "reexplain.empty.description":
     "Kies een niveau en druk op Heruitleggen. Stel eerst een vraag als je dat nog niet hebt gedaan.",
 
@@ -1359,13 +1219,10 @@ const nl: Record<TranslationKey, string> = {
   "grade.title": "Verbeter je antwoord",
   "grade.description":
     "Krijg een gedetailleerde correctie: een score, wat goed is, wat te verbeteren, en een volledig modelantwoord.",
-  "grade.against": "Beoordeling t.o.v. oefening #{id}",
   "grade.answerLabel": "Jouw antwoord",
   "grade.answerPlaceholder": "Schrijf hier je oplossing…",
   "grade.submit": "Beoordelen",
   "grade.verdictTitle": "Correctie",
-  "grade.empty.title": "Nog niet beoordeeld",
-  "grade.empty.description": "Dien hierboven een antwoord in voor een score en feedback.",
   "grade.score": "Score",
 
   // Quiz panel
@@ -1402,11 +1259,7 @@ const nl: Record<TranslationKey, string> = {
   "history.empty.title": "Nog geen geschiedenis",
   "history.empty.description":
     "Stel een vraag of genereer een oefening — je beurten verschijnen hier.",
-  "history.unthreaded": "Zonder gesprek",
-  "history.unthreadedHint": "Beurten die aan geen enkel gesprek zijn gekoppeld.",
-  "history.turnCount": "{count} berichten",
   "history.clear": "Geschiedenis wissen",
-  "history.clear.confirm": "Deze berichten wissen?",
   "history.clear.yes": "Ja, wissen",
   "history.cleared": "Geschiedenis gewist.",
   "history.clearFailed": "Kon de geschiedenis niet wissen.",
@@ -1428,14 +1281,12 @@ const nl: Record<TranslationKey, string> = {
   "threads.description.line2": "Het actieve gesprek krijgt de nieuwe vragen van het tabblad Vragen.",
   "threads.refresh": "Vernieuwen",
   "threads.list.title": "Gesprekken",
-  "threads.new": "Nieuw gesprek",
   "threads.newTitleLabel": "Gesprekstitel",
   "threads.newTitlePlaceholder": "Optioneel — bijv. De stelling van Pythagoras",
   "threads.create": "Aanmaken",
   "threads.created": "Gesprek aangemaakt.",
   "threads.createFailed": "Kon het gesprek niet aanmaken.",
   "threads.delete": "Verwijderen",
-  "threads.delete.confirm": "Dit gesprek verwijderen?",
   "threads.delete.yes": "Ja, verwijderen",
   "threads.deleted": "Gesprek verwijderd, samen met de berichten.",
   "threads.deleteFailed": "Kon het gesprek niet verwijderen.",
@@ -1443,50 +1294,22 @@ const nl: Record<TranslationKey, string> = {
   "threads.noneHint": "Nieuwe vragen worden aan geen enkel gesprek gekoppeld.",
   "threads.untitled": "Naamloos gesprek",
   "threads.active": "Actief",
-  "threads.activeBanner": "Nieuwe vragen worden aan dit gesprek gekoppeld.",
   "threads.select": "Selecteer gesprek {title}",
   "threads.empty.title": "Nog geen gesprekken",
   "threads.empty.description":
     "Maak een gesprek om verwante vragen te groeperen, of blijf vragen zonder gesprek.",
-  "threads.messages.title": "Gespreksberichten",
-  "threads.messages.empty.title": "Nog geen berichten in dit gesprek",
   "threads.messages.empty.description":
     "Selecteer dit gesprek en stel een vraag op het tabblad Vragen om het te starten.",
   "threads.loadFailed": "Kon gesprekken niet laden.",
-  "threads.messagesFailed": "Kon de berichten van het gesprek niet laden.",
 
   // Thread selector
   "threadSelect.label": "Gesprek",
   "threadSelect.all": "Volledige geschiedenis (geen gesprek)",
   "threadSelect.new": "+ Nieuw gesprek",
-  "threadSelect.created": "Nieuw gesprek aangemaakt.",
 
   // Review panel (spaced repetition)
-  "review.title": "Gespreide herhaling",
   "review.description":
     "Beoordeel hoe goed je elk begrip onthield. Je beoordeling plant het opnieuw op het juiste moment.",
-  "review.refresh": "Vernieuwen",
-  "review.dueTitle": "Nu te doen",
-  "review.dueCount": "{count} te doen",
-  "review.add.title": "Voeg een begrip toe",
-  "review.add.label": "Te herhalen begrip",
-  "review.add.placeholder": "bijv. de stelling van Pythagoras",
-  "review.add.button": "Toevoegen",
-  "review.add.hint": "Voegt het begrip toe aan je herhalingswachtrij, direct te doen.",
-  "review.added": "“{notion}” toegevoegd aan je herhalingswachtrij.",
-  "review.rateLabel": "Hoe goed herinnerde je je dit?",
-  "review.rate.again": "Opnieuw",
-  "review.rate.hard": "Moeilijk",
-  "review.rate.good": "Goed",
-  "review.rate.easy": "Makkelijk",
-  "review.rate.againAria": "Beoordeel “{notion}” als vergeten",
-  "review.rate.hardAria": "Beoordeel “{notion}” als moeilijk",
-  "review.rate.goodAria": "Beoordeel “{notion}” als goed",
-  "review.rate.easyAria": "Beoordeel “{notion}” als makkelijk",
-  "review.rescheduled": "“{notion}” — volgende herhaling over {days}.",
-  "review.day": "1 dag",
-  "review.days": "{days} dagen",
-  "review.empty.title": "Niets te doen — goed gedaan.",
   "review.empty.description": "Je bent helemaal bij. Voeg hierboven een begrip toe om het te volgen.",
   "review.helper":
     "Gespreide herhaling toont elk begrip net voordat je het zou vergeten. Beoordeel je herinnering (Opnieuw, Moeilijk, Goed, Makkelijk) en het wordt op het optimale moment opnieuw ingepland.",
@@ -1540,7 +1363,6 @@ const nl: Record<TranslationKey, string> = {
   "settings.openaiKey.badge": "Premium-model",
   "settings.openaiKey.badgeTitle": "Uw OpenAI- of Anthropic-sleutel is actief — antwoorden gebruiken een premium-model in plaats van het gratis model.",
   "doc.upload.button": "Uploaden en indexeren",
-  "doc.upload.success": "{pages} pagina('s) geïndexeerd in “{course}”.",
   "doc.library.title": "Geïndexeerd materiaal",
   "doc.library.description": "Alles wat nu doorzoekbaar is, per vak en hoofdstuk.",
   "doc.refresh": "Vernieuwen",
@@ -1550,7 +1372,6 @@ const nl: Record<TranslationKey, string> = {
   "doc.uncategorized": "Niet-gecategoriseerd",
   "doc.delete.course": "Volledig vak verwijderen",
   "doc.delete.chapter": "Hoofdstuk verwijderen",
-  "doc.delete.confirm": "“{target}” uit de index verwijderen? Dit kan niet ongedaan worden gemaakt.",
   "doc.delete.success": "{count} item(s) verwijderd uit “{target}”.",
   "doc.progress.starting": "Voorbereiden…",
   "doc.progress.pages": "{done} / {total} pagina's",
@@ -1562,7 +1383,6 @@ const nl: Record<TranslationKey, string> = {
   "doc.progress.empty":
     "Niets geïndexeerd — er kon geen tekst worden geëxtraheerd. Dit bestand lijkt alleen afbeeldingen te bevatten (gescande pagina's of afbeeldingen), die de huidige extractor niet kan lezen. Configureer een OpenAI-extractiemodel (stel LLM_EXTRACT in) om dit soort bestanden te indexeren.",
   "doc.progress.error": "Import mislukt: {message}",
-  "doc.upToDate": "Bijgewerkt",
   "doc.viewFailed": "Kon het bestand niet openen.",
   "doc.delete.confirmShort": "Verwijderen?",
   "doc.delete.confirmYes": "Ja, verwijderen",
