@@ -103,7 +103,7 @@ Spaces builds and runs it directly.
    GitHub repo, or push the repo (including the root `Dockerfile`) to the Space's
    own Git remote. No extra config is needed — the `Dockerfile` defines the
    entrypoint and honors `$PORT`.
-3. Set the Space **secrets** (Settings → Variables and secrets). These map onto the
+3. Set the Space **secrets** (Settings -> Variables and secrets). These map onto the
    API environment variables in [DEPLOY-API.md](./DEPLOY-API.md):
 
    | Secret | Value | Why |
@@ -155,7 +155,7 @@ The Next.js app lives in `web/`. `web/vercel.json` pins the framework to Next.js
 1. At <https://vercel.com/new>, **import** the GitHub repo.
 2. Set **Root Directory** to `web/`. This is essential: the Next.js project is in
    the subdirectory, not at the repo root. Vercel then auto-detects Next.js.
-3. Add the **Environment Variables** (Project Settings → Environment Variables) for
+3. Add the **Environment Variables** (Project Settings -> Environment Variables) for
    the Production environment:
 
    | Variable | Value | Required |
@@ -252,7 +252,7 @@ open-courseware chapter — anything you are comfortable showing the world). The
 display those demo credentials on the landing page so anyone can log in and try
 Ask / Exercise / Quiz immediately.
 
-> ⚠️ **Never expose personal documents in the public demo.** Do not ingest your
+> **Never expose personal documents in the public demo.** Do not ingest your
 > CV, thesis, private notes, or any sensitive material into the demo account —
 > once ingested, its content is retrievable by anyone who logs in. Keep the demo
 > corpus strictly neutral and shareable.

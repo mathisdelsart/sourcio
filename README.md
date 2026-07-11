@@ -10,7 +10,7 @@
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
 ![Next.js](https://img.shields.io/badge/web-Next.js-000000?logo=nextdotjs&logoColor=white)
 ![Qdrant](https://img.shields.io/badge/vectors-Qdrant-DC244C)
-![Tests](https://img.shields.io/badge/tests-800+-blue)
+![Tests](https://img.shields.io/badge/tests-841-blue)
 
 </div>
 
@@ -40,16 +40,16 @@ never handles page numbers, so it cannot invent one.
 
 ## Key features
 
-- 📚 **Grounded, cited answers** — every response is backed by the exact course passages it used.
-- 🚫 **Honest refusals** — out-of-course questions get *"not covered in the course material"*, never a guess.
-- ⚡ **Streaming responses** — answers render token by token over Server-Sent Events.
-- 🎓 **Re-explain by level** — beginner / intermediate / advanced rephrasing that keeps conversation memory.
-- ✍️ **Exercises & quizzes** — course-grounded practice with automatic grading at chosen rigor levels (reference solutions stay server-side).
-- 🔁 **Spaced-repetition review** — SM-2 scheduling to revisit notions at the right time.
-- 🧵 **Threads, history & feedback** — named conversation threads, an activity feed, and per-answer 👍/👎.
-- 📄 **Multi-format ingestion** — PDF slides via a vision model (math/LaTeX preserved), plus `.md` / `.txt` prose.
-- 🔐 **Multi-user by design** — JWT auth with per-account document isolation and background ingestion.
-- 🌍 **Multilingual** — English, French and Dutch UI and answers.
+- **Grounded, cited answers** — every response is backed by the exact course passages it used.
+- **Honest refusals** — out-of-course questions get *"not covered in the course material"*, never a guess.
+- **Streaming responses** — answers render token by token over Server-Sent Events.
+- **Re-explain by level** — beginner / intermediate / advanced rephrasing that keeps conversation memory.
+- **Exercises and quizzes** — course-grounded practice with automatic grading (reference solutions stay server-side).
+- **Spaced-repetition review** — SM-2 scheduling to revisit notions at the right time.
+- **Threads, history and feedback** — named conversation threads, an activity feed, and per-answer ratings.
+- **Multi-format ingestion** — PDF slides via a vision model (math/LaTeX preserved), plus `.md` / `.txt` prose.
+- **Multi-user by design** — JWT auth with per-account document isolation and background ingestion.
+- **Multilingual** — English, French and Dutch UI and answers.
 
 ## How it works
 
@@ -59,16 +59,16 @@ serves requests, guarded by an offline **evaluation** layer.
 ```
 OFFLINE — ingest once per course
   PDF / .md / .txt
-   → math-aware extraction   (slides → Markdown + LaTeX preserved)
-   → adaptive chunking       (one slide ≈ one chunk; prose split with overlap)
-   → local embeddings        (BAAI/bge-m3, multilingual, free)
-   → Qdrant                  ({vector, payload: course / chapter / page / text})
+   -> math-aware extraction   (slides -> Markdown + LaTeX preserved)
+   -> adaptive chunking       (one slide ~ one chunk; prose split with overlap)
+   -> local embeddings        (BAAI/bge-m3, multilingual, free)
+   -> Qdrant                  ({vector, payload: course / chapter / page / text})
 
 ONLINE — answer a question
   question
-   → embed + retrieve top-k from Qdrant, with a similarity threshold
-   → if nothing clears the threshold → refuse ("not covered in the course")
-   → otherwise → grounded answer with citations remapped by the code
+   -> embed + retrieve top-k from Qdrant, with a similarity threshold
+   -> if nothing clears the threshold -> refuse ("not covered in the course")
+   -> otherwise -> grounded answer with citations remapped by the code
 ```
 
 A LangGraph router classifies intent (explain / generate exercise / grade / re-explain) and dispatches
@@ -108,9 +108,9 @@ a dense technical thesis, where the capable model wins. The free Groq tier is to
 so its run used a reduced retrieval context — fine for a demo, but the OpenAI numbers are the reference.
 
 Retrieval boosters, measured separately on a slide deck: a cross-encoder reranker lifted hit-rate
-**73% → 82%**; opt-in hybrid dense + BM25 (RRF) added **+9 pts** hit-rate and +6.6 NDCG@5.
+**73% -> 82%**; opt-in hybrid dense + BM25 (RRF) added **+9 pts** hit-rate and +6.6 NDCG@5.
 
-> **CI:** 800+ tests, green — ruff + pytest + pyright + a coverage gate on every PR.
+> **CI:** 841 tests, green — ruff + pytest + pyright + a coverage gate (>=84%) on every PR.
 
 ## Tech stack
 
@@ -141,7 +141,7 @@ make web
 
 Open <http://localhost:3000>, ask an in-course question (grounded, cited) and an out-of-course one
 (honest refusal). For the full recipe — pulling models, ingesting a course, resetting the dev DB —
-see **[docs/RUN-LOCAL.md](docs/RUN-LOCAL.md)** and **[docs/RUN-LOCAL.md](docs/RUN-LOCAL.md)**.
+see **[docs/RUN-LOCAL.md](docs/RUN-LOCAL.md)**.
 
 <details>
 <summary>Prefer the CLI / OpenAI?</summary>
@@ -158,28 +158,36 @@ Run the API with `uv run uvicorn api.main:app --reload` and browse the interacti
 <http://localhost:8000/docs>.
 </details>
 
+## Repository map
+
+Each directory has its own README with a local guide to its files.
+
+| Path | What lives there |
+| --- | --- |
+| [`ingestion/`](ingestion/README.md) | Offline pipeline: PDF/prose -> extraction -> chunking -> embeddings -> Qdrant |
+| [`core/`](core/README.md) | Retrieval, threshold-based refusal, citation-by-construction, the LLM factory |
+| [`agent/`](agent/README.md) | LangGraph router and the explain / generate / grade / re-explain / quiz nodes |
+| [`api/`](api/README.md) | FastAPI service: endpoints, auth, middleware, background jobs |
+| [`web/`](web/README.md) | Next.js web app (the primary UI) |
+| [`db/`](db/README.md) | SQLAlchemy models and the engine/session layer |
+| [`eval/`](eval/README.md) | Offline evaluation: faithfulness judge, threshold calibration, A/B retrieval, benchmarks |
+| [`tests/`](tests/README.md) | Test suite (pytest) |
+| [`alembic/`](alembic/) | Database migrations |
+
 ## Documentation
 
 | Guide | Topic |
 | --- | --- |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module-level walkthrough of the whole system |
-| [docs/RUN-LOCAL.md](docs/RUN-LOCAL.md) | Run the full stack (Qdrant + API + web) locally |
-| [docs/RUN-LOCAL.md](docs/RUN-LOCAL.md) | Fully local, zero-cost runs with Ollama |
-| [docs/DEPLOY.md](docs/DEPLOY.md) | Free-tier live deployment (Vercel + Hugging Face Spaces + Qdrant Cloud) |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Design choices and a module-level walkthrough of the whole system |
+| [docs/RUN-LOCAL.md](docs/RUN-LOCAL.md) | Run the full stack (Qdrant + API + web) locally and free with Ollama |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Free-tier live deployment (Vercel + Hugging Face Spaces + Qdrant Cloud + Groq) |
 | [docs/DEPLOY-API.md](docs/DEPLOY-API.md) | The CPU-only Docker image for the API service |
-| [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) | Opt-in LangFuse tracing |
 | [docs/POSTGRES.md](docs/POSTGRES.md) | Switch the relational store to PostgreSQL |
-| [docs/DEMO.md](docs/DEMO.md) | Demo recording storyboard |
-
-## Demo
-
-<!-- demo video to be embedded here -->
-
-_A short walkthrough video is coming — asking an in-course question (grounded, cited answer), an
-out-of-course one (honest refusal), then generating and grading an exercise, all from the web UI._
-The click-by-click recording script lives in **[docs/DEMO.md](docs/DEMO.md)**.
+| [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) | Opt-in LangFuse tracing |
 
 ---
 
 Built by [**mathisdelsart**](https://github.com/mathisdelsart) as an AI-engineering portfolio project.
 `.env`, secrets, and course PDFs are never committed (personal data).
+</content>
+</invoke>

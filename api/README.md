@@ -1,0 +1,47 @@
+# api/
+
+The FastAPI service. A thin HTTP layer: each route delegates to the grounded functions in `core/` and
+the nodes in `agent/` — no retrieval or prompting is reimplemented here. The package is organized as
+`main.py` (app creation and wiring) plus per-domain routers, with cross-cutting concerns in dedicated
+modules.
+
+## Structure
+
+| File | Responsibility |
+| --- | --- |
+| `main.py` | Builds the app, binds the database engine on startup, and mounts the routers. |
+| `auth.py` | JWT account auth (HS256) and bcrypt password hashing; the opt-in `X-API-Key` gate. |
+| `middleware.py` | Request-id propagation, security headers (HSTS when enabled), and an in-process per-IP rate limiter. |
+| `logging_config.py` | JSON structured logging at `Settings.log_level`; a global handler turns unhandled errors into a generic 500 without leaking a stack trace. |
+
+## Endpoint domains
+
+| Domain | What it does |
+| --- | --- |
+| Health | `/health` liveness (always open); `/ready` readiness (503 until the DB engine is bound). |
+| Ask / stream | Grounded answer, blocking and as Server-Sent Events; persists the turn as history. |
+| Re-explain | Rephrase the last answer at a chosen level (blocking and streaming). |
+| Exercise / Grade | Generate an exercise (reference solution withheld) and grade a student's answer. |
+| Quiz | Generate a grounded multi-question quiz; grade one answer against its stored solution. |
+| Documents | Upload course files, run ingestion as a background job, poll job status, list/delete/fetch originals. |
+| Courses / Sources | List indexed courses; fetch a single source chunk by id. |
+| Sessions / History | Named conversation threads and their messages; recent turns. |
+| Feedback | Record and summarize thumbs up/down on answers. |
+| Reviews | SM-2 spaced repetition: record a recall rating and list what is due. |
+| Auth | Register, login (returns a bearer token), and the current user. |
+| Config | Non-secret runtime configuration the web app reads. |
+
+Full route-by-route table and the two independent auth layers (opt-in API key + additive JWT) are in
+[../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+
+## Run it
+
+```bash
+docker compose up -d qdrant
+uv run uvicorn api.main:app --reload        # or: make api
+# interactive docs at http://localhost:8000/docs
+uv run python -m pytest tests/test_api.py tests/test_auth.py -q
+```
+
+Deploying the CPU-only Docker image: [../docs/DEPLOY-API.md](../docs/DEPLOY-API.md).
+</content>
