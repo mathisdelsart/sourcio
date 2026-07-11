@@ -33,6 +33,9 @@ Usage
     uv run python -m eval.bench_runner --mode exercise --no-judge
     uv run python -m eval.bench_runner --filter R-all --judge-model gpt-4o
 
+    # Steady the reviewer: run it 3x per case and take the majority verdict
+    uv run python -m eval.bench_runner --judge-votes 3
+
     # Just list the cases (no calls)
     uv run python -m eval.bench_runner --list
 
@@ -241,16 +244,64 @@ JUDGE_SYSTEM = (
     "accurate by construction (the model never types page numbers). Do NOT flag a "
     "page as invented from a [n] marker; only flag a page the answer's PROSE states "
     "that plainly contradicts its cited source label.\n"
+    "EVIDENCE RULE — reason ONLY about content that literally appears in the given "
+    "system_output. Never invent, assume, or hallucinate question numbers, symbols, "
+    "formulas, page labels, or wording that is not actually present in "
+    "system_output. Every detail your reason mentions must be copyable verbatim from "
+    "system_output; if you cannot find it there, do not mention it. When you are "
+    "uncertain whether something is a real defect — the output is ambiguous, or you "
+    "cannot verify a claim against the material, or the detail you would cite is not "
+    'clearly in the output — default to "pass" (or at most "suspicious"). Never '
+    'issue a "fail" that rests on a detail you are not certain is actually in '
+    "system_output.\n"
     'Reply with a JSON object ONLY: {"verdict": "pass"|"suspicious"|"fail", '
     '"reason": "<one or two sentences>"}. Use "pass" when the output meets the '
-    'expectation, "fail" for a clear violation, "suspicious" when something looks '
-    "off but is not conclusive. For a discovery case (expected behaviour "
-    '"behavior") always use "pass" and describe what the system actually did.'
+    'expectation, "fail" only for a clear violation you can point to verbatim in '
+    'system_output, "suspicious" when something looks off but is not conclusive. '
+    'For a discovery case (expected behaviour "behavior") always use "pass" and '
+    "describe what the system actually did."
 )
 
 
-def review(case: Case, output: dict[str, Any], judge_key: str, model: str) -> dict[str, Any]:
-    """Ask the external reviewer to flag the case, returning {verdict, reason}."""
+# Severity order for the self-consistency tie-break: less severe wins a tie so an
+# uncertain reviewer never manufactures a "fail" by a bare plurality.
+VERDICT_SEVERITY = {"pass": 0, "suspicious": 1, "fail": 2, "error": 3}
+
+
+def _majority_verdict(votes: list[dict[str, Any]]) -> dict[str, Any]:
+    """Combine N single reviews into one, preferring the least-severe on a tie.
+
+    Takes the majority verdict; ties are broken toward the least severe
+    (pass > suspicious > fail). The returned dict keeps the standard
+    {verdict, reason} contract and adds the individual votes for the report.
+    """
+    verdicts = [v.get("verdict", "suspicious") for v in votes]
+    counts = {v: verdicts.count(v) for v in set(verdicts)}
+    top = max(counts.values())
+    winners = [v for v, n in counts.items() if n == top]
+    winner = min(winners, key=lambda v: VERDICT_SEVERITY.get(v, 1))
+    reason = next((v.get("reason", "") for v in votes if v.get("verdict") == winner), "")
+    return {"verdict": winner, "reason": reason, "votes": verdicts}
+
+
+def review(
+    case: Case, output: dict[str, Any], judge_key: str, model: str, votes: int = 1
+) -> dict[str, Any]:
+    """Review the case, optionally taking the majority over ``votes`` reviews.
+
+    With ``votes == 1`` this is a single reviewer call (unchanged behaviour).
+    With ``votes > 1`` the reviewer runs that many times and the majority verdict
+    is returned (ties broken toward the least-severe verdict), with the individual
+    votes recorded under ``votes``.
+    """
+    if votes <= 1:
+        return _review_once(case, output, judge_key, model)
+    ballots = [_review_once(case, output, judge_key, model) for _ in range(votes)]
+    return _majority_verdict(ballots)
+
+
+def _review_once(case: Case, output: dict[str, Any], judge_key: str, model: str) -> dict[str, Any]:
+    """Ask the external reviewer to flag the case once, returning {verdict, reason}."""
     expectation = {
         "answer": "A grounded, correctly cited, in-scope answer (not a refusal).",
         "refuse": "An honest refusal — the material does not cover this request.",
@@ -408,6 +459,9 @@ def write_reports(results: list[Result], out_dir: Path, meta: dict[str, Any]) ->
             lines.append(f"- Error: {r.error}")
         verdict = r.review.get("verdict", "-")
         lines.append(f"- Review: **{verdict}** — {r.review.get('reason', '')}")
+        votes = r.review.get("votes")
+        if votes:
+            lines.append(f"- Votes: {', '.join(votes)}")
         answer = r.output.get("answer") or r.output.get("problem")
         if answer:
             snippet = answer if len(answer) < 1200 else answer[:1200] + " …"
@@ -441,9 +495,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--judge-model", default=os.getenv("SOURCIO_JUDGE_MODEL", DEFAULT_JUDGE_MODEL)
     )
+    parser.add_argument(
+        "--judge-votes",
+        type=int,
+        default=1,
+        metavar="N",
+        help="run the reviewer N times per case and take the majority verdict (default 1)",
+    )
     parser.add_argument("--no-judge", action="store_true", help="skip the external reviewer")
     parser.add_argument("--list", action="store_true", help="list selected cases and exit")
     args = parser.parse_args(argv)
+
+    if args.judge_votes < 1:
+        print("--judge-votes must be >= 1.", file=sys.stderr)
+        return 2
 
     all_cases = load_cases(args.cases)
     cases = select(all_cases, args.text, args.mode)
@@ -482,7 +547,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[{i}/{len(cases)}] {case.id} ({case.mode}, {scope_label(case)}) …", flush=True)
         result = run_case(client, case)
         if judge_key and result.ok_call:
-            result.review = review(case, result.output, judge_key, args.judge_model)
+            result.review = review(
+                case, result.output, judge_key, args.judge_model, votes=args.judge_votes
+            )
         elif not result.ok_call:
             result.review = {"verdict": "error", "reason": result.error or "call failed"}
         verdict = result.review.get("verdict", "-")
@@ -500,6 +567,7 @@ def main(argv: list[str] | None = None) -> int:
         "base_url": args.base_url,
         "commit": git_commit(),
         "judge": ("disabled" if not judge_key else args.judge_model),
+        "judge_votes": args.judge_votes,
         "case_count": len(results),
     }
     write_reports(results, out_dir, meta)
