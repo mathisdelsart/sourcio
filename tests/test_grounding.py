@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 
 import core.answer as answer_mod
-from core.answer import _citations, _cited_indices, _strip_filler_lead_ins
+from core.answer import _cited_indices, _finalize_citations, _strip_filler_lead_ins
 from ingestion.chunk import chunk_pages
 from ingestion.schema import Chunk, Page, Retrieved
 
@@ -17,15 +17,28 @@ def test_citation_label_without_chapter():
     assert _retrieved(11).citation() == "(Wavelet Transform, p.11)"
 
 
-def test_citations_carry_marker_number_id_and_label_ascending():
-    # The legend pairs each inline [n] with its number, chunk id and label,
-    # ordered by ascending n even when the answer cites them out of order.
+def test_finalize_citations_renumbers_markers_from_one():
+    # The model may cite [3] then [1]; the markers are renumbered 1..M in order of
+    # first appearance, and the text is rewritten to match the legend.
     results = [_retrieved(11), _retrieved(12), _retrieved(13)]
-    cites = _citations("First [3] then [1].", results)
+    text, cites = _finalize_citations("First [3] then [1].", results)
+    assert text == "First [1] then [2]."
     assert cites == [
-        {"n": 1, "id": "id11", "label": "(Wavelet Transform, p.11)"},
-        {"n": 3, "id": "id13", "label": "(Wavelet Transform, p.13)"},
+        {"n": 1, "id": "id13", "label": "(Wavelet Transform, p.13)"},
+        {"n": 2, "id": "id11", "label": "(Wavelet Transform, p.11)"},
     ]
+
+
+def test_finalize_citations_merges_same_label_case_insensitively():
+    # Two different chunks whose labels differ only by casing (an ingestion
+    # inconsistency) collapse to one numbered source, not a duplicate legend entry.
+    dup = [
+        Retrieved(chunk=Chunk(id="a", course="Psych du Langage", page=4, text="."), score=0.9),
+        Retrieved(chunk=Chunk(id="b", course="psych du langage", page=4, text="."), score=0.8),
+    ]
+    text, cites = _finalize_citations("Claim [1] and also [2].", dup)
+    assert text == "Claim [1] and also [1]."
+    assert cites == [{"n": 1, "id": "a", "label": "(Psych du Langage, p.4)"}]
 
 
 def test_cited_indices_returns_only_used_sources_in_order():
