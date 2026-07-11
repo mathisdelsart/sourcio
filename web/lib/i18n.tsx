@@ -456,10 +456,14 @@ const en = {
   "doc.upload.chapter": "Chapter (optional)",
   "doc.upload.chapterHint": "Groups the material; leave empty for none.",
   "doc.upload.chapterPlaceholder": "e.g. The Pythagorean theorem",
-  "doc.upload.chapterPerFile": "Chapter per file (optional)",
-  "doc.upload.chapterPerFileHint":
-    "Each file goes under the shared course above; give each its own chapter.",
+  "doc.upload.courseDefault": "Default course",
+  "doc.upload.courseDefaultHint": "Used for any file below that leaves its course blank.",
+  "doc.upload.perFileHeading": "Course & chapter per file",
+  "doc.upload.perFileHint":
+    "Import several courses and chapters at once — set each file’s own. A blank course falls back to the default above.",
+  "doc.upload.courseForFile": "Course for {name}",
   "doc.upload.chapterForFile": "Chapter for {name}",
+  "doc.upload.courseRequiredEach": "Give every file a course (or a default above) to import.",
   "doc.upload.openaiKey": "Your OpenAI or Anthropic API key (optional)",
   "doc.upload.openaiKeyHint":
     "The same key as in the account menu. Works with an OpenAI or an Anthropic key (auto-detected). When set it powers every answer with a premium model AND reads scanned/image PDFs — it replaces the free model and runs on your own OpenAI or Anthropic credit. Stored in your browser only; never on our server. Text PDFs and .md/.txt files import for free without a key.",
@@ -980,10 +984,14 @@ const fr: Record<TranslationKey, string> = {
   "doc.upload.chapter": "Chapitre (optionnel)",
   "doc.upload.chapterHint": "Regroupe le contenu ; laissez vide si aucun.",
   "doc.upload.chapterPlaceholder": "ex. Le théorème de Pythagore",
-  "doc.upload.chapterPerFile": "Chapitre par fichier (optionnel)",
-  "doc.upload.chapterPerFileHint":
-    "Chaque fichier va dans le cours commun ci-dessus ; donnez à chacun son chapitre.",
+  "doc.upload.courseDefault": "Cours par défaut",
+  "doc.upload.courseDefaultHint": "Utilisé pour tout fichier ci-dessous dont le cours est laissé vide.",
+  "doc.upload.perFileHeading": "Cours et chapitre par fichier",
+  "doc.upload.perFileHint":
+    "Importez plusieurs cours et chapitres à la fois — indiquez ceux de chaque fichier. Un cours vide reprend le cours par défaut ci-dessus.",
+  "doc.upload.courseForFile": "Cours pour {name}",
   "doc.upload.chapterForFile": "Chapitre pour {name}",
+  "doc.upload.courseRequiredEach": "Donnez un cours à chaque fichier (ou un cours par défaut ci-dessus) pour importer.",
   "doc.upload.openaiKey": "Votre clé API OpenAI ou Anthropic (optionnel)",
   "doc.upload.openaiKeyHint":
     "La même clé que dans le menu du compte. Fonctionne avec une clé OpenAI ou Anthropic (détectée automatiquement). Lorsqu’elle est définie, elle alimente chaque réponse avec un modèle premium ET permet de lire les PDF scannés ou basés sur des images : elle remplace le modèle gratuit et utilise votre propre crédit OpenAI ou Anthropic. Conservée uniquement dans votre navigateur, jamais sur notre serveur. Les PDF texte et les fichiers .md/.txt s’importent gratuitement, sans clé.",
@@ -1484,10 +1492,14 @@ const nl: Record<TranslationKey, string> = {
   "doc.upload.chapter": "Hoofdstuk (optioneel)",
   "doc.upload.chapterHint": "Groepeert het materiaal; laat leeg voor geen.",
   "doc.upload.chapterPlaceholder": "bijv. De stelling van Pythagoras",
-  "doc.upload.chapterPerFile": "Hoofdstuk per bestand (optioneel)",
-  "doc.upload.chapterPerFileHint":
-    "Elk bestand valt onder de gedeelde cursus hierboven; geef elk zijn eigen hoofdstuk.",
+  "doc.upload.courseDefault": "Standaardcursus",
+  "doc.upload.courseDefaultHint": "Gebruikt voor elk bestand hieronder waarvan de cursus leeg blijft.",
+  "doc.upload.perFileHeading": "Cursus en hoofdstuk per bestand",
+  "doc.upload.perFileHint":
+    "Importeer meerdere cursussen en hoofdstukken tegelijk — stel die van elk bestand in. Een lege cursus valt terug op de standaardcursus hierboven.",
+  "doc.upload.courseForFile": "Cursus voor {name}",
   "doc.upload.chapterForFile": "Hoofdstuk voor {name}",
+  "doc.upload.courseRequiredEach": "Geef elk bestand een cursus (of een standaardcursus hierboven) om te importeren.",
   "doc.upload.openaiKey": "Uw OpenAI- of Anthropic-API-sleutel (optioneel)",
   "doc.upload.openaiKeyHint":
     "Dezelfde sleutel als in het accountmenu. Werkt met een OpenAI- of Anthropic-sleutel (automatisch gedetecteerd). Wanneer ingesteld, voedt hij elk antwoord met een premium-model ÉN leest hij gescande of op afbeeldingen gebaseerde PDF’s — hij vervangt het gratis model en gebruikt uw eigen OpenAI- of Anthropic-tegoed. Alleen opgeslagen in uw browser, nooit op onze server. Tekst-PDF’s en .md/.txt-bestanden worden gratis geïmporteerd, zonder sleutel.",

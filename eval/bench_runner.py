@@ -228,10 +228,14 @@ JUDGE_SYSTEM = (
     "You are given: the test's intent, the exact filters used, the expected "
     "behaviour, and the system's ACTUAL output. Judge whether the output matches "
     "the expectation and flag concrete problems: unsupported claims not backed by "
-    "the cited sources, citation/scope mismatches (content that belongs to a "
-    "chapter OTHER than the selected one), self-contradictory or circular grading "
-    "feedback, a missing score, or a refusal where content was expected (and vice "
-    "versa).\n"
+    "the cited sources, citation/scope mismatches, self-contradictory or circular "
+    "grading feedback, a missing score, or a refusal where content was expected "
+    "(and vice versa).\n"
+    "SCOPE RULE — read the filters before judging a scope mismatch. A scope "
+    "mismatch exists ONLY when a SPECIFIC chapter/course was selected but the "
+    "answer draws on content outside it. When the chapter filter is null ('All "
+    "chapters') or the course filter is null ('All courses'), citing MULTIPLE "
+    "chapters or courses is EXPECTED and CORRECT — never flag that as a mismatch.\n"
     'Reply with a JSON object ONLY: {"verdict": "pass"|"suspicious"|"fail", '
     '"reason": "<one or two sentences>"}. Use "pass" when the output meets the '
     'expectation, "fail" for a clear violation, "suspicious" when something looks '

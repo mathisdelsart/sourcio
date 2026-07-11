@@ -121,11 +121,13 @@ export function DocumentsPanel({
   const [items, setItems] = useState<DocumentCourse[]>([]);
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  // Shared course/chapter for the single-file case. When several files are
+  // selected each gets its OWN course and chapter via the per-file maps below, so
+  // one batch can span several courses AND chapters at once. The shared `course`
+  // still acts as the default for any file whose per-file course is left blank.
   const [course, setCourse] = useState("");
-  // Chapter for the single-file case. When several files are selected each gets
-  // its own chapter via `chapterByFile` below, so a batch can span chapters (all
-  // under the one shared `course`).
   const [chapter, setChapter] = useState("");
+  const [courseByFile, setCourseByFile] = useState<Record<string, string>>({});
   const [chapterByFile, setChapterByFile] = useState<Record<string, string>>({});
   // The OpenAI key is lifted to the page (props) so it stays in sync with the
   // account-menu setting; only the show/hide toggle is local here.
@@ -167,10 +169,11 @@ export function DocumentsPanel({
       if (valid.length < list.length) {
         toast.push(t("doc.upload.unsupported"), "error");
       }
-      // A new selection replaces the previous one, so drop any per-file chapters
-      // keyed to files that are no longer part of the batch.
+      // A new selection replaces the previous one, so drop any per-file course /
+      // chapter keyed to files that are no longer part of the batch.
       if (valid.length > 0) {
         setFiles(valid);
+        setCourseByFile({});
         setChapterByFile({});
       }
     },
@@ -312,19 +315,23 @@ export function DocumentsPanel({
   }, [hasRunning]);
 
   async function upload() {
-    if (files.length === 0 || !course.trim() || hasRunning || submitting) return;
-    const batch = files;
-    const courseName = course.trim();
-    const multi = batch.length > 1;
-    // One chapter per file when several are selected (each under `courseName`);
-    // the single shared chapter otherwise.
+    const multi = files.length > 1;
+    // Per file when several are selected: its own course (falling back to the
+    // shared course) and its own chapter, so one batch can span several courses
+    // and chapters. Single-file uses the shared course/chapter.
+    const courseFor = (f: File): string =>
+      (multi ? (courseByFile[fileKey(f)]?.trim() || course.trim()) : course.trim());
     const chapterFor = (f: File): string | null => {
       const raw = multi ? (chapterByFile[fileKey(f)] ?? "") : chapter;
       return raw.trim() || null;
     };
+    // Every file must resolve to a non-empty course before we start.
+    if (files.length === 0 || hasRunning || submitting || files.some((f) => !courseFor(f))) return;
+    const batch = files;
     setSubmitting(true);
     setFiles([]);
     setChapter("");
+    setCourseByFile({});
     setChapterByFile({});
     if (fileInputRef.current) fileInputRef.current.value = "";
 
@@ -333,8 +340,8 @@ export function DocumentsPanel({
       // starts, so the server ingests the whole batch in parallel.
       const started = await Promise.allSettled(
         batch.map((f) =>
-          startUpload(f, courseName, chapterFor(f), config, studentId, openaiKey.trim() || null).then(
-            (result) => ({ job_id: result.job_id, filename: f.name }),
+          startUpload(f, courseFor(f), chapterFor(f), config, studentId, openaiKey.trim() || null).then(
+            (result) => ({ job_id: result.job_id, filename: f.name, course: courseFor(f) }),
           ),
         ),
       );
@@ -345,7 +352,7 @@ export function DocumentsPanel({
         if (result.status === "fulfilled") {
           newRows.push({
             job_id: result.value.job_id,
-            course: courseName,
+            course: result.value.course,
             filename: result.value.filename,
             job: null,
             liveElapsed: 0,
@@ -457,7 +464,13 @@ export function DocumentsPanel({
     );
   }
 
-  const canUpload = files.length > 0 && course.trim().length > 0 && !hasRunning && !submitting;
+  // Every file must resolve to a course: the shared one for a single file, or —
+  // for a batch — its own per-file course, falling back to the shared course.
+  const multiSelect = files.length > 1;
+  const courseResolved = (f: File): boolean =>
+    Boolean(multiSelect ? courseByFile[fileKey(f)]?.trim() || course.trim() : course.trim());
+  const allCoursesSet = files.length > 0 && files.every(courseResolved);
+  const canUpload = allCoursesSet && !hasRunning && !submitting;
 
   return (
     <div className="space-y-5">
@@ -550,20 +563,22 @@ export function DocumentsPanel({
                 className="block w-full text-sm text-zinc-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3.5 file:py-2 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100"
               />
             </div>
+            {/* Single-file import keeps one shared course + chapter. A multi-file
+                batch gets its OWN course and chapter per file below, so one batch
+                can span several courses and chapters; the shared course here is the
+                default for any file that leaves its course blank. */}
             <div className="flex flex-col gap-3 sm:flex-row">
               <div className="flex-1">
                 <TextField
-                  label={`${t("doc.upload.course")} *`}
+                  label={multiSelect ? t("doc.upload.courseDefault") : `${t("doc.upload.course")} *`}
+                  hint={multiSelect ? t("doc.upload.courseDefaultHint") : undefined}
                   placeholder={t("doc.upload.coursePlaceholder")}
                   value={course}
                   disabled={hasRunning}
                   onChange={(e) => setCourse(e.target.value)}
                 />
               </div>
-              {/* Single-file import keeps one shared chapter beside the course.
-                  A multi-file batch gets a chapter per file below instead, so
-                  different files can land in different chapters of one course. */}
-              {files.length <= 1 && (
+              {!multiSelect && (
                 <div className="flex-1">
                   <TextField
                     label={t("doc.upload.chapter")}
@@ -577,36 +592,49 @@ export function DocumentsPanel({
               )}
             </div>
 
-            {files.length > 1 && (
+            {multiSelect && (
               <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/40">
                 <div className="space-y-0.5">
                   <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                    {t("doc.upload.chapterPerFile")}
+                    {t("doc.upload.perFileHeading")}
                   </p>
-                  <p className="text-xs text-zinc-500">{t("doc.upload.chapterPerFileHint")}</p>
+                  <p className="text-xs text-zinc-500">{t("doc.upload.perFileHint")}</p>
                 </div>
-                <ul className="space-y-2">
+                <ul className="space-y-2.5">
                   {files.map((f) => {
                     const key = fileKey(f);
                     return (
-                      <li key={key} className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
-                        <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-zinc-600 sm:w-1/3 dark:text-zinc-300">
+                      <li key={key} className="space-y-1">
+                        <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">
                           <FileIcon />
                           <span className="truncate" title={f.name}>
                             {f.name}
                           </span>
                         </span>
-                        <input
-                          type="text"
-                          aria-label={t("doc.upload.chapterForFile", { name: f.name })}
-                          placeholder={t("doc.upload.chapterPlaceholder")}
-                          value={chapterByFile[key] ?? ""}
-                          disabled={hasRunning}
-                          onChange={(e) =>
-                            setChapterByFile((prev) => ({ ...prev, [key]: e.target.value }))
-                          }
-                          className={cn(baseField, "h-9 flex-1 py-1.5 text-sm")}
-                        />
+                        <div className="flex flex-col gap-1.5 sm:flex-row">
+                          <input
+                            type="text"
+                            aria-label={t("doc.upload.courseForFile", { name: f.name })}
+                            placeholder={course.trim() || t("doc.upload.coursePlaceholder")}
+                            value={courseByFile[key] ?? ""}
+                            disabled={hasRunning}
+                            onChange={(e) =>
+                              setCourseByFile((prev) => ({ ...prev, [key]: e.target.value }))
+                            }
+                            className={cn(baseField, "h-9 flex-1 py-1.5 text-sm")}
+                          />
+                          <input
+                            type="text"
+                            aria-label={t("doc.upload.chapterForFile", { name: f.name })}
+                            placeholder={t("doc.upload.chapterPlaceholder")}
+                            value={chapterByFile[key] ?? ""}
+                            disabled={hasRunning}
+                            onChange={(e) =>
+                              setChapterByFile((prev) => ({ ...prev, [key]: e.target.value }))
+                            }
+                            className={cn(baseField, "h-9 flex-1 py-1.5 text-sm")}
+                          />
+                        </div>
                       </li>
                     );
                   })}
@@ -686,8 +714,12 @@ export function DocumentsPanel({
             )}
 
             <div className="flex flex-wrap items-center justify-end gap-3">
-              {files.length > 0 && !course.trim() && !hasRunning && !submitting && (
-                <p className="text-xs text-amber-600">{t("doc.upload.courseRequired")}</p>
+              {files.length > 0 && !allCoursesSet && !hasRunning && !submitting && (
+                <p className="text-xs text-amber-600">
+                  {multiSelect
+                    ? t("doc.upload.courseRequiredEach")
+                    : t("doc.upload.courseRequired")}
+                </p>
               )}
               <Button onClick={upload} loading={hasRunning || submitting} disabled={!canUpload}>
                 {t("doc.upload.button")}
