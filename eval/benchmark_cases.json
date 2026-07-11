@@ -139,6 +139,61 @@
       "id": "FT4", "mode": "ask", "course": "Special Relativity", "chapter": "Chapter 1", "k": 5,
       "prompt": "What are the two postulates of special relativity, and why is simultaneity relative?",
       "expect": "answer", "note": "Positive control: legitimate in-scope content must pass, cites Ch1 only."
+    },
+
+    {
+      "id": "Quiz-X-all", "mode": "quiz", "course": null, "chapter": null, "n": 7,
+      "prompt": "Quiz me with questions covering both courses.",
+      "expect": "generate",
+      "note": "Cross-course: must mix Finance AND Special Relativity questions without refusing. Report the split across the two courses (7 requested); flag a near-total imbalance (e.g. 6/1, 7/0) as biased retrieval, not a clean pass."
+    },
+    {
+      "id": "Ask-Format1", "mode": "ask", "course": "Finance", "chapter": "Chapter 3", "k": 5,
+      "prompt": "In exactly one sentence, what does portfolio diversification achieve?",
+      "expect": "answer",
+      "note": "Format constraint: PASS only if the answer is EXACTLY ONE sentence AND grounded/cited. FAIL if it runs to multiple sentences or paragraphs despite the instruction."
+    },
+    {
+      "id": "Ask-PageCite", "mode": "ask", "course": "Special Relativity", "chapter": "Chapter 2", "k": 5,
+      "prompt": "What page discusses the muon decay example, and what does it say?",
+      "expect": "answer",
+      "note": "Citation precision: the page it names must match the cited source chunk's real page for the muon-decay example. Flag an invented or approximate page number that the sources do not support."
+    },
+    {
+      "id": "Ex-Structure", "mode": "exercise", "course": "Finance", "chapter": "Chapter 1",
+      "prompt": "Give me an exercise with exactly 3 sub-questions: one on simple interest, one on compound interest, and one comparing the two.",
+      "expect": "generate",
+      "note": "Structure compliance: PASS only if the exercise has EXACTLY 3 sub-questions, in that order, covering those three angles. FAIL if it improvises a different count or structure."
+    },
+    {
+      "id": "Quiz-NumericOnly", "mode": "quiz", "course": "Special Relativity", "chapter": "Chapter 3", "n": 5,
+      "prompt": "Quiz me with numerical calculation questions only, no conceptual or definition questions, on relativistic energy and momentum.",
+      "expect": "generate",
+      "note": "Content-style instruction: PASS only if ALL 5 questions require a numeric calculation (give concrete values, ask for a computed result). FAIL if any is conceptual/definition-style."
+    },
+    {
+      "id": "Quiz-MCQ", "mode": "quiz", "course": "Finance", "chapter": "Chapter 2", "n": 3,
+      "prompt": "Quiz me with multiple-choice questions with 4 options each on loan amortization.",
+      "expect": "generate",
+      "note": "Format compliance: PASS only if every question is MCQ with exactly 4 plausible options and one correct answer, grounded in real Chapter 2 loan-amortization content. FAIL otherwise."
+    },
+    {
+      "id": "Ask-BoundaryAware", "mode": "ask", "course": "Special Relativity", "chapter": "Chapter 1", "k": 5,
+      "prompt": "Does Chapter 1 cover time dilation? If not, what does it actually cover?",
+      "expect": "answer",
+      "note": "Boundary awareness (adjacent-but-absent topic): PASS only if it says time dilation is NOT in Chapter 1 AND accurately describes what Chapter 1 covers (postulates, relativity of simultaneity), grounded/cited. FAIL if it claims Ch1 covers time dilation, or refuses outright."
+    },
+    {
+      "id": "Ask-MaxSources-Low", "mode": "ask", "course": "Finance", "chapter": null, "k": 1,
+      "prompt": "If I deposit money today that grows at compound interest, how would I calculate the present value needed today to reach a specific future goal, and how are the compound interest formula and the present value formula mathematically related?",
+      "expect": "answer",
+      "note": "Max sources=1 (same question as F1, which needs Ch1 compound-interest AND Ch2 present-value formulas). With one retrieval slot it likely can't get both; check for uncited gap-fill/hallucination vs an honest partial answer. Flag any formula stated without a supporting citation."
+    },
+    {
+      "id": "Ask-MaxSources-High", "mode": "ask", "course": "Finance", "chapter": null, "k": 10,
+      "prompt": "If I deposit money today that grows at compound interest, how would I calculate the present value needed today to reach a specific future goal, and how are the compound interest formula and the present value formula mathematically related?",
+      "expect": "answer",
+      "note": "Max sources=10 (same question as F1): check the answer stays accurate and grounded, citing both Ch1 and Ch2, and is not diluted or confused by extra irrelevant chunks."
     }
   ]
 }

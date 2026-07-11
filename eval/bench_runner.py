@@ -236,6 +236,11 @@ JUDGE_SYSTEM = (
     "answer draws on content outside it. When the chapter filter is null ('All "
     "chapters') or the course filter is null ('All courses'), citing MULTIPLE "
     "chapters or courses is EXPECTED and CORRECT — never flag that as a mismatch.\n"
+    "CITATION RULE — an inline marker like [1] is a SOURCE INDEX, not a page "
+    "number. The page/chapter shown in the source label the system attaches is "
+    "accurate by construction (the model never types page numbers). Do NOT flag a "
+    "page as invented from a [n] marker; only flag a page the answer's PROSE states "
+    "that plainly contradicts its cited source label.\n"
     'Reply with a JSON object ONLY: {"verdict": "pass"|"suspicious"|"fail", '
     '"reason": "<one or two sentences>"}. Use "pass" when the output meets the '
     'expectation, "fail" for a clear violation, "suspicious" when something looks '
