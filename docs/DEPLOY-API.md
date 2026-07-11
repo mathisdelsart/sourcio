@@ -6,8 +6,8 @@ This document describes the production Docker image for the **API service**
 of `torch` so no CUDA wheels are pulled, keeping it small enough for those tiers.
 
 > **Local development is unchanged.** Day-to-day, only the vector store runs in
-> Docker (`docker compose up -d qdrant`); the API and UI run on the host (`make
-> api` / `make ui`). The default `torch` build is multi-gigabyte (CUDA), which is
+> Docker (`docker compose up -d qdrant`); the API and web app run on the host
+> (`make api` / `make web`). The default `torch` build is multi-gigabyte (CUDA), which is
 > why the API is not containerized locally. This image exists for the cloud, where
 > a self-contained, CPU-only artifact is what the platform expects.
 
@@ -25,9 +25,10 @@ of `torch` so no CUDA wheels are pulled, keeping it small enough for those tiers
 - The application source: `api/`, `core/`, `agent/`, `db/`, and `ingestion/`
   (only its schema/embed/index modules are imported by the retrieval path).
 
-Deliberately **excluded**: Streamlit UI, the Ollama client (`local` extra), the
-PDF ingestion runtime (PyMuPDF — offline only), and Alembic (the API creates its
-tables via SQLAlchemy on startup, so no migration step runs on boot).
+Deliberately **excluded**: the Next.js web frontend (deployed separately, e.g. on
+Vercel), the Ollama client (`local` extra), the PDF ingestion runtime (PyMuPDF —
+offline only), and Alembic (the API creates its tables via SQLAlchemy on startup,
+so no migration step runs on boot).
 
 ## Build
 
@@ -86,7 +87,7 @@ Then check `http://localhost:8000/health` and the docs at
 | `MULTI_QUERY` / `HYDE` | no | Opt-in retrieval strategies (query rewriting / hypothetical-doc embedding). |
 | `SIMILARITY_THRESHOLD` | no | Refusal floor for retrieval (default `0.35`); tune per corpus. |
 | `LANGFUSE_PUBLIC_KEY` | no | LangFuse public key; set together with the secret key to enable tracing (see `OBSERVABILITY.md`). |
-| `LANGFUSE_SECRET_KEY` | no | LangFuse secret key (set as a **secret**). Both keys present ⇒ every LLM call is traced. |
+| `LANGFUSE_SECRET_KEY` | no | LangFuse secret key (set as a **secret**). Both keys present => every LLM call is traced. |
 | `LANGFUSE_HOST` | no | LangFuse base URL (default `https://cloud.langfuse.com`; the SDK var is `LANGFUSE_HOST`, not `LANGFUSE_BASE_URL`). |
 | `R2_ACCOUNT_ID` | no | Cloudflare account id; also derives the R2 endpoint. Set together with the three below to enable durable file storage (see below). |
 | `R2_ACCESS_KEY_ID` | no | R2 API token access key id. |
@@ -144,8 +145,8 @@ the exact local-disk behavior — this is entirely optional.
 3. Find your **Account ID**: it's shown on the main Cloudflare dashboard
    overview page (right-hand sidebar under your account), and also on the R2
    Object Storage landing page. This is your **`R2_ACCOUNT_ID`** value.
-4. Create an API token scoped to just this bucket: in **R2 Object Storage** →
-   **Manage R2 API Tokens** (or **Account API Tokens** from the R2 overview) →
+4. Create an API token scoped to just this bucket: in **R2 Object Storage** ->
+   **Manage R2 API Tokens** (or **Account API Tokens** from the R2 overview) ->
    **Create API Token**. Configure it as:
    - **Permissions**: `Object Read & Write`
    - **Specify bucket(s)**: restrict to the bucket created in step 2 (don't
@@ -153,10 +154,10 @@ the exact local-disk behavior — this is entirely optional.
    - **TTL**: no expiry (or a long one — rotate manually later if desired)
 5. Click **Create API Token**. Cloudflare shows the credentials **once** — copy
    both immediately:
-   - **Access Key ID** → this is your **`R2_ACCESS_KEY_ID`**
-   - **Secret Access Key** → this is your **`R2_SECRET_ACCESS_KEY`**
-6. Set all four as environment variables on the deployed API (e.g. HF Spaces →
-   your Space → **Settings** → **Repository secrets** / **Variables**, or via
+   - **Access Key ID** -> this is your **`R2_ACCESS_KEY_ID`**
+   - **Secret Access Key** -> this is your **`R2_SECRET_ACCESS_KEY`**
+6. Set all four as environment variables on the deployed API (e.g. HF Spaces ->
+   your Space -> **Settings** -> **Repository secrets** / **Variables**, or via
    `docker run -e ...` for another host):
    ```
    R2_ACCOUNT_ID=<from step 3>

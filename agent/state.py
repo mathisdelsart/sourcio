@@ -21,12 +21,11 @@ Level = Literal["beginner", "intermediate", "advanced"]
 # node falls back to a sensible default when none is supplied.
 Rigor = Literal["lenient", "standard", "strict"]
 
-# Conversation roles. ``PersistedRole`` is what the relational store records on a
+# Conversation roles. The relational store records ``user`` / ``assistant`` on a
 # message; ``NodeRole`` is what the agent nodes read and write in the in-memory
 # history. They differ deliberately: a stored ``assistant`` turn is a tutor turn
 # from the agent's point of view. ``ROLE_FROM_PERSISTED`` is the single mapping
 # bridging the two vocabularies, so the relabelling lives in exactly one place.
-PersistedRole = Literal["user", "assistant"]
 NodeRole = Literal["user", "tutor"]
 
 ROLE_FROM_PERSISTED: dict[str, NodeRole] = {"user": "user", "assistant": "tutor"}

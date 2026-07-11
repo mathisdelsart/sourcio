@@ -20,7 +20,8 @@ observation with its latency, token usage and estimated cost:
   harness (`eval/run_eval.py`).
 
 Retrieval and per-stage latency are tracked separately by the in-process timer
-in `core/obs.py` (see the metrics dashboard).
+in `core/obs.py`, which feeds the retrieval-latency percentiles reported in the
+README.
 
 ## How it works
 
@@ -60,7 +61,7 @@ coded anywhere.
    the cloud endpoint when omitted.
 
 4. Run any query (an `/ask` call, an agent turn, or the eval harness). Open the
-   LangFuse UI and the traces — retrieval → LLM → judge — appear with latency,
+   LangFuse UI and the traces — retrieval -> LLM -> judge — appear with latency,
    tokens and cost.
 
 To turn tracing off again, unset the keys: the pipeline returns to the

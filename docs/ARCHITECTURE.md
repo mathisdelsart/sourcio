@@ -41,10 +41,10 @@ offline / in CI.
                                 |
 ================================|=====================================
                                 |        ONLINE SERVING (per request)
-  client (Streamlit ui/ or HTTP)|
+  client (web app or HTTP)      |
       |                         |
       v                         |
-  api/main.py  (FastAPI)        |
+  api/  (FastAPI: app + routers)|
       |   \                     |
       |    \---------> core/retrieval.py --> [ Qdrant ]  top-k + threshold (+ opt-in hybrid RRF)
       |   /                          \
@@ -62,7 +62,6 @@ offline / in CI.
                          QUALITY LAYER (offline / CI)
   eval/run_eval.py     faithfulness + relevance + refusal + retrieval-hit
   eval/calibrate.py    empirically calibrate the similarity threshold
-  ui/metrics.py        read-only dashboard over eval results + DB stats
 ```
 
 ## Offline ingestion pipeline
@@ -132,7 +131,7 @@ bge-m3 lexical weights — which is what the hybrid retrieval path fuses at quer
 time. Dense-only ingestion (the default) leaves the collection sparse-free, and
 hybrid retrieval falls back to dense against it.
 
-`ingestion/run.py` processes pages in **batches** (extract → chunk → index per
+`ingestion/run.py` processes pages in **batches** (extract -> chunk -> index per
 batch): a crash mid-run keeps the progress of earlier batches, and the stable
 chunk ids make a re-run safe.
 
@@ -267,9 +266,10 @@ configured database, or no `db` package, the helpers are no-ops and the node
 keeps working. The session factory is injectable, so tests bind it to an
 in-memory SQLite engine.
 
-### API (`api/main.py`)
+### API (`api/`)
 
-A thin FastAPI layer; each route delegates to the existing grounded functions and
+A thin FastAPI layer, organized as `main.py` (app creation and wiring) plus
+per-domain routers. Each route delegates to the existing grounded functions and
 nodes — no retrieval or prompting is reimplemented. Endpoints group by area:
 
 | Area | Endpoint | Role |
@@ -442,10 +442,10 @@ Three concerns wrap the HTTP layer, all safe by default:
 
 A walkthrough of a single question, end to end:
 
-1. **Client → API.** The client (Streamlit UI or any HTTP caller) sends
-   `{student_id, question, k}` to `POST /ask` (`api/main.py`). If an API key is
+1. **Client -> API.** The client (the web app or any HTTP caller) sends
+   `{student_id, question, k}` to `POST /ask` (`api/`). If an API key is
    configured, `require_api_key` validates the `X-API-Key` header.
-2. **API → answer.** The route calls `answer(question, k)` (`core/answer.py`).
+2. **API -> answer.** The route calls `answer(question, k)` (`core/answer.py`).
 3. **Retrieve.** `answer` calls `retrieve` (`core/retrieval.py`), which embeds the
    question with `embed_query` (bge-m3) and queries Qdrant for the top-k chunks
    **above the similarity threshold**.
@@ -483,7 +483,7 @@ guard apply transparently when enabled.
 | Agent graph + router | `agent/graph.py`, `agent/state.py` |
 | Agent nodes (explain / generate / grade / reexplain / quiz) | `agent/nodes/*.py` |
 | Node persistence | `agent/persistence.py` |
-| HTTP API | `api/main.py` |
+| HTTP API | `api/` (`main.py` app + per-domain routers) |
 | User auth (bcrypt + JWT) | `api/auth.py` |
 | Logging / middleware (request-id, security headers, rate limit) | `api/logging_config.py`, `api/middleware.py` |
 | Spaced-repetition scheduler (SM-2) | `core/scheduling.py` |

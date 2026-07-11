@@ -32,7 +32,7 @@ cap, API-key auth, LangFuse) is documented in `.env.example`.
 
 Dependencies are split into extras so each part can be installed independently:
 `ingestion` (PDF extraction + embeddings), `agent` (LangGraph), `api` (FastAPI +
-SQLAlchemy), `obs` (LangFuse), `ui` (Streamlit), `migrations` (Alembic). Install
+SQLAlchemy), `obs` (LangFuse), `migrations` (Alembic). Install
 a subset with, e.g., `uv sync --extra api --extra agent --group dev`.
 
 ## Running tests
@@ -99,7 +99,7 @@ are excluded.
 | `make test` | run the test suite |
 | `make check` | lint + format check + tests |
 | `make api` | run the FastAPI app with autoreload |
-| `make ui` | run the Streamlit UI |
+| `make web` | run the Next.js web frontend |
 | `make eval` | run the offline faithfulness evaluation |
 | `make eval-report` | run the eval and write `eval/results.json` (calls the API) |
 | `make ingest PDF=... COURSE="..."` | ingest a course PDF into Qdrant |
