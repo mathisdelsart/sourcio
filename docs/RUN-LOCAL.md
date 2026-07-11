@@ -3,24 +3,24 @@
 This guide ties the three pieces together — the Qdrant vector store (Docker),
 the FastAPI backend (host), and the Next.js web frontend (host) — and runs them
 with **no paid API calls** by pointing the LLM at a local
-[Ollama](https://ollama.com) server.
-
-For the LLM-provider details (installing Ollama, which models to pull, and the
-`LLM_PROVIDER=ollama` switch) see **[docs/RUN-LOCAL.md](RUN-LOCAL.md)**. This page is the
-end-to-end "run everything" recipe.
+[Ollama](https://ollama.com) server. It is the end-to-end "run everything" recipe:
+installing Ollama, which models to pull, the `LLM_PROVIDER=ollama` switch, and
+wiring the three services together.
 
 ## Prerequisites
 
 - **Docker** — runs Qdrant (`docker compose up -d qdrant`).
 - **uv** — manages the Python backend (`make api`).
 - **Node.js** (18+) and **npm** — run the web frontend (`make web`).
-- **Ollama**, with the chat model (and, for ingestion, the vision model) pulled.
-  See [docs/RUN-LOCAL.md](RUN-LOCAL.md) for the exact `ollama pull` commands; in short:
+- **Ollama**, with the chat model (and, for ingestion, the vision model) pulled:
 
   ```sh
   ollama serve            # leave running
   ollama pull llama3.1    # chat model (router / explain / generate / grade)
   ```
+
+  For math-aware PDF ingestion you also need a local vision model
+  (e.g. `ollama pull llama3.2-vision`); prose `.md` / `.txt` ingestion needs none.
 
 Everything else (embeddings `bge-m3`, the cross-encoder reranker) already runs
 locally and free.
@@ -51,9 +51,9 @@ make web                                 # http://localhost:3000
 `make web` runs `npm install` then `npm run dev`. The first run installs the
 frontend dependencies; later runs are fast.
 
-> Need to ingest a course first? With the stack local, ingestion is also free —
-> see [docs/RUN-LOCAL.md](RUN-LOCAL.md) (`make ingest`, optionally `--hybrid` to avoid a
-> vision model on text-heavy decks).
+> Need to ingest a course first? With the stack local, ingestion is also free:
+> `make ingest PDF=path/to/course.pdf COURSE="..."` (optionally `--hybrid` to skip
+> the vision model on text-heavy decks). See [ingestion/README.md](../ingestion/README.md).
 
 ## What the web frontend needs
 
@@ -109,9 +109,9 @@ Then restart the API.
 ## 30-second smoke checklist
 
 1. Open `http://localhost:3000` — the health badge in the header turns **green**.
-2. **Ask** an *in-course* question (covered by an indexed deck) → you get a
+2. **Ask** an *in-course* question (covered by an indexed deck) -> you get a
    grounded answer **with source citation chips** (chapter / page).
-3. **Ask** an *out-of-course* question (not in any deck) → you get an explicit
+3. **Ask** an *out-of-course* question (not in any deck) -> you get an explicit
    **"refused — not covered"** response instead of an invented answer.
 
 If all three hold, the full local, zero-cost stack is working end to end.
