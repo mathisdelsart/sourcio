@@ -69,22 +69,41 @@ Then check `http://localhost:8000/health` and the docs at
 | Variable | Required | Purpose |
 |---|---|---|
 | `QDRANT_URL` | yes | Qdrant endpoint holding the indexed course chunks (default `http://localhost:6333`). |
+| `QDRANT_API_KEY` | yes (Qdrant Cloud) | API key for a hosted Qdrant (Cloud) cluster; unset for a local Qdrant. |
 | `QDRANT_COLLECTION` | no | Collection name (default `courses`). |
 | `OPENAI_API_KEY` | yes (OpenAI) | Provider key when using the default OpenAI models. |
-| `LLM_PROVIDER` | no | Set to `ollama` to route every role to a local Ollama model (no `OPENAI_API_KEY` needed). |
+| `LLM_PROVIDER` | no | `groq` (free hosted) or `ollama` (local) to route every role off OpenAI. |
+| `GROQ_API_KEY` | yes (`LLM_PROVIDER=groq`) | Key for the free hosted Groq LLM. |
 | `OLLAMA_BASE_URL` | no | Ollama server URL when `LLM_PROVIDER=ollama` (default `http://localhost:11434`). |
 | `LLM_<ROLE>` | no | Per-role model override (e.g. `LLM_GENERATE=gpt-4o`), provider prefix allowed. |
 | `DATABASE_URL` | no | Relational store (default `sqlite:///./app.db`; set a Postgres URL for persistence). |
+| `REQUIRE_AUTH` | yes (public) | `true` forces a valid JWT on every data endpoint. Leave unset only for a private/local instance. |
+| `JWT_SECRET` | yes (`REQUIRE_AUTH=true`) | Strong random secret used to sign auth tokens. The app refuses to boot with a weak/default value when auth is on. |
+| `CORS_ORIGINS` | yes (browser client) | Comma-separated allowed origins (e.g. the Vercel web URL); the browser app cannot call the API without it. |
+| `ENABLE_HSTS` | no | `true` to send the HSTS header (HTTPS deployments). |
 | `API_KEY` | no | When set, clients must send a matching `X-API-Key` header on the mutating endpoints and `/history`. `/health` stays open. |
 | `RERANKER_MODEL` | no | Enables the cross-encoder reranker (e.g. `cross-encoder/ms-marco-MiniLM-L-6-v2`). |
+| `MULTI_QUERY` / `HYDE` | no | Opt-in retrieval strategies (query rewriting / hypothetical-doc embedding). |
+| `SIMILARITY_THRESHOLD` | no | Refusal floor for retrieval (default `0.35`); tune per corpus. |
+| `LANGFUSE_PUBLIC_KEY` | no | LangFuse public key; set together with the secret key to enable tracing (see `OBSERVABILITY.md`). |
+| `LANGFUSE_SECRET_KEY` | no | LangFuse secret key (set as a **secret**). Both keys present ⇒ every LLM call is traced. |
+| `LANGFUSE_HOST` | no | LangFuse base URL (default `https://cloud.langfuse.com`; the SDK var is `LANGFUSE_HOST`, not `LANGFUSE_BASE_URL`). |
 | `R2_ACCOUNT_ID` | no | Cloudflare account id; also derives the R2 endpoint. Set together with the three below to enable durable file storage (see below). |
 | `R2_ACCESS_KEY_ID` | no | R2 API token access key id. |
-| `R2_SECRET_ACCESS_KEY` | no | R2 API token secret. |
+| `R2_SECRET_ACCESS_KEY` | no | R2 API token secret (set as a **secret**). |
 | `R2_BUCKET` | no | R2 bucket name that stores uploaded course-file originals. |
 | `PORT` | no | Port the server binds to (default `8000`). See the Hugging Face note below. |
 
-The full list of optional settings (reranker tuning, hybrid retrieval, LLM cache,
-budget cap, LangFuse tracing) lives in `.env.example`.
+Remaining optional settings (reranker tuning, hybrid retrieval, LLM cache, budget
+cap) live in `.env.example`.
+
+**Public deployment (this project's live HF Space) sets:** `QDRANT_URL` +
+`QDRANT_API_KEY` (Qdrant Cloud), `DATABASE_URL` (Neon Postgres), `LLM_PROVIDER=groq`
++ `GROQ_API_KEY`, `REQUIRE_AUTH=true` + a strong `JWT_SECRET`, `CORS_ORIGINS` (the
+Vercel URL), `PORT=7860`, optionally the retrieval flags, the four `R2_*`
+(durable uploads) and the three `LANGFUSE_*` (tracing). Secrets (`*_KEY`,
+`*_SECRET*`, `JWT_SECRET`, DB password) go in the Space's **Secrets**; the rest can
+be **Variables**.
 
 ## Port handling and Hugging Face Spaces
 
