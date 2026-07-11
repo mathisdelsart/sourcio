@@ -121,19 +121,43 @@ def _strip_filler_lead_ins(text: str) -> str:
     return "\n".join(kept).strip()
 
 
-def _citations(raw: str, results: list[Retrieved]) -> list[dict]:
-    """Structured list of the sources the answer cites: number, chunk id, label.
+def _finalize_citations(text: str, results: list[Retrieved]) -> tuple[str, list[dict]]:
+    """Renumber the answer's inline ``[n]`` markers to a clean 1..M sequence + dedup.
 
-    ``n`` is the 1-based index exactly as written inline in the answer (``[n]``),
-    so a UI can render a numbered legend that matches the markers. The chunk id
-    lets a UI resolve each citation to its exact source excerpt via
-    ``GET /source/{id}``; the label is the human-readable ``(course, p.n)`` text.
-    Entries are ordered by ascending ``n``.
+    The model cites the *source indices* it was given, so an answer may cite ``[3]``
+    and ``[4]`` (the 3rd and 4th retrieved chunks) while skipping ``[1] [2]`` — which
+    reads oddly (numbering starts at 3) and, when two cited chunks resolve to the
+    same citation label (the same page, or the same course/chapter stored with
+    different casing), shows what looks like the same source twice.
+
+    This maps the cited indices, in order of first appearance, to ``1..M`` — merging
+    any that share a label (compared case-insensitively) onto one number — and
+    rewrites the ``[n]`` markers in the text to match. The chunk id and label of the
+    first occurrence are kept, so a UI can still open the exact excerpt via
+    ``GET /source/{id}``. Returns ``(rewritten_text, citations)`` where citations is
+    ordered by the new number.
     """
-    return [
-        {"n": n, "id": results[n - 1].chunk.id, "label": results[n - 1].citation()}
-        for n in sorted(_cited_indices(raw, len(results)))
-    ]
+    new_by_old: dict[int, int] = {}
+    by_label: dict[str, int] = {}
+    citations: list[dict] = []
+    for old in _cited_indices(text, len(results)):
+        result = results[old - 1]
+        label = result.citation()
+        key = label.strip().casefold()
+        existing = by_label.get(key)
+        if existing is not None:
+            new_by_old[old] = existing
+            continue
+        new = len(citations) + 1
+        by_label[key] = new
+        new_by_old[old] = new
+        citations.append({"n": new, "id": result.chunk.id, "label": label})
+
+    def _renumber(match: re.Match) -> str:
+        old = int(match.group(1))
+        return f"[{new_by_old[old]}]" if old in new_by_old else match.group(0)
+
+    return re.sub(r"\[(\d+)\]", _renumber, text), citations
 
 
 def _retrieve(
@@ -249,8 +273,9 @@ def answer(
     # Guard against the model appending the refusal after a genuine answer, and
     # drop any standalone filler lead-in line it may have added.
     cleaned = _strip_filler_lead_ins(_strip_trailing_refusal(raw))
-    # Only list the sources the answer truly relies on, not every retrieved chunk.
-    citations = _citations(cleaned, results)
+    # Only list the sources the answer truly relies on, not every retrieved chunk,
+    # renumbering the inline markers to a clean 1..M sequence and merging duplicates.
+    cleaned, citations = _finalize_citations(cleaned, results)
     # Grounding guard (citation-by-construction): a non-refusal answer that cites
     # zero sources is not defensible from the course material, so a weak model may
     # have answered from its own knowledge. Refuse rather than leak an ungrounded
@@ -355,7 +380,7 @@ def stream_answer(
     # sentence the model may have appended and any standalone filler lead-in,
     # while keeping the inline [n] markers for the numbered legend.
     cleaned = _strip_filler_lead_ins(_strip_trailing_refusal(raw))
-    citations = _citations(cleaned, results)
+    cleaned, citations = _finalize_citations(cleaned, results)
     # Grounding guard (same as answer()): if the assembled answer cites no source
     # yet was not an explicit refusal, it is ungrounded — emit the refusal as the
     # final event so the UI shows the refusal, not the streamed ungrounded text.
