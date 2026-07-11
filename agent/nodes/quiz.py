@@ -18,7 +18,6 @@ returned (without ids) and nothing is written.
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 
@@ -68,9 +67,14 @@ _SYSTEM = (
     "- For each question also provide a complete reference solution, grounded in"
     " the sources.\n"
     "{lang}"
-    "Reply with JSON only: a list of objects "
-    '[{{"problem": "<question>", "solution": "<reference solution>"}}, ...] '
-    "with {n} item(s)."
+    # A delimiter format (not JSON) so LaTeX backslashes pass through verbatim: a
+    # model emitting $\\gamma$ or \\frac inside a JSON string produces invalid JSON
+    # escapes, which used to break parsing and mangle the rendered maths.
+    "Format your reply EXACTLY like this and nothing else, for each question"
+    " numbered 1 to {n}:\n"
+    "### QUESTION 1\n<the question>\n### SOLUTION 1\n<the reference solution>\n"
+    "### QUESTION 2\n<the question>\n### SOLUTION 2\n<the reference solution>\n"
+    "(continue through question {n}). Keep LaTeX exactly as written."
 )
 
 
@@ -79,49 +83,28 @@ def _system_prompt(n: int, language: str | None) -> str:
     return _SYSTEM.format(n=n, lang=_language_instruction(language, subject="the quiz"))
 
 
-def _loads_lenient(blob: str) -> Any:
-    """``json.loads`` that tolerates LaTeX with unescaped backslashes.
-
-    Quiz questions carry mathematics as LaTeX (``$\\rho$``, ``\\sqrt``,
-    ``\\frac``). A model frequently emits those with a SINGLE backslash inside the
-    JSON string, which is an invalid JSON escape, so ``json.loads`` raises and the
-    quiz was wrongly reported as "not covered by the course". On that failure,
-    escape every stray backslash (all but ``\\"``) and retry: doubling ``\\`` in
-    the JSON source means ``json.loads`` then un-escapes it back to a single
-    backslash, so the LaTeX is preserved verbatim for rendering. Returns the
-    decoded value, or ``None`` when it still cannot be parsed.
-    """
-    try:
-        return json.loads(blob)
-    except (ValueError, TypeError):
-        pass
-    try:
-        return json.loads(re.sub(r'\\(?!")', r"\\\\", blob))
-    except (ValueError, TypeError):
-        return None
+# Marker splitting the ``### QUESTION k`` / ``### SOLUTION k`` blocks. Tolerant of
+# missing/extra ``#``, a trailing ``:`` or ``.``, and any surrounding whitespace,
+# but the word must stand on its own line so an inline mention never triggers it.
+_QUESTION_MARK = re.compile(r"(?im)^[ \t]*#{0,3}[ \t]*QUESTION[ \t]+\d+[ \t]*[:.]?[ \t]*$")
+_SOLUTION_MARK = re.compile(r"(?im)^[ \t]*#{0,3}[ \t]*SOLUTION[ \t]+\d+[ \t]*[:.]?[ \t]*$")
 
 
 def _parse_questions(raw: str, n: int) -> list[dict[str, str]]:
-    """Parse the model output into ``[{"problem", "solution"}, ...]``.
+    """Parse the delimiter-formatted reply into ``[{"problem", "solution"}, ...]``.
 
-    Tolerates text surrounding the JSON array (e.g. a ``` ```json ``` fence) and
-    LaTeX with unescaped backslashes (see :func:`_loads_lenient`). Each item is
-    coerced to a problem/solution pair; malformed items are skipped. At most ``n``
-    questions are kept so an over-eager model cannot inflate the quiz.
+    Splits on ``### QUESTION k`` / ``### SOLUTION k`` markers (see
+    :data:`_QUESTION_MARK`). This format carries LaTeX verbatim, so no JSON
+    escaping can corrupt the mathematics. Any preamble before the first question
+    marker is ignored; a block with no solution marker keeps an empty solution. At
+    most ``n`` questions are kept so an over-eager model cannot inflate the quiz.
     """
-    match = re.search(r"\[.*\]", raw, re.DOTALL)
-    if not match:
-        return []
-    data = _loads_lenient(match.group(0))
-    if not isinstance(data, list):
-        return []
-
+    blocks = _QUESTION_MARK.split(raw)[1:]  # drop any preamble before question 1
     questions: list[dict[str, str]] = []
-    for item in data:
-        if not isinstance(item, dict):
-            continue
-        problem = str(item.get("problem", "")).strip()
-        solution = str(item.get("solution", "")).strip()
+    for block in blocks:
+        halves = _SOLUTION_MARK.split(block, maxsplit=1)
+        problem = halves[0].strip()
+        solution = halves[1].strip() if len(halves) > 1 else ""
         if problem:
             questions.append({"problem": problem, "solution": solution})
         if len(questions) >= n:

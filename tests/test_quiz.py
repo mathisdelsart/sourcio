@@ -53,8 +53,8 @@ def _make_retrieved(text: str):
 
 
 _TWO_QUESTIONS = (
-    '[{"problem": "Prove closure.", "solution": "By axiom 1."},'
-    ' {"problem": "Prove identity.", "solution": "The neutral element e."}]'
+    "### QUESTION 1\nProve closure.\n### SOLUTION 1\nBy axiom 1.\n"
+    "### QUESTION 2\nProve identity.\n### SOLUTION 2\nThe neutral element e.\n"
 )
 
 
@@ -203,19 +203,21 @@ def test_generate_quiz_generates_when_sources_cover_notion(engine, monkeypatch):
     ]
 
 
-def test_generate_quiz_parses_latex_with_unescaped_backslashes(engine, monkeypatch):
-    # Regression: a math-heavy quiz whose JSON strings carry LaTeX with SINGLE
-    # backslashes (\rho, \sqrt, \gamma) is invalid JSON and used to fail to parse
-    # -> the node wrongly reported "not covered by the course". It must now parse,
-    # not refuse, and preserve the LaTeX (single backslash) for rendering.
+def test_generate_quiz_preserves_latex_verbatim(engine, monkeypatch):
+    # The delimiter format carries LaTeX with single backslashes (\rho, \sqrt)
+    # verbatim — no JSON escaping to corrupt the maths (which used to double
+    # backslashes and break rendering). It must parse, not refuse, and keep the
+    # LaTeX byte-for-byte.
     _patch_retrieve(monkeypatch, _make_retrieved("Portfolio variance and correlation."))
     latex_reply = (
-        '[{"problem": "How does $\\rho_{12}$ affect risk when $\\rho_{12} = -1$?",'
-        ' "solution": "Portfolio variance uses $\\sqrt{w_1^2 + w_2^2}$."}]'
+        "### QUESTION 1\n"
+        "How does $\\rho_{12}$ affect risk when $\\rho_{12} = -1$?\n"
+        "### SOLUTION 1\n"
+        "Portfolio variance uses $\\sqrt{w_1^2 + w_2^2}$.\n"
     )
     _patch_llm(monkeypatch, latex_reply)
 
-    result = generate_quiz("portfolio correlation", 2, "zoe")
+    result = generate_quiz("portfolio correlation", 1, "zoe")
 
     assert result["refused"] is False
     assert result["questions"][0]["problem"] == (
@@ -225,7 +227,7 @@ def test_generate_quiz_parses_latex_with_unescaped_backslashes(engine, monkeypat
 
 def test_generate_quiz_refuses_when_model_returns_no_question(engine, monkeypatch):
     _patch_retrieve(monkeypatch, _make_retrieved("Group axioms."))
-    _patch_llm(monkeypatch, "no usable json here")
+    _patch_llm(monkeypatch, "no question markers here")
 
     result = generate_quiz("groups", 2, "zoe")
 
@@ -236,9 +238,9 @@ def test_generate_quiz_refuses_when_model_returns_no_question(engine, monkeypatc
 def test_generate_quiz_caps_question_count(engine, monkeypatch):
     # The model returns three; n=2 keeps only the first two.
     three = (
-        '[{"problem": "Q1", "solution": "S1"},'
-        ' {"problem": "Q2", "solution": "S2"},'
-        ' {"problem": "Q3", "solution": "S3"}]'
+        "### QUESTION 1\nQ1\n### SOLUTION 1\nS1\n"
+        "### QUESTION 2\nQ2\n### SOLUTION 2\nS2\n"
+        "### QUESTION 3\nQ3\n### SOLUTION 3\nS3\n"
     )
     _patch_retrieve(monkeypatch, _make_retrieved("Axioms."))
     _patch_llm(monkeypatch, three)
