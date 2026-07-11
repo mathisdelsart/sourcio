@@ -68,10 +68,17 @@ const config: Config = {
         shimmer: {
           "100%": { transform: "translateX(100%)" },
         },
+        // Indeterminate progress: a short segment sweeps left→right across the
+        // track, so "preparing" reads as active without a misleading percentage.
+        "progress-indeterminate": {
+          "0%": { left: "-40%" },
+          "100%": { left: "100%" },
+        },
       },
       animation: {
         "fade-in": "fade-in 0.2s ease-out",
         shimmer: "shimmer 1.6s infinite",
+        "progress-indeterminate": "progress-indeterminate 1.1s ease-in-out infinite",
       },
     },
   },
