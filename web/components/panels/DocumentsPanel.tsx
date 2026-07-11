@@ -20,7 +20,7 @@ import { RefreshButton } from "@/components/RefreshButton";
 import { TextField, FieldShell, baseField } from "@/components/TextField";
 import { EmptyState, Skeleton } from "@/components/States";
 import { useToast } from "@/components/Toast";
-import { useT } from "@/lib/i18n";
+import { localizeError, useT } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 
 interface DocumentsPanelProps {
@@ -158,6 +158,21 @@ export function DocumentsPanel({
 
   const hasRunning = activeJobs.some((j) => (j.job?.status ?? "running") === "running");
 
+  // Clear the pending import form once the whole batch finishes (hasRunning goes
+  // true -> false), so the picked files and their course/chapter stay on screen
+  // while the import runs and reset only when it's done.
+  const prevRunningRef = useRef(false);
+  useEffect(() => {
+    if (prevRunningRef.current && !hasRunning) {
+      setFiles([]);
+      setChapter("");
+      setCourseByFile({});
+      setChapterByFile({});
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+    prevRunningRef.current = hasRunning;
+  }, [hasRunning]);
+
   // Add the picked/dropped files to the batch, rejecting obviously unsupported
   // types with a gentle message. A new selection replaces the previous one
   // (matches how the native file dialog reports "the files you just chose").
@@ -185,7 +200,7 @@ export function DocumentsPanel({
     try {
       setItems(await listDocuments(config, studentId));
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
+      toast.push(err instanceof Error ? localizeError(t, err.message) : t("common.requestFailed"), "error");
     } finally {
       setLoading(false);
     }
@@ -245,7 +260,10 @@ export function DocumentsPanel({
             anyTerminal = true;
             if (res.value.status === "done") anyDone = true;
             if (res.value.status === "error") {
-              toast.push(t("doc.progress.error", { message: res.value.message ?? "" }), "error");
+              toast.push(
+                t("doc.progress.error", { message: localizeError(t, res.value.message) }),
+                "error",
+              );
             }
           }
         } else if (res.reason instanceof ApiError && res.reason.status === 404) {
@@ -328,12 +346,10 @@ export function DocumentsPanel({
     // Every file must resolve to a non-empty course before we start.
     if (files.length === 0 || hasRunning || submitting || files.some((f) => !courseFor(f))) return;
     const batch = files;
+    // Keep the picked files and their course/chapter on screen (disabled) while
+    // the import runs, so the user still sees what is being imported. The form is
+    // cleared only once the whole batch finishes (see the effect below).
     setSubmitting(true);
-    setFiles([]);
-    setChapter("");
-    setCourseByFile({});
-    setChapterByFile({});
-    if (fileInputRef.current) fileInputRef.current.value = "";
 
     try {
       // Kick off every upload concurrently — none is awaited before the next
@@ -399,7 +415,7 @@ export function DocumentsPanel({
       toast.push(t("doc.delete.success", { count: result.deleted, target: label }), "success");
       await load();
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
+      toast.push(err instanceof Error ? localizeError(t, err.message) : t("common.requestFailed"), "error");
     } finally {
       setDeleting(null);
     }
@@ -863,7 +879,7 @@ function JobProgressCard({
       <p className="mb-2 truncate text-xs font-semibold text-zinc-500">{filename}</p>
       {job?.type === "error" ? (
         <p className="text-sm font-medium text-red-700">
-          {t("doc.progress.error", { message: job.message ?? "" })}
+          {t("doc.progress.error", { message: localizeError(t, job.message) })}
         </p>
       ) : job?.type === "done" && (job.indexed ?? 0) === 0 ? (
         <p className="text-sm font-medium text-amber-700">

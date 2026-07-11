@@ -26,7 +26,7 @@ import { EmptyState, NoCoursesState, RefusalBanner } from "@/components/States";
 import { AnswerProgress } from "@/components/AnswerProgress";
 import { LevelSelector } from "@/components/LevelSelector";
 import { useToast } from "@/components/Toast";
-import { useT } from "@/lib/i18n";
+import { localizeError, useT } from "@/lib/i18n";
 import { submitOnCmdEnter } from "@/lib/keys";
 import { KEYS, readLocal, writeLocal } from "@/lib/storage";
 
@@ -173,7 +173,7 @@ export function AskPanel({
         const result = await ask(req, config);
         setLastAnswer(result);
       } catch (err) {
-        toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
+        toast.push(err instanceof Error ? localizeError(t, err.message) : t("common.requestFailed"), "error");
       } finally {
         setStreaming(null);
         setStage(null);
@@ -290,7 +290,7 @@ export function AskPanel({
         const result = await reexplain(studentId, level, config);
         setReexplained(result.answer);
       } catch (err) {
-        toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
+        toast.push(err instanceof Error ? localizeError(t, err.message) : t("common.requestFailed"), "error");
       }
     } finally {
       setReStreaming(null);

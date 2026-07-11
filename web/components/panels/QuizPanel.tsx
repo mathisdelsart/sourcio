@@ -21,7 +21,7 @@ import { Markdown } from "@/components/Markdown";
 import { EmptyState, NoCoursesState, RefusalBanner } from "@/components/States";
 import { ThinkingIndicator } from "@/components/ThinkingIndicator";
 import { useToast } from "@/components/Toast";
-import { useT } from "@/lib/i18n";
+import { localizeError, useT } from "@/lib/i18n";
 import { submitOnCmdEnter } from "@/lib/keys";
 import { KEYS, readLocal, writeLocal } from "@/lib/storage";
 import { cn } from "@/lib/cn";
@@ -134,7 +134,7 @@ export function QuizPanel({
       );
       setResult(data);
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
+      toast.push(err instanceof Error ? localizeError(t, err.message) : t("common.requestFailed"), "error");
     } finally {
       setLoading(false);
     }
@@ -156,7 +156,7 @@ export function QuizPanel({
       );
       setVerdicts((v) => ({ ...v, [questionId]: verdict }));
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
+      toast.push(err instanceof Error ? localizeError(t, err.message) : t("common.requestFailed"), "error");
     } finally {
       setGrading((g) => ({ ...g, [questionId]: false }));
     }
@@ -188,7 +188,7 @@ export function QuizPanel({
         return next;
       });
     } catch (err) {
-      toast.push(err instanceof Error ? err.message : t("common.requestFailed"), "error");
+      toast.push(err instanceof Error ? localizeError(t, err.message) : t("common.requestFailed"), "error");
     } finally {
       setGradingAll(false);
     }

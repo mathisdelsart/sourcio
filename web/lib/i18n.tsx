@@ -192,6 +192,15 @@ const en = {
 
   // Shared
   "common.requestFailed": "Request failed.",
+  "err.freeTierCapacity":
+    "This request is too large for the free model. Add your own OpenAI or Anthropic API key (account menu) — it then runs on your own model, billed to your account.",
+  "err.ownKeyCapacity":
+    "Your API key hit its provider's rate or size limit for this request. Wait a moment and try again, or check your account's usage limits.",
+  "err.scannedNeedsKey":
+    "This looks like a scanned or image-based PDF, which needs a vision model to read. Add your OpenAI API key to import it — text PDFs and .md/.txt files import for free without a key.",
+  "err.keyRejected":
+    "The API key was rejected. Check that it is valid — that it has credit and access to a vision model, and that you pasted only the key itself (e.g. sk-…), not a whole “OPENAI_API_KEY=…” line.",
+  "err.unsupportedFile": "Unsupported file type — upload a PDF, .md or .txt.",
   "common.upToDate": "Up to date",
   "answerProgress.search": "Searching your courses",
   "answerProgress.read": "Reading the sources",
@@ -714,6 +723,15 @@ const fr: Record<TranslationKey, string> = {
 
   // Shared
   "common.requestFailed": "La requête a échoué.",
+  "err.freeTierCapacity":
+    "Cette requête est trop volumineuse pour le modèle gratuit. Ajoutez votre propre clé API OpenAI ou Anthropic (menu du compte) — elle s’exécute alors sur votre modèle, facturé sur votre compte.",
+  "err.ownKeyCapacity":
+    "Votre clé API a atteint la limite de débit ou de taille de son fournisseur pour cette requête. Patientez un instant et réessayez, ou vérifiez les limites d’usage de votre compte.",
+  "err.scannedNeedsKey":
+    "Ceci ressemble à un PDF scanné ou basé sur des images, qui nécessite un modèle de vision. Ajoutez votre clé API OpenAI pour l’importer — les PDF texte et les fichiers .md/.txt s’importent gratuitement, sans clé.",
+  "err.keyRejected":
+    "La clé API a été rejetée. Vérifiez qu’elle est valide — qu’elle a du crédit et accès à un modèle de vision, et que vous avez collé uniquement la clé (ex. sk-…), pas toute une ligne « OPENAI_API_KEY=… ».",
+  "err.unsupportedFile": "Type de fichier non pris en charge — importez un PDF, .md ou .txt.",
   "common.upToDate": "À jour",
   "answerProgress.search": "Recherche dans vos cours",
   "answerProgress.read": "Lecture des sources",
@@ -1231,6 +1249,15 @@ const nl: Record<TranslationKey, string> = {
 
   // Shared
   "common.requestFailed": "Verzoek mislukt.",
+  "err.freeTierCapacity":
+    "Dit verzoek is te groot voor het gratis model. Voeg je eigen OpenAI- of Anthropic-API-sleutel toe (accountmenu) — het draait dan op je eigen model, gefactureerd op je account.",
+  "err.ownKeyCapacity":
+    "Je API-sleutel heeft de snelheids- of groottelimiet van de provider voor dit verzoek bereikt. Wacht even en probeer opnieuw, of controleer de gebruikslimieten van je account.",
+  "err.scannedNeedsKey":
+    "Dit lijkt een gescande of op afbeeldingen gebaseerde PDF, die een vision-model nodig heeft. Voeg je OpenAI-API-sleutel toe om te importeren — tekst-PDF’s en .md/.txt-bestanden worden gratis geïmporteerd, zonder sleutel.",
+  "err.keyRejected":
+    "De API-sleutel is geweigerd. Controleer of hij geldig is — of hij tegoed en toegang tot een vision-model heeft, en dat je alleen de sleutel hebt geplakt (bijv. sk-…), niet een hele ‘OPENAI_API_KEY=…’-regel.",
+  "err.unsupportedFile": "Niet-ondersteund bestandstype — upload een PDF, .md of .txt.",
   "common.upToDate": "Bijgewerkt",
   "answerProgress.search": "Zoeken in je cursussen",
   "answerProgress.read": "De bronnen lezen",
@@ -1657,4 +1684,31 @@ export function useT(): I18nContextValue {
     setLocale: () => {},
     t: (key, vars) => translate("en", key, vars),
   };
+}
+
+// Known backend error messages (English constants from `core/errors.py` and
+// `core/documents.py`) matched by a stable fragment, so they can be shown in the
+// UI language. Anything unmatched falls back to the raw message unchanged.
+const _BACKEND_ERROR_MAP: { match: string; key: TranslationKey }[] = [
+  { match: "too large for the free model", key: "err.freeTierCapacity" },
+  { match: "hit its provider's rate", key: "err.ownKeyCapacity" },
+  { match: "scanned or image-based PDF", key: "err.scannedNeedsKey" },
+  { match: "API key was rejected", key: "err.keyRejected" },
+  { match: "Unsupported file type", key: "err.unsupportedFile" },
+];
+
+/**
+ * Translate a known backend error message into the UI language. The API emits
+ * these as English strings (API-key / capacity / unsupported-file errors); this
+ * maps them to the localized copy, leaving any unrecognized message untouched.
+ */
+export function localizeError(
+  t: I18nContextValue["t"],
+  message: string | null | undefined,
+): string {
+  if (!message) return message ?? "";
+  for (const { match, key } of _BACKEND_ERROR_MAP) {
+    if (message.includes(match)) return t(key);
+  }
+  return message;
 }
