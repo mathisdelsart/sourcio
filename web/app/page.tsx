@@ -119,6 +119,21 @@ export default function Home() {
     [baseUrl, apiKey, token, openaiKey],
   );
 
+  // Connection fields the auth resolution actually depends on — deliberately
+  // WITHOUT `openaiKey`. `/auth/me` ignores the visitor's OpenAI key, so folding
+  // it in here would make every keystroke in the key field re-run the `me()`
+  // effect (below) and flip `authResolving` on, swapping the whole tool for the
+  // loading skeleton and unmounting the panels — which wiped a document import in
+  // progress. Excluding it keeps auth stable while the key changes.
+  const authConfig: ConnectionConfig = useMemo(
+    () => ({
+      baseUrl: baseUrl || undefined,
+      apiKey: apiKey || undefined,
+      token: token || undefined,
+    }),
+    [baseUrl, apiKey, token],
+  );
+
   // Update the visitor's own OpenAI/Anthropic key (from the account menu or the
   // Documents upload card) and persist it so it survives reloads and stays in
   // sync across both places. The value is normalized so a paste like
@@ -143,7 +158,7 @@ export default function Home() {
     }
     let cancelled = false;
     setAuthResolving(true);
-    me({ ...config, token })
+    me({ ...authConfig, token })
       .then((user) => {
         if (cancelled) return;
         setAuthUserId(user.id);
@@ -160,10 +175,11 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-    // `config` is derived from token/baseUrl/apiKey; re-run when those change.
-    // `onLogout` is a stable in-component callback, deliberately not a dep.
+    // Re-run on token / connection changes only (`authConfig` excludes the
+    // OpenAI key on purpose — see its memo). `onLogout` is a stable in-component
+    // callback, deliberately not a dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, config]);
+  }, [token, authConfig]);
 
   // The student id the tool actually uses. Once logged in it is scoped to the
   // account ("u<id>") so the same account is consistent across devices and two

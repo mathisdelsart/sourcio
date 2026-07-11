@@ -102,6 +102,9 @@ omit = [
     "tests/*",
     "alembic/*",
     "web/*",
+    # Operational QA CLI: drives a LIVE API and an external reviewer model, so it
+    # is exercised against a running server, not in unit tests.
+    "eval/bench_runner.py",
 ]
 
 [tool.coverage.report]

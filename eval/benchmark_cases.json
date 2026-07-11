@@ -1,0 +1,144 @@
+{
+  "_README": [
+    "Seed test set for eval/bench_runner.py — the manual UI benchmark, as API cases.",
+    "Edit `course` / `chapter` to match your INDEXED names exactly (check GET /courses",
+    "and GET /chapters?course=...). `chapter: null` means 'All chapters'; `course: null`",
+    "means 'All courses'. `expect` is one of: answer | refuse | generate | behavior.",
+    "  - answer   : grounded, cited, in-scope reply expected (Ask).",
+    "  - refuse   : an honest refusal expected.",
+    "  - generate : an exercise/quiz should be produced (not refused), in-scope.",
+    "  - behavior : discovery only; the judge documents what happens, no pass/fail.",
+    "Optional per-case fields: `k` (Ask max sources), `n` (quiz questions),",
+    "`student_answer` (Exercise: submit it to /grade and capture the verdict)."
+  ],
+  "courses": {
+    "finance": "Finance",
+    "relativity": "Special Relativity"
+  },
+  "cases": [
+    {
+      "id": "F1", "mode": "ask", "course": "Finance", "chapter": null, "k": 5,
+      "prompt": "If I deposit money today that grows at compound interest, how would I calculate the present value needed today to reach a specific future goal, and how are the compound interest formula and the present value formula mathematically related?",
+      "expect": "answer",
+      "note": "Interchapter: must cite BOTH Ch1 (compound interest) and Ch2 (present value)."
+    },
+    {
+      "id": "F1-control", "mode": "ask", "course": "Finance", "chapter": "Chapter 1", "k": 3,
+      "prompt": "What is the compound interest formula and how does increasing the compounding frequency n affect the result?",
+      "expect": "answer", "note": "Should cite Ch1 only."
+    },
+    {
+      "id": "F2", "mode": "ask", "course": "Finance", "chapter": "Chapter 2", "k": 3,
+      "prompt": "How is the monthly payment for a fixed-rate loan calculated, and what happens to the total interest paid if the loan term is extended?",
+      "expect": "answer", "note": "PMT formula, Ch2 only."
+    },
+    {
+      "id": "F3", "mode": "ask", "course": "Finance", "chapter": null, "k": 5,
+      "prompt": "What is the Black-Scholes formula for pricing a European call option?",
+      "expect": "refuse", "note": "Out of scope."
+    },
+    {
+      "id": "R1", "mode": "ask", "course": "Special Relativity", "chapter": null, "k": 5,
+      "prompt": "How does the Lorentz factor from the postulates relate to the time dilation formula, and why does gamma approach infinity as velocity approaches the speed of light?",
+      "expect": "answer", "note": "Interchapter: gamma (Ch1/Ch2) + infinite-energy reasoning (Ch3)."
+    },
+    {
+      "id": "R2", "mode": "ask", "course": "Special Relativity", "chapter": "Chapter 3", "k": 3,
+      "prompt": "What is the energy-momentum relation, and why does it simplify to E = pc for a photon?",
+      "expect": "answer", "note": "E^2=(pc)^2+(mc^2)^2, Ch3 only."
+    },
+    {
+      "id": "R3", "mode": "ask", "course": "Special Relativity", "chapter": null, "k": 5,
+      "prompt": "What is the Einstein field equation from general relativity, and how does it describe the curvature of spacetime caused by mass?",
+      "expect": "refuse", "note": "GR is out of scope (adjacent-topic trap)."
+    },
+    {
+      "id": "X1", "mode": "ask", "course": null, "chapter": null, "k": 5,
+      "prompt": "What does gamma the symbol represent in this material?",
+      "expect": "answer", "note": "Ambiguous shared symbol -> Lorentz factor."
+    },
+    {
+      "id": "X3", "mode": "ask", "course": null, "chapter": null, "k": 5,
+      "prompt": "Is there a mathematical relationship between the Lorentz factor in relativity and portfolio risk in finance?",
+      "expect": "answer", "note": "Must deny any forced analogy while citing both domains' real formulas."
+    },
+    {
+      "id": "X5", "mode": "ask", "course": null, "chapter": null, "k": 5,
+      "prompt": "What is the CAP theorem in distributed systems design?",
+      "expect": "refuse", "note": "Fully out of scope."
+    },
+
+    {
+      "id": "ExF1", "mode": "exercise", "course": "Finance", "chapter": "Chapter 1",
+      "prompt": "Give me a practice problem where I compare simple interest and compound interest on the same principal over a long time horizon.",
+      "expect": "generate", "note": "Stays within Ch1."
+    },
+    {
+      "id": "ExR2", "mode": "exercise", "course": "Special Relativity", "chapter": "Chapter 3",
+      "prompt": "Create an exercise where I calculate total relativistic energy and momentum for a particle given its rest mass and velocity (or gamma).",
+      "expect": "generate", "note": "Ch3 content, in scope."
+    },
+    {
+      "id": "ExR3", "mode": "exercise", "course": "Special Relativity", "chapter": "Chapter 2",
+      "prompt": "Create an exercise where I calculate total relativistic energy and momentum for a particle given its rest mass and velocity (or gamma).",
+      "expect": "refuse", "note": "BUG under test: Ch3 content requested while filtered to Ch2 -> must refuse / flag."
+    },
+    {
+      "id": "ExR4", "mode": "exercise", "course": "Special Relativity", "chapter": "Chapter 1",
+      "prompt": "Create an exercise where I calculate total relativistic energy and momentum for a particle given its rest mass and velocity (or gamma).",
+      "expect": "refuse", "note": "BUG under test: same, filtered to Ch1."
+    },
+    {
+      "id": "ExF-control", "mode": "exercise", "course": "Finance", "chapter": "Chapter 1",
+      "prompt": "Create an exercise where I calculate the variance and standard deviation of a portfolio with two assets given their correlation coefficient.",
+      "expect": "refuse", "note": "Ch3 content while filtered to Ch1 -> must refuse (isolates the bug to Relativity)."
+    },
+
+    {
+      "id": "Quiz-F-scope", "mode": "quiz", "course": "Finance", "chapter": "Chapter 1", "n": 3,
+      "prompt": "Quiz me on portfolio diversification and correlation between assets.",
+      "expect": "refuse", "note": "Ch3 content while filtered to Ch1."
+    },
+    {
+      "id": "Quiz-F-all", "mode": "quiz", "course": "Finance", "chapter": null, "n": 3,
+      "prompt": "Quiz me on portfolio diversification and correlation between assets.",
+      "expect": "generate", "note": "All chapters -> Ch3 in scope, should generate."
+    },
+    {
+      "id": "Quiz-coverage", "mode": "quiz", "course": "Finance", "chapter": null, "n": 3,
+      "prompt": "Quiz me with questions covering all three chapters of this course.",
+      "expect": "generate", "note": "BUG under test: meta-phrased scope request must NOT be read as a content search."
+    },
+    {
+      "id": "Quiz-R-scope", "mode": "quiz", "course": "Special Relativity", "chapter": "Chapter 1", "n": 3,
+      "prompt": "Quiz me on relativistic energy and momentum.",
+      "expect": "refuse", "note": "Ch3 content while filtered to Ch1."
+    },
+    {
+      "id": "Quiz-R-all", "mode": "quiz", "course": "Special Relativity", "chapter": null, "n": 3,
+      "prompt": "Quiz me on relativistic energy and momentum.",
+      "expect": "generate", "note": "BUG under test: All chapters -> Ch3 in scope, must generate (currently refuses)."
+    },
+
+    {
+      "id": "FT1", "mode": "ask", "course": "Special Relativity", "chapter": "Chapter 2", "k": 5,
+      "prompt": "What is the compound interest formula?",
+      "expect": "refuse", "note": "Course filter must block Finance content."
+    },
+    {
+      "id": "FT2", "mode": "ask", "course": null, "chapter": "Chapter 3", "k": 5,
+      "prompt": "What formulas are covered in chapter 3?",
+      "expect": "behavior", "note": "All courses + numbered chapter: document whether it pulls Finance Ch3, Relativity Ch3, or both."
+    },
+    {
+      "id": "FT3", "mode": "ask", "course": "Finance", "chapter": "Chapter 3", "k": 5,
+      "prompt": "What is the Lorentz factor?",
+      "expect": "refuse", "note": "Wrong course AND wrong content -> refuse."
+    },
+    {
+      "id": "FT4", "mode": "ask", "course": "Special Relativity", "chapter": "Chapter 1", "k": 5,
+      "prompt": "What are the two postulates of special relativity, and why is simultaneity relative?",
+      "expect": "answer", "note": "Positive control: legitimate in-scope content must pass, cites Ch1 only."
+    }
+  ]
+}
