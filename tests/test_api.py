@@ -1247,8 +1247,8 @@ def test_quiz_then_grade_end_to_end(client, monkeypatch):
     monkeypatch.setattr(
         "agent.nodes.quiz.get_llm",
         lambda role="default", api_key=None: _FakeLLM(
-            '[{"problem": "Prove closure.", "solution": "By axiom 1."},'
-            ' {"problem": "Prove identity.", "solution": "Element e."}]'
+            "### QUESTION 1\nProve closure.\n### SOLUTION 1\nBy axiom 1.\n"
+            "### QUESTION 2\nProve identity.\n### SOLUTION 2\nElement e.\n"
         ),
     )
     monkeypatch.setattr(
@@ -1569,8 +1569,8 @@ def _mock_quiz_nodes(monkeypatch):
     monkeypatch.setattr(
         "agent.nodes.quiz.get_llm",
         lambda role="default", api_key=None: _FakeLLM(
-            '[{"problem": "Prove closure.", "solution": "By axiom 1."},'
-            ' {"problem": "Prove identity.", "solution": "Element e."}]'
+            "### QUESTION 1\nProve closure.\n### SOLUTION 1\nBy axiom 1.\n"
+            "### QUESTION 2\nProve identity.\n### SOLUTION 2\nElement e.\n"
         ),
     )
     monkeypatch.setattr(
