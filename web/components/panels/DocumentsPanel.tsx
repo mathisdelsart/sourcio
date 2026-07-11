@@ -836,7 +836,11 @@ function JobProgressCard({
   const { t } = useT();
   const total = job?.total ?? 0;
   const done = job?.done ?? (job?.type === "start" ? (job.skipped ?? 0) : 0);
-  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 5;
+  // While the page count is still unknown the bar is indeterminate (an animated
+  // sweep) rather than a made-up percentage: showing 5% and then snapping back to
+  // 0% once the total arrived read as a glitch.
+  const preparing = total === 0;
+  const pct = preparing ? 0 : Math.min(100, Math.round((done / total) * 100));
   const elapsed = job?.elapsed ?? 0;
   const displayElapsed = Math.max(liveElapsed, elapsed);
   const fresh = done - (job?.skipped ?? 0); // pages actually processed this run
@@ -873,16 +877,19 @@ function JobProgressCard({
       ) : (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm font-medium text-brand-700">
-            <span>
-              {total > 0 ? t("doc.progress.pages", { done, total }) : t("doc.progress.starting")}
-            </span>
-            <span className="tabular-nums text-brand-600">{pct}%</span>
+            <span>{preparing ? t("doc.progress.starting") : t("doc.progress.pages", { done, total })}</span>
+            {/* No percentage while preparing — the number would be meaningless. */}
+            {!preparing && <span className="tabular-nums text-brand-600">{pct}%</span>}
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-brand-100">
-            <div
-              className="h-full rounded-full bg-brand-500 transition-[width] duration-700 ease-out"
-              style={{ width: `${pct}%` }}
-            />
+          <div className="relative h-2 w-full overflow-hidden rounded-full bg-brand-100">
+            {preparing ? (
+              <span className="absolute inset-y-0 w-2/5 rounded-full bg-brand-500 animate-progress-indeterminate" />
+            ) : (
+              <div
+                className="h-full rounded-full bg-brand-500 transition-[width] duration-700 ease-out"
+                style={{ width: `${pct}%` }}
+              />
+            )}
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
             <span>{t("doc.progress.elapsed", { time: fmtTime(displayElapsed) })}</span>

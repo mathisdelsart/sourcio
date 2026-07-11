@@ -113,10 +113,14 @@ export function AskPanel({
   // ones. It is a tunable ceiling rather than unbounded because a very high
   // value slows a LOCAL model (larger context, higher latency).
   const [loading, setLoading] = useState(false);
-  /** Text accumulated from the live token stream, before the final event lands. */
+  // Non-null while an answer is in flight; drives the progress indicator. The
+  // partial answer text is deliberately NOT shown while generating: the grounding
+  // check runs at the end and can turn an uncited answer into a refusal, so
+  // streaming the text would flash an answer that then vanishes. Instead the
+  // answer is revealed in one step when it completes (answer or refusal).
   const [streaming, setStreaming] = useState<string | null>(null);
-  // Real progress stage from the stream, with the source count once retrieved.
-  const [stage, setStage] = useState<"retrieving" | "reading" | null>(null);
+  // Real progress stage, with the source count once retrieved.
+  const [stage, setStage] = useState<"retrieving" | "reading" | "writing" | null>(null);
   const [sourceCount, setSourceCount] = useState<number | null>(null);
   // The background answer job currently being polled; null when none is active.
   // Set on ask and on mount (resume) — it is what drives the polling effect.
@@ -218,12 +222,14 @@ export function AskPanel({
         const job = await getAskJob(askJobId, studentId, config);
         if (cancelled) return;
         if (job.status === "running") {
+          // Keep the progress indicator up the whole time (streaming = ""); never
+          // render the partial answer, so a late grounding-check refusal can't
+          // retract text already shown. Advance the stage to "writing" once the
+          // model has started producing tokens.
+          setStreaming("");
           if (job.answer && job.answer.length > 0) {
-            // Tokens have started: show the growing answer text.
-            setStreaming(job.answer);
+            setStage("writing");
           } else {
-            // Still retrieving/reading: show the staged progress indicator.
-            setStreaming("");
             setStage(job.stage === "reading" ? "reading" : "retrieving");
             if (typeof job.source_count === "number") setSourceCount(job.source_count);
           }
@@ -366,15 +372,9 @@ export function AskPanel({
       <Card>
         <CardHeader title={t("ask.answerTitle")} />
         <CardBody>
-          {streaming != null ? (
-            streaming.length === 0 ? (
-              <AnswerProgress stage={stage} sources={sourceCount} />
-            ) : (
-              <div className="streaming-answer" aria-live="polite" aria-busy="true">
-                <Markdown>{streaming}</Markdown>
-              </div>
-            )
-          ) : loading ? (
+          {streaming != null || loading ? (
+            // In flight: show the staged progress the whole time, then reveal the
+            // finished answer (or refusal) atomically — never a partial answer.
             <AnswerProgress stage={stage} sources={sourceCount} />
           ) : lastAnswer == null ? (
             <EmptyState

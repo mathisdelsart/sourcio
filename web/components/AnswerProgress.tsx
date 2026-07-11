@@ -5,23 +5,24 @@ import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 
 /**
- * Real, event-driven progress for a streamed answer. The stages reflect actual
- * backend work emitted over SSE — "retrieving" (embedding + vector search) then
- * "reading" (the model ingests the retrieved sources before its first word) —
- * not a timer. The third step, "writing", is where tokens stream: once that
- * begins the live answer text itself takes over from this component, so here it
- * is shown as the upcoming step.
+ * Real, event-driven progress for an answer in flight. The stages reflect actual
+ * backend work — "retrieving" (embedding + vector search), "reading" (the model
+ * ingests the retrieved sources) and "writing" (the model is producing the
+ * answer) — not a timer. The answer is revealed atomically when it completes
+ * (grounded answer or refusal), so this indicator stays up through "writing"
+ * rather than being replaced by partial text that a grounding check might then
+ * retract into a refusal.
  */
 export function AnswerProgress({
   stage,
   sources,
 }: {
-  stage: "retrieving" | "reading" | null;
+  stage: "retrieving" | "reading" | "writing" | null;
   sources: number | null;
 }) {
   const { t } = useT();
-  const activeIndex = stage === "reading" ? 1 : 0;
-  const pct = stage === "reading" ? 62 : 28;
+  const activeIndex = stage === "writing" ? 2 : stage === "reading" ? 1 : 0;
+  const pct = stage === "writing" ? 90 : stage === "reading" ? 62 : 28;
 
   const steps = [
     { label: t("answerProgress.search"), hint: null as string | null },
