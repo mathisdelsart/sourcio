@@ -456,6 +456,10 @@ const en = {
   "doc.upload.chapter": "Chapter (optional)",
   "doc.upload.chapterHint": "Groups the material; leave empty for none.",
   "doc.upload.chapterPlaceholder": "e.g. The Pythagorean theorem",
+  "doc.upload.chapterPerFile": "Chapter per file (optional)",
+  "doc.upload.chapterPerFileHint":
+    "Each file goes under the shared course above; give each its own chapter.",
+  "doc.upload.chapterForFile": "Chapter for {name}",
   "doc.upload.openaiKey": "Your OpenAI or Anthropic API key (optional)",
   "doc.upload.openaiKeyHint":
     "The same key as in the account menu. Works with an OpenAI or an Anthropic key (auto-detected). When set it powers every answer with a premium model AND reads scanned/image PDFs — it replaces the free model and runs on your own OpenAI or Anthropic credit. Stored in your browser only; never on our server. Text PDFs and .md/.txt files import for free without a key.",
@@ -976,6 +980,10 @@ const fr: Record<TranslationKey, string> = {
   "doc.upload.chapter": "Chapitre (optionnel)",
   "doc.upload.chapterHint": "Regroupe le contenu ; laissez vide si aucun.",
   "doc.upload.chapterPlaceholder": "ex. Le théorème de Pythagore",
+  "doc.upload.chapterPerFile": "Chapitre par fichier (optionnel)",
+  "doc.upload.chapterPerFileHint":
+    "Chaque fichier va dans le cours commun ci-dessus ; donnez à chacun son chapitre.",
+  "doc.upload.chapterForFile": "Chapitre pour {name}",
   "doc.upload.openaiKey": "Votre clé API OpenAI ou Anthropic (optionnel)",
   "doc.upload.openaiKeyHint":
     "La même clé que dans le menu du compte. Fonctionne avec une clé OpenAI ou Anthropic (détectée automatiquement). Lorsqu’elle est définie, elle alimente chaque réponse avec un modèle premium ET permet de lire les PDF scannés ou basés sur des images : elle remplace le modèle gratuit et utilise votre propre crédit OpenAI ou Anthropic. Conservée uniquement dans votre navigateur, jamais sur notre serveur. Les PDF texte et les fichiers .md/.txt s’importent gratuitement, sans clé.",
@@ -1476,6 +1484,10 @@ const nl: Record<TranslationKey, string> = {
   "doc.upload.chapter": "Hoofdstuk (optioneel)",
   "doc.upload.chapterHint": "Groepeert het materiaal; laat leeg voor geen.",
   "doc.upload.chapterPlaceholder": "bijv. De stelling van Pythagoras",
+  "doc.upload.chapterPerFile": "Hoofdstuk per bestand (optioneel)",
+  "doc.upload.chapterPerFileHint":
+    "Elk bestand valt onder de gedeelde cursus hierboven; geef elk zijn eigen hoofdstuk.",
+  "doc.upload.chapterForFile": "Hoofdstuk voor {name}",
   "doc.upload.openaiKey": "Uw OpenAI- of Anthropic-API-sleutel (optioneel)",
   "doc.upload.openaiKeyHint":
     "Dezelfde sleutel als in het accountmenu. Werkt met een OpenAI- of Anthropic-sleutel (automatisch gedetecteerd). Wanneer ingesteld, voedt hij elk antwoord met een premium-model ÉN leest hij gescande of op afbeeldingen gebaseerde PDF’s — hij vervangt het gratis model en gebruikt uw eigen OpenAI- of Anthropic-tegoed. Alleen opgeslagen in uw browser, nooit op onze server. Tekst-PDF’s en .md/.txt-bestanden worden gratis geïmporteerd, zonder sleutel.",

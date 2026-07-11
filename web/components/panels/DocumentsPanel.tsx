@@ -48,6 +48,14 @@ function rowKey(course: string, chapter: string | null): string {
 }
 
 /**
+ * Stable identity for a picked file, so a per-file chapter survives re-renders
+ * and never collides when two files share a name (size + mtime disambiguate).
+ */
+function fileKey(f: File): string {
+  return `${f.name}::${f.size}::${f.lastModified}`;
+}
+
+/**
  * localStorage key holding the currently running uploads (a batch may have
  * several), so a page refresh or navigation can re-attach to each background
  * server job instead of losing it.
@@ -114,7 +122,11 @@ export function DocumentsPanel({
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [course, setCourse] = useState("");
+  // Chapter for the single-file case. When several files are selected each gets
+  // its own chapter via `chapterByFile` below, so a batch can span chapters (all
+  // under the one shared `course`).
   const [chapter, setChapter] = useState("");
+  const [chapterByFile, setChapterByFile] = useState<Record<string, string>>({});
   // The OpenAI key is lifted to the page (props) so it stays in sync with the
   // account-menu setting; only the show/hide toggle is local here.
   const [showKey, setShowKey] = useState(false);
@@ -155,7 +167,12 @@ export function DocumentsPanel({
       if (valid.length < list.length) {
         toast.push(t("doc.upload.unsupported"), "error");
       }
-      if (valid.length > 0) setFiles(valid);
+      // A new selection replaces the previous one, so drop any per-file chapters
+      // keyed to files that are no longer part of the batch.
+      if (valid.length > 0) {
+        setFiles(valid);
+        setChapterByFile({});
+      }
     },
     [toast, t],
   );
@@ -298,10 +315,17 @@ export function DocumentsPanel({
     if (files.length === 0 || !course.trim() || hasRunning || submitting) return;
     const batch = files;
     const courseName = course.trim();
-    const chapterName = chapter.trim() || null;
+    const multi = batch.length > 1;
+    // One chapter per file when several are selected (each under `courseName`);
+    // the single shared chapter otherwise.
+    const chapterFor = (f: File): string | null => {
+      const raw = multi ? (chapterByFile[fileKey(f)] ?? "") : chapter;
+      return raw.trim() || null;
+    };
     setSubmitting(true);
     setFiles([]);
     setChapter("");
+    setChapterByFile({});
     if (fileInputRef.current) fileInputRef.current.value = "";
 
     try {
@@ -309,7 +333,7 @@ export function DocumentsPanel({
       // starts, so the server ingests the whole batch in parallel.
       const started = await Promise.allSettled(
         batch.map((f) =>
-          startUpload(f, courseName, chapterName, config, studentId, openaiKey.trim() || null).then(
+          startUpload(f, courseName, chapterFor(f), config, studentId, openaiKey.trim() || null).then(
             (result) => ({ job_id: result.job_id, filename: f.name }),
           ),
         ),
@@ -536,17 +560,59 @@ export function DocumentsPanel({
                   onChange={(e) => setCourse(e.target.value)}
                 />
               </div>
-              <div className="flex-1">
-                <TextField
-                  label={t("doc.upload.chapter")}
-                  hint={t("doc.upload.chapterHint")}
-                  placeholder={t("doc.upload.chapterPlaceholder")}
-                  value={chapter}
-                  disabled={hasRunning}
-                  onChange={(e) => setChapter(e.target.value)}
-                />
-              </div>
+              {/* Single-file import keeps one shared chapter beside the course.
+                  A multi-file batch gets a chapter per file below instead, so
+                  different files can land in different chapters of one course. */}
+              {files.length <= 1 && (
+                <div className="flex-1">
+                  <TextField
+                    label={t("doc.upload.chapter")}
+                    hint={t("doc.upload.chapterHint")}
+                    placeholder={t("doc.upload.chapterPlaceholder")}
+                    value={chapter}
+                    disabled={hasRunning}
+                    onChange={(e) => setChapter(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
+
+            {files.length > 1 && (
+              <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50/60 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/40">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                    {t("doc.upload.chapterPerFile")}
+                  </p>
+                  <p className="text-xs text-zinc-500">{t("doc.upload.chapterPerFileHint")}</p>
+                </div>
+                <ul className="space-y-2">
+                  {files.map((f) => {
+                    const key = fileKey(f);
+                    return (
+                      <li key={key} className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+                        <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-zinc-600 sm:w-1/3 dark:text-zinc-300">
+                          <FileIcon />
+                          <span className="truncate" title={f.name}>
+                            {f.name}
+                          </span>
+                        </span>
+                        <input
+                          type="text"
+                          aria-label={t("doc.upload.chapterForFile", { name: f.name })}
+                          placeholder={t("doc.upload.chapterPlaceholder")}
+                          value={chapterByFile[key] ?? ""}
+                          disabled={hasRunning}
+                          onChange={(e) =>
+                            setChapterByFile((prev) => ({ ...prev, [key]: e.target.value }))
+                          }
+                          className={cn(baseField, "h-9 flex-1 py-1.5 text-sm")}
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
 
             {/* Visitor's own OpenAI key for importing scanned/image PDFs. Masked
                 by default with a show/hide toggle (same pattern as the sign-in
