@@ -7,305 +7,41 @@
  * `ApiError` on a non-2xx response so callers can surface a clean message.
  */
 
-export type Level = "beginner" | "intermediate" | "advanced";
+import {
+  buildHeaders,
+  readError,
+  request,
+  resolveApiKey,
+  resolveBaseUrl,
+  resolveOpenaiKey,
+} from "./client";
+import { ApiError } from "./types";
+import type {
+  AskRequest,
+  AskResponse,
+  AuthUser,
+  Citation,
+  ConnectionConfig,
+  ExerciseResponse,
+  ExerciseReview,
+  FeedbackRequest,
+  FeedbackResponse,
+  GradeResponse,
+  HistoryItem,
+  Level,
+  QuizGradeAllItem,
+  QuizResponse,
+  QuizReview,
+  QuizSummaryResponse,
+  ReexplainResponse,
+  ReviewItem,
+  ReviewQuality,
+  Rigor,
+  SessionOut,
+  SourceChunk,
+  TokenResponse,
+} from "./types";
 
-export const LEVELS: readonly Level[] = ["beginner", "intermediate", "advanced"] as const;
-
-/** Marking strictness applied when grading a student's answer. */
-export type Rigor = "lenient" | "standard" | "strict";
-
-export const RIGORS: readonly Rigor[] = ["lenient", "standard", "strict"] as const;
-
-export interface AskRequest {
-  student_id: string;
-  question: string;
-  k?: number;
-  course?: string | null;
-  chapter?: string | null;
-  /** When set, the turn is attached to this conversation thread. */
-  session_id?: number | null;
-  /** Locale code ('en'/'fr'/'nl') to force the default answer language. */
-  language?: string | null;
-}
-
-/** A conversation thread (session) for a student. `title` may be unset. */
-export interface SessionOut {
-  id: number;
-  title: string | null;
-  created_at: string;
-}
-
-/**
- * A cited source: its inline marker number, the chunk id (to fetch its excerpt)
- * and its display label. `n` is the 1-based index exactly as written inline in
- * the answer (`[n]`), so the UI can render a numbered legend matching the markers.
- */
-export interface Citation {
-  n: number;
-  id: string;
-  label: string;
-}
-
-export interface AskResponse {
-  answer: string;
-  refused: boolean;
-  sources: string[];
-  citations?: Citation[];
-}
-
-/** A source chunk's full excerpt, resolved from a citation via GET /source/{id}. */
-export interface SourceChunk {
-  id: string;
-  course: string;
-  chapter?: string | null;
-  page: number;
-  text: string;
-}
-
-export interface ReexplainResponse {
-  answer: string;
-}
-
-export interface ExerciseResponse {
-  problem: string;
-  refused: boolean;
-  id: number | null;
-}
-
-export interface GradeResponse {
-  score: number;
-  feedback: string;
-}
-
-export interface QuizQuestionOut {
-  id: number | null;
-  problem: string;
-}
-
-export interface QuizResponse {
-  quiz_id: number | null;
-  notion: string;
-  questions: QuizQuestionOut[];
-  refused: boolean;
-}
-
-export interface QuizGradeAllItem {
-  question_id: number;
-  answer: string;
-}
-
-export interface QuizGradeResult {
-  question_id: number;
-  score: number;
-  feedback: string;
-}
-
-export interface QuizSummaryResponse {
-  total: number;
-  results: QuizGradeResult[];
-  recommendation: string;
-}
-
-export interface HistoryItem {
-  role: string;
-  content: string;
-  created_at: string;
-  /** Id of the linked exercise/quiz for activity turns; null for plain Q&A. */
-  ref_id?: number | null;
-}
-
-/** The latest grade on an exercise, surfaced for after-the-fact review. */
-export interface ExerciseGradeReview {
-  answer: string;
-  score: number;
-  feedback: string;
-  created_at: string;
-}
-
-/** A generated exercise reviewed after the fact (reference solution included). */
-export interface ExerciseReview {
-  problem: string;
-  reference_solution: string;
-  grade: ExerciseGradeReview | null;
-}
-
-/** One quiz question reviewed after the fact, with the student's latest grade. */
-export interface QuizQuestionReview {
-  position: number;
-  problem: string;
-  reference_solution: string;
-  answer: string | null;
-  score: number | null;
-  feedback: string | null;
-}
-
-/** A generated quiz reviewed after the fact (reference solutions included). */
-export interface QuizReview {
-  notion: string;
-  questions: QuizQuestionReview[];
-}
-
-/** Spaced-repetition recall quality, from 0 (forgot) to 5 (perfect). */
-export type ReviewQuality = 0 | 1 | 2 | 3 | 4 | 5;
-
-/** A notion scheduled for spaced-repetition review. */
-export interface ReviewItem {
-  notion: string;
-  ease: number;
-  interval_days: number;
-  due_at: string;
-}
-
-/** A student's thumbs up (1) or down (-1) on a tutor answer. */
-export type FeedbackRating = 1 | -1;
-
-export interface FeedbackRequest {
-  student_id: string;
-  rating: FeedbackRating;
-  question: string;
-  answer: string;
-  note?: string | null;
-}
-
-export interface FeedbackResponse {
-  id: number;
-}
-
-/** Runtime overrides for the connection, sourced from the settings panel. */
-export interface ConnectionConfig {
-  baseUrl?: string;
-  apiKey?: string;
-  /** Bearer JWT for the logged-in user. Sent in addition to the API key. */
-  token?: string;
-  /**
-   * The visitor's own OpenAI key. When set it is sent as the `X-OpenAI-Key`
-   * header on every request, so all LLM calls (Ask, Re-explain, Exercise, Quiz,
-   * grading) — and document upload — run on the visitor's own premium OpenAI
-   * model instead of the free default. Kept only in the browser; never persisted
-   * server-side.
-   */
-  openaiKey?: string;
-}
-
-/** Minimal public view of an authenticated user. */
-export interface AuthUser {
-  id: number;
-  /** The pseudonym: both the login identifier and the display name. */
-  username: string;
-}
-
-/** Token returned by a successful login. */
-export interface TokenResponse {
-  access_token: string;
-  token_type: string;
-}
-
-/** Error thrown for any failed request, carrying the HTTP status when known. */
-export class ApiError extends Error {
-  readonly status: number;
-
-  constructor(message: string, status = 0) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-  }
-}
-
-const DEFAULT_BASE_URL = "http://localhost:8000";
-
-function envBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_BASE_URL;
-}
-
-function envApiKey(): string {
-  return process.env.NEXT_PUBLIC_API_KEY || "";
-}
-
-function resolveBaseUrl(config?: ConnectionConfig): string {
-  const raw = (config?.baseUrl ?? envBaseUrl()).trim() || DEFAULT_BASE_URL;
-  return raw.replace(/\/+$/, "");
-}
-
-function resolveApiKey(config?: ConnectionConfig): string {
-  return (config?.apiKey ?? envApiKey()).trim();
-}
-
-function resolveOpenaiKey(config?: ConnectionConfig): string {
-  return (config?.openaiKey ?? "").trim();
-}
-
-/**
- * Normalize a pasted API key. Users often copy a whole line from a `.env` file
- * or a shell export, e.g. `export OPENAI_API_KEY="sk-..."` — strip a leading
- * `export `, a `NAME=` assignment prefix, surrounding quotes, and whitespace so
- * only the key itself is kept. A bare key (`sk-...`, `sk-ant-...`) is returned
- * unchanged (it has no leading `identifier=`).
- */
-export function normalizeApiKey(raw: string): string {
-  let key = raw.trim().replace(/^export\s+/i, "");
-  key = key.replace(/^[A-Za-z_][A-Za-z0-9_]*\s*=\s*/, "");
-  return key.trim().replace(/^["']|["']$/g, "").trim();
-}
-
-function buildHeaders(config?: ConnectionConfig, json = false): Headers {
-  const headers = new Headers();
-  if (json) {
-    headers.set("Content-Type", "application/json");
-  }
-  const key = resolveApiKey(config);
-  if (key) {
-    headers.set("X-API-Key", key);
-  }
-  // Additive to the API key: when a user is logged in, also send the bearer JWT.
-  const token = config?.token?.trim();
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-  // The visitor's own OpenAI key, when set: sent on every request so all LLM
-  // calls (and upload) use their premium OpenAI model instead of the free one.
-  const openaiKey = resolveOpenaiKey(config);
-  if (openaiKey) {
-    headers.set("X-OpenAI-Key", openaiKey);
-  }
-  return headers;
-}
-
-async function readError(response: Response): Promise<string> {
-  try {
-    const data = (await response.json()) as { detail?: unknown };
-    if (typeof data?.detail === "string") {
-      return data.detail;
-    }
-    if (data?.detail != null) {
-      return JSON.stringify(data.detail);
-    }
-  } catch {
-    /* fall through to status text */
-  }
-  return response.statusText || `Request failed (${response.status})`;
-}
-
-async function request<T>(
-  path: string,
-  init: RequestInit,
-  config?: ConnectionConfig,
-): Promise<T> {
-  const url = `${resolveBaseUrl(config)}${path}`;
-  let response: Response;
-  try {
-    response = await fetch(url, init);
-  } catch {
-    throw new ApiError(
-      "Could not reach the backend. Check that it is running and the base URL is correct.",
-    );
-  }
-  if (!response.ok) {
-    throw new ApiError(await readError(response), response.status);
-  }
-  return (await response.json()) as T;
-}
-
-/** Liveness probe. Returns true only when the backend reports `status: ok`. */
 export async function checkHealth(config?: ConnectionConfig): Promise<boolean> {
   try {
     const data = await request<{ status: string }>(
