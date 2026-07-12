@@ -13,9 +13,9 @@ NOT refuse merely because the material is non-mathematical.
 
 from agent.persistence import persist_exercise
 from agent.state import TutorState
-from core.answer import REFUSAL, _language_instruction
 from core.config import get_llm
 from core.obs import get_callbacks
+from core.prompts import REFUSAL, language_instruction
 from ingestion.schema import format_numbered_sources
 
 # Base instructions; the output-language directive is injected per request by
@@ -68,7 +68,7 @@ _SYSTEM_FORMAT = (
 
 def _system_prompt(language: str | None = None) -> str:
     """Assemble the exercise system prompt with the language directive injected."""
-    return _SYSTEM_HEAD + _language_instruction(language, subject="the exercise") + _SYSTEM_FORMAT
+    return _SYSTEM_HEAD + language_instruction(language, subject="the exercise") + _SYSTEM_FORMAT
 
 
 def _split(raw: str) -> tuple[str, str]:

@@ -22,9 +22,9 @@ import re
 from typing import Any
 
 from agent.state import Rigor
-from core.answer import REFUSAL, _language_instruction
 from core.config import get_llm
 from core.obs import get_callbacks
+from core.prompts import REFUSAL, language_instruction
 from ingestion.schema import format_numbered_sources
 
 # Fallback marking strictness when the caller supplies none. Mirrors the exercise
@@ -100,7 +100,7 @@ _SYSTEM = (
 
 def _system_prompt(n: int, language: str | None) -> str:
     """Assemble the quiz system prompt with the count and language injected."""
-    return _SYSTEM.format(n=n, lang=_language_instruction(language, subject="the quiz"))
+    return _SYSTEM.format(n=n, lang=language_instruction(language, subject="the quiz"))
 
 
 # Marker splitting the ``### QUESTION k`` / ``### SOLUTION k`` blocks. Tolerant of
