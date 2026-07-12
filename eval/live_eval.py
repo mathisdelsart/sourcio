@@ -4,7 +4,7 @@ Replaces slow, one-at-a-time manual UI testing with a single command that drives
 the real backend (local or deployed) the same way the web app does — hitting
 ``/ask``, ``/exercise`` and ``/quiz`` with the same parameters (course filter,
 chapter filter, max sources, prompt) — over a predefined list of cases
-(``eval/benchmark_cases.json``), and writes every result to a timestamped file.
+(``eval/live_eval_cases.json``), and writes every result to a timestamped file.
 
 An optional second, *external* model acts as an automated first-pass QA reviewer:
 it reads Sourcio's actual output (answer + cited sources, or the generated
@@ -25,19 +25,19 @@ Usage
     export SOURCIO_API_KEY=...         # optional: X-API-Key gate, if the deployment is gated
     export SOURCIO_JUDGE_KEY=sk-...    # optional: OpenAI key for the independent reviewer
 
-    # Run everything, review each result, write eval/benchmark/run-<UTC>/{results.json,report.md}
-    uv run python -m eval.bench_runner
+    # Run everything, review each result, write eval/live_runs/run-<UTC>/{results.json,report.md}
+    uv run python -m eval.live_eval
 
     # A subset (id / mode / course substring), no reviewer, more quiz questions
-    uv run python -m eval.bench_runner --filter Relativity
-    uv run python -m eval.bench_runner --mode exercise --no-judge
-    uv run python -m eval.bench_runner --filter R-all --judge-model gpt-4o
+    uv run python -m eval.live_eval --filter Relativity
+    uv run python -m eval.live_eval --mode exercise --no-judge
+    uv run python -m eval.live_eval --filter R-all --judge-model gpt-4o
 
     # Steady the reviewer: run it 3x per case and take the majority verdict
-    uv run python -m eval.bench_runner --judge-votes 3
+    uv run python -m eval.live_eval --judge-votes 3
 
     # Just list the cases (no calls)
-    uv run python -m eval.bench_runner --list
+    uv run python -m eval.live_eval --list
 
 Run it again after each deployed fix and diff two run folders to confirm a case
 flipped. It complements — does not replace — the occasional manual UI spot-check
@@ -59,8 +59,8 @@ from typing import Any
 import httpx
 
 DEFAULT_BASE_URL = "http://localhost:8000"
-CASES_PATH = Path(__file__).with_name("benchmark_cases.json")
-OUT_ROOT = Path(__file__).with_name("benchmark")
+CASES_PATH = Path(__file__).with_name("live_eval_cases.json")
+OUT_ROOT = Path(__file__).with_name("live_runs")
 # Default external reviewer. OpenAI so it is independent of whatever model Sourcio
 # runs internally; override with --judge-model.
 DEFAULT_JUDGE_MODEL = "gpt-4o"
