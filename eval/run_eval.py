@@ -17,7 +17,7 @@ build on a regression.
 
 The answer function and the judge are injectable so the harness can be unit
 tested without any API call. The default wiring uses the real ``answer.answer``
-and ``config.get_llm("judge")``; tests pass fakes instead.
+and ``llm.get_llm("judge")``; tests pass fakes instead.
 """
 
 from __future__ import annotations
@@ -257,7 +257,7 @@ def _default_answer_fn() -> AnswerFn:
 
 def _default_judge_fn() -> JudgeFn:
     """Wire the real faithfulness judge via the model-agnostic factory."""
-    from core.config import get_llm
+    from core.llm import get_llm
     from core.obs import get_callbacks, timer
 
     llm = get_llm("judge")

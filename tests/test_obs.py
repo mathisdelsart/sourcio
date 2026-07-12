@@ -2,7 +2,7 @@
 
 import pytest
 
-import core.config as config
+import core.llm as llm_mod
 import core.obs as obs
 
 _LANGFUSE_ENV = ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_HOST")
@@ -32,9 +32,9 @@ def test_get_llm_unchanged_when_langfuse_absent(monkeypatch):
         captured["temperature"] = temperature
         return sentinel
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init_chat_model)
+    monkeypatch.setattr(llm_mod, "init_chat_model", fake_init_chat_model)
 
-    result = config.get_llm()
+    result = llm_mod.get_llm()
 
     # No callbacks attached: the model is returned exactly as built.
     assert result is sentinel
@@ -52,9 +52,9 @@ def test_role_selects_model(monkeypatch):
         captured["model"] = model
         return object()
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init_chat_model)
+    monkeypatch.setattr(llm_mod, "init_chat_model", fake_init_chat_model)
 
-    config.get_llm("generate")
+    llm_mod.get_llm("generate")
     assert captured["model"] == "gpt-4o"
 
 
@@ -78,7 +78,7 @@ def test_get_llm_attaches_callbacks_when_enabled(monkeypatch):
 
     # Mock the handler list so the test never imports langfuse or hits a server.
     fake_callback = object()
-    monkeypatch.setattr(config, "get_callbacks", lambda: [fake_callback])
+    monkeypatch.setattr(llm_mod, "get_callbacks", lambda: [fake_callback])
 
     captured = {}
 
@@ -87,9 +87,9 @@ def test_get_llm_attaches_callbacks_when_enabled(monkeypatch):
             captured["callbacks"] = callbacks
             return "configured-model"
 
-    monkeypatch.setattr(config, "init_chat_model", lambda model, temperature: FakeModel())
+    monkeypatch.setattr(llm_mod, "init_chat_model", lambda model, temperature: FakeModel())
 
-    result = config.get_llm()
+    result = llm_mod.get_llm()
     assert result == "configured-model"
     assert captured["callbacks"] == [fake_callback]
 
@@ -209,12 +209,11 @@ def test_reexplain_threads_callbacks(monkeypatch, callbacks):
 
 @pytest.mark.parametrize("callbacks", [["cb-sentinel"], []])
 def test_eval_judge_threads_callbacks(monkeypatch, callbacks):
-    import core.config as cfg
     import core.obs as obs_mod
     from eval.run_eval import _default_judge_fn
 
     llm = _CapturingLLM('{"faithful": true, "relevant": true}')
-    monkeypatch.setattr(cfg, "get_llm", lambda role="default", api_key=None: llm)
+    monkeypatch.setattr(llm_mod, "get_llm", lambda role="default", api_key=None: llm)
     monkeypatch.setattr(obs_mod, "get_callbacks", lambda: callbacks)
 
     judge = _default_judge_fn()

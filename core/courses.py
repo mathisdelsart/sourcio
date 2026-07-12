@@ -15,11 +15,7 @@ endpoint degrades gracefully before any course has been ingested.
 """
 
 from core.config import get_settings
-
-# Cap on how many points to scan in the scroll fallback, so an unexpectedly
-# large collection can never make this enumeration unbounded.
-_SCROLL_PAGE = 256
-_SCROLL_MAX_POINTS = 100_000
+from core.qdrant import client_from_settings, iter_point_payloads
 
 # Upper bound on distinct course values requested from the facet API.
 _FACET_LIMIT = 1_000
@@ -45,16 +41,10 @@ def list_courses(owner: str | None = None) -> list[str]:
     if owner is None:
         return []
 
-    # Imported lazily so importing this module stays cheap and the heavy client
-    # is only loaded when courses are actually requested, matching the codebase
-    # style for optional/heavy dependencies.
-    from qdrant_client import QdrantClient
-
     from core.retrieval import owner_scope_filter
 
-    settings = get_settings()
-    client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
-    collection = settings.qdrant_collection
+    client = client_from_settings()
+    collection = get_settings().qdrant_collection
     owner_filter = owner_scope_filter(owner)
 
     courses = _facet_courses(client, collection, owner_filter)
@@ -83,14 +73,12 @@ def list_chapters(course: str, owner: str | None = None) -> list[str]:
     if owner is None:
         return []
 
-    from qdrant_client import QdrantClient
     from qdrant_client.models import Condition, FieldCondition, Filter, MatchValue
 
     from core.retrieval import owner_scope_filter
 
-    settings = get_settings()
-    client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
-    collection = settings.qdrant_collection
+    client = client_from_settings()
+    collection = get_settings().qdrant_collection
     # Scope strictly to the caller's own material AND the chosen course. The owner
     # condition is nested via the shared ``owner_scope_filter`` (same pattern as
     # retrieval's ``_build_filter``) so the isolation stays consistent with reads.
@@ -147,32 +135,13 @@ def _facet_distinct(client, collection: str, key: str, scope_filter=None) -> set
 def _scroll_distinct(client, collection: str, key: str, scope_filter=None) -> set[str]:
     """Collect distinct values of a payload ``key`` by paging through points.
 
-    Bounded by ``_SCROLL_MAX_POINTS`` so the scan can never run unbounded.
-    Returns an empty set for an empty or missing collection (any error is
-    treated as "nothing indexed"). ``scope_filter``, when given, strictly scopes
-    the scan (e.g. to the caller's own material and, for chapters, to a course).
+    Bounded scan (see :func:`core.qdrant.iter_point_payloads`); returns an empty
+    set for an empty or missing collection. ``scope_filter``, when given, strictly
+    scopes the scan (e.g. to the caller's own material and, for chapters, a course).
     """
     values: set[str] = set()
-    offset = None
-    scanned = 0
-    try:
-        while scanned < _SCROLL_MAX_POINTS:
-            points, offset = client.scroll(
-                collection_name=collection,
-                scroll_filter=scope_filter,
-                limit=_SCROLL_PAGE,
-                with_payload=True,
-                with_vectors=False,
-                offset=offset,
-            )
-            for point in points:
-                payload = point.payload or {}
-                value = payload.get(key)
-                if value is not None:
-                    values.add(str(value))
-            scanned += len(points)
-            if offset is None or not points:
-                break
-    except Exception:
-        return values
+    for payload in iter_point_payloads(client, collection, scope_filter):
+        value = payload.get(key)
+        if value is not None:
+            values.add(str(value))
     return values

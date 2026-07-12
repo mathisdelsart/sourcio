@@ -9,7 +9,9 @@ Ollama environment variables take effect within a test.
 import pytest
 
 import core.config as config
-from core.config import _resolve_model, get_settings
+import core.llm as llm
+from core.config import get_settings
+from core.llm import _resolve_model
 
 
 @pytest.fixture(autouse=True)
@@ -157,8 +159,8 @@ def test_get_llm_default_builds_openai_model(monkeypatch):
         captured["kwargs"] = kwargs
         return object()
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init)
-    config.get_llm("default")
+    monkeypatch.setattr(llm, "init_chat_model", fake_init)
+    llm.get_llm("default")
     assert captured["model"] == "gpt-4o-mini"
     assert captured["kwargs"].get("temperature") == 0
     assert "base_url" not in captured["kwargs"]
@@ -182,8 +184,8 @@ def test_get_llm_ollama_builds_local_model(monkeypatch):
         captured["kwargs"] = kwargs
         return object()
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init)
-    config.get_llm("explain")
+    monkeypatch.setattr(llm, "init_chat_model", fake_init)
+    llm.get_llm("explain")
     assert captured["model"] == "ollama:llama3.1"
     assert captured["kwargs"].get("base_url") == "http://ollama.internal:11434"
     assert captured["kwargs"].get("temperature") == 0
@@ -203,8 +205,8 @@ def test_get_llm_forwards_api_key_for_openai_model(monkeypatch):
         captured["kwargs"] = kwargs
         return object()
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init)
-    config.get_llm("extract", api_key="sk-test")
+    monkeypatch.setattr(llm, "init_chat_model", fake_init)
+    llm.get_llm("extract", api_key="sk-test")
     assert captured["model"] == "gpt-4o-mini"
     assert captured["kwargs"].get("api_key") == "sk-test"
 
@@ -223,8 +225,8 @@ def test_get_llm_key_forces_openai_for_groq_role(monkeypatch):
         captured["kwargs"] = kwargs
         return object()
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init)
-    config.get_llm("explain", api_key="sk-test")
+    monkeypatch.setattr(llm, "init_chat_model", fake_init)
+    llm.get_llm("explain", api_key="sk-test")
     assert captured["model"] == "gpt-4o-mini"
     assert captured["kwargs"].get("api_key") == "sk-test"
     assert captured["kwargs"].get("temperature") == 0
@@ -243,8 +245,8 @@ def test_get_llm_key_forces_openai_over_ollama_provider(monkeypatch):
         captured["kwargs"] = kwargs
         return object()
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init)
-    config.get_llm("explain", api_key="sk-test")
+    monkeypatch.setattr(llm, "init_chat_model", fake_init)
+    llm.get_llm("explain", api_key="sk-test")
     assert captured["model"] == "gpt-4o-mini"
     assert captured["kwargs"].get("api_key") == "sk-test"
     assert "base_url" not in captured["kwargs"]
@@ -262,8 +264,8 @@ def test_get_llm_key_honours_openai_per_role_override(monkeypatch):
         captured["kwargs"] = kwargs
         return object()
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init)
-    config.get_llm("explain", api_key="sk-test")
+    monkeypatch.setattr(llm, "init_chat_model", fake_init)
+    llm.get_llm("explain", api_key="sk-test")
     assert captured["model"] == "openai:gpt-4o"
     assert captured["kwargs"].get("api_key") == "sk-test"
 
@@ -282,8 +284,8 @@ def test_get_llm_anthropic_key_forces_anthropic_model(monkeypatch):
         captured["kwargs"] = kwargs
         return object()
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init)
-    config.get_llm("explain", api_key="sk-ant-xxx")
+    monkeypatch.setattr(llm, "init_chat_model", fake_init)
+    llm.get_llm("explain", api_key="sk-ant-xxx")
     assert captured["model"].startswith("anthropic:")
     assert captured["model"] == f"anthropic:{get_settings().anthropic_chat_model}"
     assert captured["kwargs"].get("api_key") == "sk-ant-xxx"
@@ -301,8 +303,8 @@ def test_get_llm_anthropic_key_honours_claude_per_role_override(monkeypatch):
         captured["kwargs"] = kwargs
         return object()
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init)
-    config.get_llm("explain", api_key="sk-ant-xxx")
+    monkeypatch.setattr(llm, "init_chat_model", fake_init)
+    llm.get_llm("explain", api_key="sk-ant-xxx")
     assert captured["model"] == "anthropic:claude-opus-4-8"
     assert captured["kwargs"].get("api_key") == "sk-ant-xxx"
 
@@ -319,8 +321,8 @@ def test_get_llm_openai_key_still_forces_openai(monkeypatch):
         captured["kwargs"] = kwargs
         return object()
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init)
-    config.get_llm("explain", api_key="sk-xxx")
+    monkeypatch.setattr(llm, "init_chat_model", fake_init)
+    llm.get_llm("explain", api_key="sk-xxx")
     assert captured["model"] == "gpt-4o-mini"
     assert captured["kwargs"].get("api_key") == "sk-xxx"
 
@@ -338,8 +340,8 @@ def test_get_llm_no_key_leaves_groq_resolution_unchanged(monkeypatch):
         captured["kwargs"] = kwargs
         return object()
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init)
-    config.get_llm("explain")
+    monkeypatch.setattr(llm, "init_chat_model", fake_init)
+    llm.get_llm("explain")
     assert captured["model"].startswith("groq:")
     assert "api_key" not in captured["kwargs"]
 
@@ -356,8 +358,8 @@ def test_get_llm_no_key_leaves_ollama_resolution_unchanged(monkeypatch):
         captured["kwargs"] = kwargs
         return object()
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init)
-    config.get_llm("explain")
+    monkeypatch.setattr(llm, "init_chat_model", fake_init)
+    llm.get_llm("explain")
     assert captured["model"].startswith("ollama:")
     assert "api_key" not in captured["kwargs"]
 

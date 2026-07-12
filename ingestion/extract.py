@@ -26,7 +26,8 @@ from dataclasses import dataclass
 
 from langchain_core.messages import HumanMessage
 
-from core.config import get_llm, get_settings
+from core.config import get_settings
+from core.llm import get_llm
 from ingestion.schema import Page
 
 logger = logging.getLogger(__name__)

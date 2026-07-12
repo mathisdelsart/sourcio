@@ -9,41 +9,12 @@ the question is refused rather than answered from the model's own knowledge.
 import re
 from collections.abc import Iterator
 
-from core.config import get_llm, get_settings
+from core.config import get_settings
+from core.llm import get_llm
 from core.obs import get_callbacks, timer
+from core.prompts import REFUSAL, language_instruction
 from core.retrieval import retrieve, retrieve_multi
 from ingestion.schema import Retrieved, format_numbered_sources
-
-REFUSAL = "This is not covered in the course material."
-
-# Locale codes the UI sends, mapped to the language name used in the prompt.
-_LANGUAGE_NAMES = {"en": "English", "fr": "French", "nl": "Dutch"}
-
-
-def _language_instruction(language: str | None, *, subject: str = "the answer") -> str:
-    """Build the output-language directive for a grounding system prompt.
-
-    ``subject`` names what must be written ("the answer", "the exercise", "the
-    quiz"), so the same directive is reusable across the answer, exercise and
-    quiz prompts. With no explicit ``language`` we keep the original behavior:
-    write in the request's own language. With a locale code ('en'/'fr'/'nl') we
-    make that language the strong default that overrides the sources' language,
-    while still deferring to an explicit request for another language. The
-    wording is deliberately forceful so a weak local model does not default to
-    the (usually English) source language.
-    """
-    if language is None:
-        return (
-            f"- Write {subject} in the same language as the request, unless it "
-            "explicitly asks for another language.\n"
-        )
-    name = _LANGUAGE_NAMES.get(language, "English")
-    return (
-        f"- Write {subject} in {name}, even if the sources are written in another "
-        "language, unless the request explicitly asks for another language. Only "
-        "the prose is translated: keep all mathematics, notation and symbols "
-        "exactly as they appear in the sources.\n"
-    )
 
 
 def _system_prompt(language: str | None = None) -> str:
@@ -51,7 +22,7 @@ def _system_prompt(language: str | None = None) -> str:
     return (
         "You are a course tutor that answers strictly from the provided sources.\n"
         "- Use only the numbered sources below; never use outside knowledge.\n"
-        + _language_instruction(language)
+        + language_instruction(language)
         + "- Every claim MUST carry a citation to the source index it comes from, like "
         "[1] or [2]. If a statement cannot be attributed to a numbered source, do not "
         "make it. An answer with no [n] citation is not acceptable.\n"
@@ -233,7 +204,7 @@ def answer(
     model answers in the question's own language. ``api_key`` is an optional
     per-request OpenAI key: when set, the explanation (and any HyDE/multi-query
     router call) runs on the visitor's own OpenAI model instead of the free
-    default (see :func:`core.config.get_llm`).
+    default (see :func:`core.llm.get_llm`).
     """
     with timer("retrieval"):
         results = _retrieve(

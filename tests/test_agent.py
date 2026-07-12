@@ -1,13 +1,13 @@
 """Tests for the agentic layer: router, node wiring, and graph routing.
 
-No real API or vector store is touched. ``config.get_llm`` is monkeypatched to
+No real API or vector store is touched. ``core.llm.get_llm`` is monkeypatched to
 return a fake chat model that yields canned outputs, and ``answer.answer`` is
 monkeypatched where the explain node would otherwise run RAG.
 """
 
 import pytest
 
-import core.config as config
+import core.llm as llm_factory
 from agent import graph as graph_mod
 from agent.graph import INTENTS, build_graph, classify_intent, route
 from agent.nodes.explain import explain
@@ -79,7 +79,7 @@ def fake_llm(monkeypatch):
         holder["last"] = llm
         return llm
 
-    monkeypatch.setattr(config, "get_llm", _factory)
+    monkeypatch.setattr(llm_factory, "get_llm", _factory)
     # Nodes import get_llm by name into their own module namespace.
     monkeypatch.setattr(graph_mod, "get_llm", _factory)
     import agent.nodes.generate as gen_mod

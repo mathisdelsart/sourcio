@@ -60,7 +60,7 @@ class TutorState(TypedDict, total=False):
     language: str | None  # optional locale code ('en'/'fr'/'nl') for the output language
     # Optional per-request OpenAI key: when set, this node's LLM call runs on the
     # visitor's own OpenAI model instead of the free default. Transient only —
-    # never persisted, logged or returned (see core.config.get_llm).
+    # never persisted, logged or returned (see core.llm.get_llm).
     api_key: str | None
     retrieved: list[Any]  # citations/sources backing the last explanation
     answer: str  # grounded explanation (explain / reexplain output)

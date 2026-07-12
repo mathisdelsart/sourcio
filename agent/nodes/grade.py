@@ -14,7 +14,7 @@ import re
 
 from agent.persistence import persist_grade
 from agent.state import Rigor, TutorState
-from core.config import get_llm
+from core.llm import get_llm
 from core.obs import get_callbacks
 
 _SYSTEM = (

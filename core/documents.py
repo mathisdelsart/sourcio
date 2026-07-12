@@ -7,11 +7,11 @@ client. It exposes three operations a "Documents" UI needs:
   payloads (``course``/``chapter``/``page``) and grouping pages per course and
   chapter. It is read-only and grounded in what is actually indexed; an empty or
   missing collection yields an empty list rather than raising.
-- :func:`ingest_document` ingests one uploaded file (``.pdf`` via the math-aware
+- :func:`stream_ingest` ingests one uploaded file (``.pdf`` via the math-aware
   vision pipeline, ``.md``/``.txt`` via the prose loader) under a given
-  course/chapter, reusing exactly the same extract -> chunk -> index path as the
-  ingestion CLI. The heavy extract/embed/index calls live behind module-level
-  names so a test can stub them without loading any model.
+  course/chapter, yielding progress events and reusing the same extract -> chunk
+  -> index path as the ingestion CLI. The heavy extract/embed/index calls live
+  behind module-level names so a test can stub them without loading any model.
 - :func:`delete_documents` removes the points of a course (optionally narrowed to
   one chapter) with a payload filter, returning how many points were removed.
 - :func:`rename_course` / :func:`rename_chapter` rewrite the ``course`` /
@@ -32,16 +32,16 @@ from typing import Any
 
 from core import storage
 from core.config import get_settings
-from core.errors import describe_capacity_error
+from core.errors import (
+    _is_missing_openai_credentials,
+    _openai_key_error,
+    describe_capacity_error,
+)
+from core.qdrant import client_from_settings, iter_point_payloads
 from ingestion.chunk import chunk_pages
 from ingestion.index import index_chunks
 from ingestion.load import is_text_file, load_text_file
 from ingestion.schema import Page
-
-# Cap on how many points to scan when building the inventory, so an unexpectedly
-# large collection can never make the enumeration unbounded.
-_SCROLL_PAGE = 256
-_SCROLL_MAX_POINTS = 100_000
 
 # Where uploaded originals are kept so a user can re-open the intact file later.
 # Overridable for tests/deploys; gitignored.
@@ -50,48 +50,6 @@ UPLOADS_DIR = os.environ.get("DOCUMENTS_DIR", "uploads")
 # User-facing message when an upload is neither a PDF nor a supported text file.
 # Surfaced as a clean ``error`` event / raised error instead of a raw fitz crash.
 UNSUPPORTED_FILE_MESSAGE = "Unsupported file type — upload a PDF, .md or .txt"
-
-# User-facing message when a scanned/image PDF needs the vision model but no
-# OpenAI key is available (neither the visitor's nor a server env key). Text PDFs
-# and .md/.txt import for free with local embeddings, so this only ever applies
-# to image-based pages. It guides the UI to prompt the visitor for their own key.
-MISSING_OPENAI_KEY_MESSAGE = (
-    "This looks like a scanned or image-based PDF, which needs a vision model to "
-    "read. Add your OpenAI API key to import it — text PDFs and .md/.txt files "
-    "import for free without a key."
-)
-
-# Same failure but the visitor DID supply a key that the provider rejected (wrong
-# value, no credit, or no vision-model access). A common cause is pasting a whole
-# `OPENAI_API_KEY=...` line instead of just the key, so the message says so.
-REJECTED_OPENAI_KEY_MESSAGE = (
-    "The API key was rejected. Check that it is valid — that it has credit and "
-    "access to a vision model, and that you pasted only the key itself (e.g. "
-    "sk-…), not a whole 'OPENAI_API_KEY=…' line."
-)
-
-
-def _openai_key_error(extract_api_key: str | None) -> str:
-    """Pick the missing-key vs rejected-key message by whether a key was supplied."""
-    return REJECTED_OPENAI_KEY_MESSAGE if extract_api_key else MISSING_OPENAI_KEY_MESSAGE
-
-
-def _is_missing_openai_credentials(exc: BaseException) -> bool:
-    """Return whether ``exc`` is an OpenAI missing/invalid-credentials error.
-
-    Detection is by exception class name and message so the OpenAI SDK never has
-    to be imported here. Covers both LangChain's "Did not find openai_api_key"
-    startup ValueError and the SDK's ``AuthenticationError`` (HTTP 401), which is
-    what a scanned PDF hits when no key (visitor's or env) is available for the
-    vision fallback. Unrelated errors return False and keep their own message.
-    """
-    haystack = f"{type(exc).__name__} {exc}".lower()
-    return (
-        "openai_api_key" in haystack
-        or "authenticationerror" in haystack
-        or "api_key client option must be set" in haystack
-        or ("api key" in haystack and "openai" in haystack)
-    )
 
 
 def _is_pdf_file(path: str) -> bool:
@@ -137,7 +95,19 @@ def _safe_join(directory: str, name: str) -> str | None:
 
 
 def _course_dir(course: str) -> str:
-    return os.path.join(UPLOADS_DIR, _slug(course))
+    """Absolute path to a course's upload directory, confined to ``UPLOADS_DIR``.
+
+    ``_slug`` already strips traversal from the course name, but resolving the
+    result and asserting it stays under the uploads root makes every downstream
+    filesystem operation (create/list/rename) provably confined to that root --
+    the ``course`` component is validated against the fixed root, so a crafted
+    name can never escape it (defense in depth, statically verifiable).
+    """
+    base = os.path.abspath(UPLOADS_DIR)
+    path = os.path.abspath(os.path.join(base, _slug(course)))
+    if os.path.commonpath([base, path]) != base:  # pragma: no cover - defensive; _slug contains it
+        raise ValueError("Invalid course name")
+    return path
 
 
 def _r2_key(course: str, filename: str) -> str:
@@ -252,14 +222,6 @@ def list_course_files(course: str) -> list[str]:
     return names
 
 
-def _client():
-    """Build a Qdrant client from settings (same construction as retrieval)."""
-    from qdrant_client import QdrantClient
-
-    settings = get_settings()
-    return QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
-
-
 def _format_inventory(index: dict[str, dict[Any, set[int]]]) -> list[dict[str, Any]]:
     """Render the collected ``course -> chapter -> pages`` map as the API shape.
 
@@ -303,42 +265,23 @@ def list_documents(owner: str | None = None) -> list[dict[str, Any]]:
 
     from core.retrieval import owner_scope_filter
 
-    settings = get_settings()
-    client = _client()
-    collection = settings.qdrant_collection
+    client = client_from_settings()
+    collection = get_settings().qdrant_collection
     scroll_filter = owner_scope_filter(owner)
 
-    # course -> chapter (str | None) -> set of distinct page numbers.
+    # course -> chapter (str | None) -> set of distinct page numbers. Any
+    # scroll/collection error ends the scan quietly (see iter_point_payloads),
+    # degrading to "nothing indexed" rather than failing the request.
     index: dict[str, dict[Any, set[int]]] = {}
-    offset = None
-    scanned = 0
-    try:
-        while scanned < _SCROLL_MAX_POINTS:
-            points, offset = client.scroll(
-                collection_name=collection,
-                scroll_filter=scroll_filter,
-                limit=_SCROLL_PAGE,
-                with_payload=True,
-                with_vectors=False,
-                offset=offset,
-            )
-            for point in points:
-                payload = point.payload or {}
-                course = payload.get("course")
-                if course is None:
-                    continue
-                chapter = payload.get("chapter")
-                pages = index.setdefault(str(course), {}).setdefault(chapter, set())
-                page = payload.get("page")
-                if page is not None:
-                    pages.add(int(page))
-            scanned += len(points)
-            if offset is None or not points:
-                break
-    except Exception:
-        # Treat any scroll/collection error as "nothing indexed" rather than
-        # failing the request, matching core.courses' graceful degradation.
-        pass
+    for payload in iter_point_payloads(client, collection, scroll_filter):
+        course = payload.get("course")
+        if course is None:
+            continue
+        chapter = payload.get("chapter")
+        pages = index.setdefault(str(course), {}).setdefault(chapter, set())
+        page = payload.get("page")
+        if page is not None:
+            pages.add(int(page))
     result = _format_inventory(index)
     # Attach the stored original files (if any) so the UI can offer "view".
     for course in result:
@@ -358,7 +301,6 @@ def _indexed_pages(course: str, document: str | None = None, owner: str | None =
     (their pages have a distinct owner). Any error degrades to an empty set
     (nothing skipped) rather than failing the ingest.
     """
-    settings = get_settings()
     from qdrant_client.models import FieldCondition, Filter, MatchValue
 
     conditions: list[Any] = [FieldCondition(key="course", match=MatchValue(value=course))]
@@ -366,30 +308,17 @@ def _indexed_pages(course: str, document: str | None = None, owner: str | None =
         conditions.append(FieldCondition(key="document", match=MatchValue(value=document)))
     if owner is not None:
         conditions.append(FieldCondition(key="owner", match=MatchValue(value=owner)))
+    course_filter = Filter(must=conditions)
     pages: set[int] = set()
-    offset = None
-    scanned = 0
-    try:
-        client = _client()
-        course_filter = Filter(must=conditions)
-        while scanned < _SCROLL_MAX_POINTS:
-            points, offset = client.scroll(
-                collection_name=settings.qdrant_collection,
-                scroll_filter=course_filter,
-                limit=_SCROLL_PAGE,
-                with_payload=["page"],
-                with_vectors=False,
-                offset=offset,
-            )
-            for point in points:
-                page = (point.payload or {}).get("page")
-                if page is not None:
-                    pages.add(int(page))
-            scanned += len(points)
-            if offset is None or not points:
-                break
-    except Exception:
-        return set()
+    for payload in iter_point_payloads(
+        client_from_settings(),
+        get_settings().qdrant_collection,
+        course_filter,
+        with_payload=["page"],
+    ):
+        page = payload.get("page")
+        if page is not None:
+            pages.add(int(page))
     return pages
 
 
@@ -471,37 +400,6 @@ def _done_reason(indexed: int, skipped: int) -> str:
     if skipped > 0:
         return "already_indexed"
     return "empty"
-
-
-def ingest_document(
-    path: str,
-    course: str,
-    chapter: str | None = None,
-    *,
-    owner: str | None = None,
-    sparse: bool = False,
-    extract_api_key: str | None = None,
-) -> int:
-    """Ingest one uploaded file under ``course``/``chapter`` and return the count.
-
-    Reuses the exact extract -> chunk -> index path of the ingestion CLI. When a
-    ``chapter`` is given it overrides the source-derived chapter on every page so
-    the uploaded material is filed under the user's chosen chapter; otherwise the
-    pipeline's own chapter (the file stem for prose, ``None`` for slides) is kept.
-    Every page is stamped with the document identity so distinct files in the same
-    course never collide or overwrite one another, and with ``owner`` (the
-    uploader's effective ``student_id``) so the material is scoped to that account.
-    Returns the number of indexed chunks (``0`` when the file has no content).
-    """
-    pages = _load_pages(path, course, extract_api_key=extract_api_key)
-    _stamp_pages(pages, chapter, _document_id(path), owner)
-    if not pages:
-        return 0
-    chunks = chunk_pages(pages)
-    if not chunks:
-        return 0
-    index_chunks(chunks, sparse=sparse)
-    return len(chunks)
 
 
 def stream_ingest(
@@ -690,7 +588,7 @@ def delete_documents(course: str, chapter: str | None = None, owner: str | None 
     from core.retrieval import owner_scope_filter
 
     settings = get_settings()
-    client = _client()
+    client = client_from_settings()
     collection = settings.qdrant_collection
 
     conditions: list[Any] = [FieldCondition(key="course", match=MatchValue(value=course))]
@@ -736,7 +634,7 @@ def _set_payload_scoped(
     from core.retrieval import owner_scope_filter
 
     settings = get_settings()
-    client = _client()
+    client = client_from_settings()
     collection = settings.qdrant_collection
 
     conditions: list[Any] = [FieldCondition(key="course", match=MatchValue(value=course))]

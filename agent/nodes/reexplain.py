@@ -9,7 +9,7 @@ again, so the explanation stays anchored to what was already grounded.
 from collections.abc import Iterator
 
 from agent.state import Level, TutorState
-from core.config import get_llm
+from core.llm import get_llm
 from core.obs import get_callbacks
 
 _SYSTEM = (

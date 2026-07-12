@@ -11,7 +11,7 @@ error, malformed output) degrades gracefully to just the original question
 rather than raising, keeping retrieval available even when rewriting fails.
 """
 
-from core.config import get_llm
+from core.llm import get_llm
 from core.obs import get_callbacks
 
 _SYSTEM = (
@@ -76,7 +76,7 @@ def expand_query(question: str, n: int = 3, api_key: str | None = None) -> list[
 
     ``api_key`` is an optional per-request OpenAI key forwarded to ``get_llm``:
     when set, the rewrite call runs on the visitor's own OpenAI model (see
-    :func:`core.config.get_llm`); when None the configured free model is used.
+    :func:`core.llm.get_llm`); when None the configured free model is used.
 
     Robust by construction: any error from the model, or output that yields no
     usable rewrites, falls back to ``[question]``. This function never raises,

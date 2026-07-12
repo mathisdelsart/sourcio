@@ -14,7 +14,7 @@ from agent.nodes.generate import generate
 from agent.nodes.grade import grade
 from agent.nodes.reexplain import reexplain
 from agent.state import Intent, TutorState
-from core.config import get_llm
+from core.llm import get_llm
 from core.obs import get_callbacks
 
 # Every valid intent label, derived from the Intent type so the two cannot drift.

@@ -10,6 +10,7 @@ from langchain_core.outputs import ChatGeneration, LLMResult
 
 import core.budget as budget
 import core.config as config
+import core.llm as llm
 
 
 def _result(total_tokens: int) -> LLMResult:
@@ -77,13 +78,13 @@ def test_budget_accumulates_across_separate_retrievals():
 
 
 def test_get_llm_reuses_shared_budget_handler(monkeypatch):
-    """`config.get_llm` attaches the shared handler so usage is cumulative."""
+    """`llm.get_llm` attaches the shared handler so usage is cumulative."""
     for var in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_HOST"):
         monkeypatch.delenv(var, raising=False)
 
-    monkeypatch.setattr(config, "_cache_configured", False)
+    monkeypatch.setattr(llm, "_cache_configured", False)
     monkeypatch.setattr(
-        config, "get_settings", lambda: config.Settings(llm_cache="", llm_budget_tokens=100)
+        llm, "get_settings", lambda: config.Settings(llm_cache="", llm_budget_tokens=100)
     )
 
     captured = {}
@@ -93,11 +94,11 @@ def test_get_llm_reuses_shared_budget_handler(monkeypatch):
             captured["callbacks"] = callbacks
             return self
 
-    monkeypatch.setattr(config, "init_chat_model", lambda model, temperature: _FakeLLM())
+    monkeypatch.setattr(llm, "init_chat_model", lambda model, temperature: _FakeLLM())
 
-    config.get_llm()
+    llm.get_llm()
     first = captured["callbacks"]
-    config.get_llm()
+    llm.get_llm()
     second = captured["callbacks"]
 
     # Both invocations attach the very same handler instance.
@@ -149,8 +150,8 @@ def test_configure_cache_memory(monkeypatch):
     from langchain_core.caches import InMemoryCache
 
     # Reset the once-only guard so the helper runs in this test.
-    monkeypatch.setattr(config, "_cache_configured", False)
-    monkeypatch.setattr(config, "get_settings", lambda: config.Settings(llm_cache="memory"))
+    monkeypatch.setattr(llm, "_cache_configured", False)
+    monkeypatch.setattr(llm, "get_settings", lambda: config.Settings(llm_cache="memory"))
 
     captured = {}
     monkeypatch.setattr(
@@ -158,14 +159,14 @@ def test_configure_cache_memory(monkeypatch):
         lambda cache: captured.__setitem__("cache", cache),
     )
 
-    config.configure_cache()
+    llm.configure_cache()
     assert isinstance(captured["cache"], InMemoryCache)
 
 
 def test_configure_cache_disabled_is_noop(monkeypatch):
     """`configure_cache` does nothing when `llm_cache` is empty."""
-    monkeypatch.setattr(config, "_cache_configured", False)
-    monkeypatch.setattr(config, "get_settings", lambda: config.Settings(llm_cache=""))
+    monkeypatch.setattr(llm, "_cache_configured", False)
+    monkeypatch.setattr(llm, "get_settings", lambda: config.Settings(llm_cache=""))
 
     captured = {}
     monkeypatch.setattr(
@@ -173,7 +174,7 @@ def test_configure_cache_disabled_is_noop(monkeypatch):
         lambda cache: captured.__setitem__("cache", cache),
     )
 
-    config.configure_cache()
+    llm.configure_cache()
     assert "cache" not in captured
 
 
@@ -182,9 +183,9 @@ def test_get_llm_unchanged_when_both_features_disabled(monkeypatch):
     for var in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_HOST"):
         monkeypatch.delenv(var, raising=False)
 
-    monkeypatch.setattr(config, "_cache_configured", False)
+    monkeypatch.setattr(llm, "_cache_configured", False)
     monkeypatch.setattr(
-        config, "get_settings", lambda: config.Settings(llm_cache="", llm_budget_tokens=0)
+        llm, "get_settings", lambda: config.Settings(llm_cache="", llm_budget_tokens=0)
     )
 
     sentinel = object()
@@ -195,9 +196,9 @@ def test_get_llm_unchanged_when_both_features_disabled(monkeypatch):
         captured["temperature"] = temperature
         return sentinel
 
-    monkeypatch.setattr(config, "init_chat_model", fake_init_chat_model)
+    monkeypatch.setattr(llm, "init_chat_model", fake_init_chat_model)
 
-    result = config.get_llm()
+    result = llm.get_llm()
 
     # No callbacks attached, no cache installed: model returned exactly as built.
     assert result is sentinel

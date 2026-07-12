@@ -46,6 +46,7 @@ from qdrant_client.models import (
 )
 
 from core.config import get_settings
+from core.qdrant import client_from_settings
 from core.query import expand_query, hyde_passage
 from ingestion.embed import embed_query
 from ingestion.index import DENSE_VECTOR_NAME
@@ -507,7 +508,7 @@ def retrieve(
     the dense/sparse search itself and defaults to the free model when None.
     """
     settings = get_settings()
-    client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
+    client = client_from_settings()
     query_filter = _build_filter(course, chapter, owner)
 
     reranking = bool(settings.reranker_model)
@@ -590,7 +591,7 @@ def retrieve_multi(
     settings = get_settings()
     queries = expand_query(question, n=settings.multi_query_n, api_key=api_key)
 
-    client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
+    client = client_from_settings()
     query_filter = _build_filter(course, chapter, owner)
 
     reranking = bool(settings.reranker_model)
