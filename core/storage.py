@@ -3,7 +3,7 @@
 Uploaded PDFs/``.md``/``.txt`` originals are saved to local disk by
 ``core.documents`` so the "view original file" feature can re-open them later.
 That works for local development, but the production API runs inside an
-ephemeral container (Hugging Face Spaces, see ``docs/DEPLOY-API.md``): every
+ephemeral container (Hugging Face Spaces, see ``docs/DEPLOY.md``): every
 redeploy or free-tier sleep/wake cycle wipes the filesystem, silently losing
 every stored original. The *indexed* content survives fine (chunks + embeddings
 live in Qdrant Cloud, a genuinely persistent external service) -- only the raw

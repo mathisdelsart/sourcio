@@ -88,24 +88,10 @@ are excluded.
 
 ## Makefile targets
 
-`make` (or `make help`) lists everything. The common targets:
-
-| Target | What it does |
-| --- | --- |
-| `make install` | install all extras + dev group |
-| `make qdrant` | start Qdrant in the background |
-| `make hooks` | install pre-commit hooks and run them on all files |
-| `make lint` / `make fmt` / `make fmt-check` | ruff lint / format / format check |
-| `make test` | run the test suite |
-| `make check` | lint + format check + tests |
-| `make api` | run the FastAPI app with autoreload |
-| `make web` | run the Next.js web frontend |
-| `make eval` | run the offline faithfulness evaluation |
-| `make eval-report` | run the eval and write `eval/results.json` (calls the API) |
-| `make ingest PDF=... COURSE="..."` | ingest a course PDF into Qdrant |
-| `make ask Q="..."` | ask a question from the command line |
-| `make up` / `make down` | start / stop all services (app + Qdrant) |
-| `make clean` | remove local caches |
+Run `make` (or `make help`) for the full, self-documenting list — each target
+carries its own one-line description, so this doc does not restate them. The
+everyday ones are `make dev` (Qdrant + API + web), `make check` (lint + format
+check + tests), and `make hooks`.
 
 Note that `make eval-report` and `make ingest` make real provider API calls,
 unlike the unit tests.
@@ -131,8 +117,8 @@ descriptions) is in professional English.
 CI is defined in `.github/workflows/ci.yml` and runs on every PR and on pushes to
 `main`. It has two jobs:
 
-- **quality** — installs the dev group and the `api`, `agent`, `obs`, and `ui`
-  extras, then enforces the quality gate: `ruff check`, `ruff format --check`,
+- **quality** — installs the dev group and the `api`, `agent`, and `obs` extras,
+  then enforces the quality gate: `ruff check`, `ruff format --check`,
   `pyright` (static type check), and `pytest` with a coverage floor
   (`--cov-fail-under`). The pre-commit hooks cover the ruff half of this gate
   locally; run `make check` for the rest.

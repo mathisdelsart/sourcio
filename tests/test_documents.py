@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 import core.documents as documents_mod
+import core.errors as errors_mod
 from ingestion.schema import Page
 
 # --- core.jobs: the background-job registry ----------------------------------
@@ -108,9 +109,9 @@ def test_openai_key_error_distinguishes_missing_vs_rejected():
     # No key supplied -> "add your key"; a key WAS supplied but rejected -> "the
     # key was rejected", so a user who pasted a bad/malformed key is not told to
     # add one they already added.
-    assert documents_mod._openai_key_error(None) == documents_mod.MISSING_OPENAI_KEY_MESSAGE
-    assert documents_mod._openai_key_error("") == documents_mod.MISSING_OPENAI_KEY_MESSAGE
-    assert documents_mod._openai_key_error("sk-bad") == documents_mod.REJECTED_OPENAI_KEY_MESSAGE
+    assert errors_mod._openai_key_error(None) == errors_mod.MISSING_OPENAI_KEY_MESSAGE
+    assert errors_mod._openai_key_error("") == errors_mod.MISSING_OPENAI_KEY_MESSAGE
+    assert errors_mod._openai_key_error("sk-bad") == errors_mod.REJECTED_OPENAI_KEY_MESSAGE
 
 
 # --- list_documents: grouping by course and chapter --------------------------
@@ -219,64 +220,6 @@ def test_list_documents_fail_closed_without_owner(monkeypatch):
     _use_client(monkeypatch, _BoomScrollClient)
     assert documents_mod.list_documents() == []
     assert documents_mod.list_documents(owner=None) == []
-
-
-# --- ingest_document: routing without touching any model ---------------------
-
-
-def test_ingest_document_text_overrides_chapter(monkeypatch, tmp_path):
-    path = tmp_path / "syllabus.md"
-    path.write_text(" ".join(f"w{i}" for i in range(30)), encoding="utf-8")
-
-    captured: list = []
-    monkeypatch.setattr(documents_mod, "index_chunks", lambda chunks, **_: captured.extend(chunks))
-
-    def boom_extract(*args, **kwargs):
-        raise AssertionError("the PDF/vision path must not run for a text file")
-
-    # The lazy extract import resolves to ingestion.extract.extract_pdf.
-    import ingestion.extract
-
-    monkeypatch.setattr(ingestion.extract, "extract_pdf", boom_extract)
-
-    count = documents_mod.ingest_document(str(path), "Wavelets", "Chapter 1")
-
-    assert count == len(captured) > 0
-    # The provided chapter overrides the file-stem chapter on every chunk.
-    assert all(c.course == "Wavelets" for c in captured)
-    assert all(c.chapter == "Chapter 1" for c in captured)
-
-
-def test_ingest_document_pdf_uses_extract(monkeypatch, tmp_path):
-    path = tmp_path / "deck.pdf"
-    path.write_bytes(b"%PDF-1.4 fake")
-
-    def fake_extract(p, course, **kwargs):  # noqa: ARG001
-        return [Page(course=course, page=1, text="slide one", doc_type="slides")]
-
-    import ingestion.extract
-
-    monkeypatch.setattr(ingestion.extract, "extract_pdf", fake_extract)
-
-    captured: list = []
-    monkeypatch.setattr(documents_mod, "index_chunks", lambda chunks, **_: captured.extend(chunks))
-
-    count = documents_mod.ingest_document(str(path), "Wavelets")
-
-    assert count == 1
-    assert captured[0].course == "Wavelets"
-
-
-def test_ingest_document_empty_file_indexes_nothing(monkeypatch, tmp_path):
-    path = tmp_path / "blank.txt"
-    path.write_text("   \n\n  ", encoding="utf-8")
-
-    def boom_index(*args, **kwargs):
-        raise AssertionError("index_chunks must not run for an empty file")
-
-    monkeypatch.setattr(documents_mod, "index_chunks", boom_index)
-
-    assert documents_mod.ingest_document(str(path), "Wavelets") == 0
 
 
 # --- stream_ingest: per-document scoping and honest 0 ------------------------
@@ -490,7 +433,7 @@ def test_stream_ingest_missing_openai_key_gives_clear_message(monkeypatch, tmp_p
 
     events = list(documents_mod.stream_ingest(str(path), "Wavelets"))
     assert events[-1]["type"] == "error"
-    assert events[-1]["message"] == documents_mod.MISSING_OPENAI_KEY_MESSAGE
+    assert events[-1]["message"] == errors_mod.MISSING_OPENAI_KEY_MESSAGE
 
 
 def test_stream_ingest_unsupported_extension_emits_error(monkeypatch, tmp_path):
@@ -510,13 +453,6 @@ def test_stream_ingest_unsupported_extension_emits_error(monkeypatch, tmp_path):
     assert len(events) == 1
     assert events[0]["type"] == "error"
     assert events[0]["message"] == documents_mod.UNSUPPORTED_FILE_MESSAGE
-
-
-def test_ingest_document_unsupported_extension_raises(tmp_path):
-    path = tmp_path / "slides.pptx"
-    path.write_bytes(b"not a pdf")
-    with pytest.raises(ValueError, match="Unsupported file type"):
-        documents_mod.ingest_document(str(path), "Wavelets")
 
 
 def test_indexed_pages_scopes_to_course_and_document(monkeypatch):

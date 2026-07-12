@@ -67,3 +67,49 @@ def raise_friendly_llm_error(exc: Exception, *, used_own_key: bool) -> None:
     message = describe_capacity_error(exc, used_own_key=used_own_key)
     if message is not None:
         raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=message) from exc
+
+
+# --- OpenAI vision-extraction credential errors (used by document ingestion) ---
+# A scanned/image PDF needs the vision model. These recognize a missing/invalid
+# OpenAI credential and produce the right guidance for the uploader.
+
+# No OpenAI key available (neither the visitor's nor a server env key). Text PDFs
+# and .md/.txt import for free with local embeddings, so this only applies to
+# image-based pages; it guides the UI to prompt the visitor for their own key.
+MISSING_OPENAI_KEY_MESSAGE = (
+    "This looks like a scanned or image-based PDF, which needs a vision model to "
+    "read. Add your OpenAI API key to import it — text PDFs and .md/.txt files "
+    "import for free without a key."
+)
+
+# The visitor DID supply a key that the provider rejected (wrong value, no credit,
+# or no vision-model access). A common cause is pasting a whole `OPENAI_API_KEY=...`
+# line instead of just the key, so the message says so.
+REJECTED_OPENAI_KEY_MESSAGE = (
+    "The API key was rejected. Check that it is valid — that it has credit and "
+    "access to a vision model, and that you pasted only the key itself (e.g. "
+    "sk-…), not a whole 'OPENAI_API_KEY=…' line."
+)
+
+
+def _openai_key_error(extract_api_key: str | None) -> str:
+    """Pick the missing-key vs rejected-key message by whether a key was supplied."""
+    return REJECTED_OPENAI_KEY_MESSAGE if extract_api_key else MISSING_OPENAI_KEY_MESSAGE
+
+
+def _is_missing_openai_credentials(exc: BaseException) -> bool:
+    """Return whether ``exc`` is an OpenAI missing/invalid-credentials error.
+
+    Detection is by exception class name and message so the OpenAI SDK never has
+    to be imported here. Covers both LangChain's "Did not find openai_api_key"
+    startup ValueError and the SDK's ``AuthenticationError`` (HTTP 401), which is
+    what a scanned PDF hits when no key (visitor's or env) is available for the
+    vision fallback. Unrelated errors return False and keep their own message.
+    """
+    haystack = f"{type(exc).__name__} {exc}".lower()
+    return (
+        "openai_api_key" in haystack
+        or "authenticationerror" in haystack
+        or "api_key client option must be set" in haystack
+        or ("api key" in haystack and "openai" in haystack)
+    )

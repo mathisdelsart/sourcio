@@ -49,9 +49,9 @@ offline / in CI.
       |    \---------> core/retrieval.py --> [ Qdrant ]  top-k + threshold (+ opt-in hybrid RRF)
       |   /                          \
       v  v                            +--> core/answer.py  citation-by-construction
-  agent/graph.py (LangGraph)               (answer + stream_answer; used by /ask, /ask/stream, explain)
+  agent/nodes/* + core/answer.py           (explicit endpoints dispatch straight to a node)
       |
-   router --> explain | generate | grade | reexplain | quiz   (agent/nodes/*)
+   explain | generate | grade | reexplain | quiz   (agent/nodes/*; also composed by agent/graph.py — agentic reference)
       |              |        |        |
       |              v        v        v
       |          [ SQL store: students, exercises, grades, messages ]
@@ -217,10 +217,14 @@ persists the question and assembled answer when the stream completes.
 
 ### Agent graph (`agent/`)
 
-The online flow is a LangGraph `StateGraph` (`agent/graph.py`) threading a single
-`TutorState` TypedDict (`agent/state.py`). The router classifies the message into
-one of four intents and dispatches to a node; each node writes only its own
-output key.
+The agentic layer is a LangGraph `StateGraph` (`agent/graph.py`) threading a single
+`TutorState` TypedDict (`agent/state.py`): a router classifies the message into one
+of four intents and dispatches to a node, each writing only its own output key. The
+**deployed product does not route through the graph** — each API endpoint (`/ask`,
+`/exercise`, `/grade`, `/quiz`, `/reexplain`) calls the matching node/function
+directly (via `api/runtime.py`), which is simpler and gives the UI explicit
+actions. The graph is kept as a tested reference that exercises the same nodes and
+the router, demonstrating the agentic routing/state pattern end to end.
 
 ```
             +-- explain    RAG -> grounded, sourced explanation
@@ -374,7 +378,7 @@ The relational layer uses SQLAlchemy 2.0 declarative models (`db/models.py`):
 
 The engine is created lazily from `Settings.database_url` (`db/session.py`), so
 swapping SQLite for PostgreSQL is just a URL change — see
-[POSTGRES.md](POSTGRES.md). Schema migrations are managed by Alembic
+[OPERATIONS.md](OPERATIONS.md). Schema migrations are managed by Alembic
 (`alembic/`), which resolves the same URL at runtime and diffs against the
 declarative `Base`.
 
@@ -393,15 +397,15 @@ The same switch enables a **fully-local, zero-cost** run: `LLM_PROVIDER=ollama`
 reranker, and Qdrant are already local, so the whole pipeline then runs offline
 and free — see [RUN-LOCAL.md](RUN-LOCAL.md). For serving, the API ships as a **CPU-only
 Docker image** that installs a CPU-only `torch` to avoid multi-gigabyte CUDA
-wheels; build and run details are in [DEPLOY-API.md](DEPLOY-API.md), and a
-free-tier hosted path in [DEPLOY.md](DEPLOY.md).
+wheels; the image, its env-var reference, and the free-tier hosted path are all in
+[DEPLOY.md](DEPLOY.md).
 
 The factory also composes two opt-in, zero-cost-when-disabled cross-cutting
 concerns:
 
 - **LangFuse tracing + latency instrumentation** (`core/obs.py`): tracing
   activates only when LangFuse credentials are present (the package is imported
-  lazily), staying zero-cost when off — see [OBSERVABILITY.md](OBSERVABILITY.md).
+  lazily), staying zero-cost when off — see [OPERATIONS.md](OPERATIONS.md).
   The same module owns a lightweight per-stage timer (`timer`, `record_sample`,
   `latency_stats`) that feeds the retrieval-latency percentiles reported in the
   README; it is what the streaming and answer paths wrap their `retrieval` and
@@ -480,7 +484,7 @@ guard apply transparently when enabled.
 | Course discovery | `core/courses.py` |
 | Grounded answer + citations + streaming | `core/answer.py` |
 | CLI ask | `core/ask.py` |
-| Agent graph + router | `agent/graph.py`, `agent/state.py` |
+| Agent graph + router (agentic reference; not in the request path) | `agent/graph.py`, `agent/state.py` |
 | Agent nodes (explain / generate / grade / reexplain / quiz) | `agent/nodes/*.py` |
 | Node persistence | `agent/persistence.py` |
 | HTTP API | `api/` (`main.py` app + per-domain routers) |
@@ -491,7 +495,7 @@ guard apply transparently when enabled.
 | Relational store | `db/models.py`, `db/session.py`, `alembic/` |
 | LLM factory, settings, cache | `core/config.py` |
 | Tracing (LangFuse) / latency / budget | `core/obs.py`, `core/budget.py` |
-| Deployment guides | `docs/DEPLOY-API.md` (Docker image), `docs/DEPLOY.md` (free-tier), `docs/RUN-LOCAL.md` (Ollama), `docs/OBSERVABILITY.md`, `docs/POSTGRES.md` |
+| Deployment & ops guides | `docs/DEPLOY.md` (cloud + Docker image + env reference + R2), `docs/RUN-LOCAL.md` (Ollama), `docs/OPERATIONS.md` (Postgres + LangFuse) |
 | Faithfulness eval / calibration | `eval/run_eval.py`, `eval/calibrate.py` |
 | Containerization | `docker-compose.yml`, `Dockerfile` |
 | CI | `.github/workflows/ci.yml` |

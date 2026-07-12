@@ -43,5 +43,5 @@ uv run uvicorn api.main:app --reload        # or: make api
 uv run python -m pytest tests/test_api.py tests/test_auth.py -q
 ```
 
-Deploying the CPU-only Docker image: [../docs/DEPLOY-API.md](../docs/DEPLOY-API.md).
+Deploying the CPU-only Docker image (and the full env-var reference): [../docs/DEPLOY.md](../docs/DEPLOY.md).
 </content>

@@ -1,8 +1,10 @@
 # agent/
 
-The online orchestration layer: a LangGraph `StateGraph` that routes a student's message to the right
+The agentic orchestration layer: a LangGraph `StateGraph` that routes a student's message to the right
 node. Nodes own no retrieval logic of their own — they delegate to `core/` so the grounding guarantees
-live in one place.
+live in one place. The deployed API calls these nodes directly through explicit endpoints; the graph
+(`graph.py`) is kept as a tested reference of the routing/state design, not the request path (see
+[../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)).
 
 ## Structure
 
@@ -27,8 +29,8 @@ router --+-- generate   exercise + reference solution (server-side)
          +-- reexplain  level-aware rephrase, keeps memory
 ```
 
-The API layer (`api/`) invokes these nodes; grounding and citation come from `core/`. See
-[../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+The API layer (`api/`) invokes these nodes directly (one explicit endpoint each); grounding and
+citation come from `core/`. See [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 
 ## Test it
 

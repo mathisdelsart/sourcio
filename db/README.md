@@ -29,5 +29,5 @@ make reset-db                                        # wipe the local dev DB aft
 uv run python -m pytest tests/test_db.py tests/test_migrations.py -q
 ```
 
-Switching to PostgreSQL: [../docs/POSTGRES.md](../docs/POSTGRES.md).
+Switching to PostgreSQL: [../docs/OPERATIONS.md](../docs/OPERATIONS.md).
 </content>
