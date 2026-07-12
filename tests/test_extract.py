@@ -13,14 +13,9 @@ import types
 import pytest
 
 from ingestion import extract
-from ingestion.extract import (
-    PageFeatures,
-    _strip_code_fence,
-    has_math_symbols,
-    is_rate_limit_error,
-    needs_vision,
-    with_rate_limit_retry,
-)
+from ingestion.extract import _strip_code_fence
+from ingestion.mathdetect import PageFeatures, has_math_symbols, needs_vision
+from ingestion.retry import is_rate_limit_error, with_rate_limit_retry
 
 
 class _FakeRateLimitError(Exception):
