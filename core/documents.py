@@ -137,7 +137,19 @@ def _safe_join(directory: str, name: str) -> str | None:
 
 
 def _course_dir(course: str) -> str:
-    return os.path.join(UPLOADS_DIR, _slug(course))
+    """Absolute path to a course's upload directory, confined to ``UPLOADS_DIR``.
+
+    ``_slug`` already strips traversal from the course name, but resolving the
+    result and asserting it stays under the uploads root makes every downstream
+    filesystem operation (create/list/rename) provably confined to that root --
+    the ``course`` component is validated against the fixed root, so a crafted
+    name can never escape it (defense in depth, statically verifiable).
+    """
+    base = os.path.abspath(UPLOADS_DIR)
+    path = os.path.abspath(os.path.join(base, _slug(course)))
+    if os.path.commonpath([base, path]) != base:  # pragma: no cover - defensive; _slug contains it
+        raise ValueError("Invalid course name")
+    return path
 
 
 def _r2_key(course: str, filename: str) -> str:

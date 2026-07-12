@@ -1041,6 +1041,15 @@ def test_safe_filename_rejects_traversal_components(value):
     assert documents_mod._safe_filename(value) not in {".", ".."}
 
 
+@pytest.mark.parametrize("course", ["Wavelets", "..", "../../etc", "  ..  ", "."])
+def test_course_dir_stays_inside_uploads_root(course, local_uploads):
+    # The course component is validated against the fixed uploads root, so no
+    # crafted course name can resolve to a sibling/parent directory.
+    root = os.path.abspath(str(local_uploads))
+    resolved = documents_mod._course_dir(course)
+    assert os.path.commonpath([root, resolved]) == root
+
+
 def test_save_upload_traversal_stays_inside_uploads_root(monkeypatch, local_uploads):
     _disable_r2(monkeypatch)
     root = os.path.abspath(str(local_uploads))
