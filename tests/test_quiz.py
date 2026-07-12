@@ -13,7 +13,8 @@ pytest.importorskip("sqlalchemy")
 from sqlalchemy import create_engine, select  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
-from agent.nodes.quiz import generate_quiz, grade_quiz_answer, summarize_quiz  # noqa: E402
+from agent.nodes.quiz import generate_quiz  # noqa: E402
+from agent.nodes.quiz_grade import grade_quiz_answer, summarize_quiz  # noqa: E402
 from db.models import Grade, Quiz, QuizQuestion  # noqa: E402
 from db.session import configure_session_factory, get_session, init_db  # noqa: E402
 
@@ -362,7 +363,8 @@ def test_summarize_quiz_threads_rigor_to_judge(engine, monkeypatch):
         "agent.nodes.grade.get_llm", lambda role="default", api_key=None: _CaptureLLM()
     )
     monkeypatch.setattr(
-        "agent.nodes.quiz.get_llm", lambda role="default", api_key=None: _FakeLLM("Keep going.")
+        "agent.nodes.quiz_grade.get_llm",
+        lambda role="default", api_key=None: _FakeLLM("Keep going."),
     )
 
     summarize_quiz(quiz_id, [{"question_id": q0, "answer": "a0"}], "zoe", "lenient")
@@ -385,7 +387,7 @@ def test_summarize_quiz_averages_and_recommends(engine, monkeypatch):
         lambda role="default", api_key=None: _FakeLLM('{"score": 80, "feedback": "Good."}'),
     )
     monkeypatch.setattr(
-        "agent.nodes.quiz.get_llm",
+        "agent.nodes.quiz_grade.get_llm",
         lambda role="default", api_key=None: _FakeLLM("Revise the group axioms."),
     )
 
@@ -417,7 +419,7 @@ def test_summarize_quiz_skips_unknown_questions(engine, monkeypatch):
         lambda role="default", api_key=None: _FakeLLM('{"score": 60, "feedback": "ok"}'),
     )
     monkeypatch.setattr(
-        "agent.nodes.quiz.get_llm",
+        "agent.nodes.quiz_grade.get_llm",
         lambda role="default", api_key=None: _FakeLLM("Keep practising."),
     )
 
@@ -443,7 +445,7 @@ def test_summarize_quiz_without_graded_questions_has_no_recommendation(engine, m
     def _boom(role="default", api_key=None):
         raise AssertionError("recommendation LLM must not be called")
 
-    monkeypatch.setattr("agent.nodes.quiz.get_llm", _boom)
+    monkeypatch.setattr("agent.nodes.quiz_grade.get_llm", _boom)
 
     summary = summarize_quiz(quiz_id, [{"question_id": 99999, "answer": "x"}], "zoe")
 

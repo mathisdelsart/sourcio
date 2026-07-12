@@ -17,7 +17,8 @@ live in one place. The deployed API calls these nodes directly through explicit 
 | `nodes/generate.py` | Builds an exercise plus a reference solution strictly from retrieved chunks; refuses when nothing is retrieved. The solution is stored server-side, never returned. |
 | `nodes/grade.py` | Judge #1 (product): marks the student's answer against the reference solution, returning a score and feedback. Distinct from the eval faithfulness judge. |
 | `nodes/reexplain.py` | Rephrases the last answer at a chosen level (beginner / intermediate / advanced), reusing history instead of re-retrieving. |
-| `nodes/quiz.py` | `generate_quiz` / `grade_quiz_answer` — a multi-question grounded quiz with server-side solutions, graded by the same product judge as `grade`. |
+| `nodes/quiz.py` | `generate_quiz` — a multi-question grounded quiz with server-side reference solutions. |
+| `nodes/quiz_grade.py` | `grade_quiz_answer` / `summarize_quiz` — mark stored quiz answers with the same product judge as `grade`, plus a study recommendation. |
 
 ## How it fits
 

@@ -18,7 +18,8 @@ from sqlalchemy import Engine
 
 from agent.nodes.generate import generate
 from agent.nodes.grade import grade
-from agent.nodes.quiz import generate_quiz, grade_quiz_answer, summarize_quiz
+from agent.nodes.quiz import generate_quiz
+from agent.nodes.quiz_grade import grade_quiz_answer, summarize_quiz
 from agent.nodes.reexplain import reexplain, stream_reexplain
 from core.answer import answer, stream_answer
 from core.config import get_settings
