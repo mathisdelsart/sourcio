@@ -1,0 +1,14 @@
+name: "grounded-rag CodeQL config"
+
+# Keep the security-and-quality suite (see codeql.yml) but stop scanning code
+# that is not part of the running application:
+#   - alembic/  : auto-generated database migrations. Their revision scaffolding
+#                 trips maintainability queries (unused globals, import style)
+#                 that are noise in generated code, not defects to hand-edit.
+#   - tests/    : test-only code. Findings here (e.g. side-effect-in-assert) do
+#                 not describe a risk in the shipped product.
+# Together these account for the large majority of the low-severity alerts;
+# excluding them keeps the Security tab focused on the application code.
+paths-ignore:
+  - alembic
+  - tests
