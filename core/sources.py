@@ -12,6 +12,7 @@ so the endpoint degrades gracefully before any course has been ingested.
 """
 
 from core.config import get_settings
+from core.qdrant import client_from_settings
 
 
 def get_source(chunk_id: str, owner: str | None = None) -> dict | None:
@@ -39,14 +40,8 @@ def get_source(chunk_id: str, owner: str | None = None) -> dict | None:
     if owner is None:
         return None
 
-    # Imported lazily so importing this module stays cheap and the heavy client
-    # is only loaded when a source is actually requested, matching the codebase
-    # style for optional/heavy dependencies.
-    from qdrant_client import QdrantClient
-
-    settings = get_settings()
-    client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
-    collection = settings.qdrant_collection
+    client = client_from_settings()
+    collection = get_settings().qdrant_collection
 
     try:
         points = client.retrieve(
