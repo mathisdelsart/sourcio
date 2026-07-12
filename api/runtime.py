@@ -83,6 +83,16 @@ def configure_engine(engine: Engine) -> None:
     configure_session_factory(engine)
 
 
+def ensure_engine() -> None:
+    """Bind the default engine (built from settings) if none is configured yet.
+
+    Called once on startup; a no-op after :func:`configure_engine` has run --
+    including when a test has already injected an in-memory engine.
+    """
+    if _engine is None:
+        configure_engine(create_engine_from_settings())
+
+
 # The placeholder secret shipped for local development. It MUST be overridden
 # before enabling ``require_auth`` — otherwise anyone knowing this public default
 # could forge a valid access token.

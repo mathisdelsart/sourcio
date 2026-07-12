@@ -93,8 +93,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_logging(settings.log_level)
     # Refuse to boot a public (auth-required) deployment with a forgeable secret.
     runtime._validate_jwt_secret(settings)
-    if runtime._engine is None:
-        runtime.configure_engine(runtime.create_engine_from_settings())
+    runtime.ensure_engine()
     yield
 
 
