@@ -25,7 +25,7 @@ services:
   # started by the default `docker compose up -d qdrant`; bring it up explicitly
   # with `docker compose --profile postgres up -d postgres`. The development
   # default remains local SQLite (`sqlite:///./app.db`); switch by setting
-  # `DATABASE_URL=postgresql+psycopg://...`. See docs/POSTGRES.md.
+  # `DATABASE_URL=postgresql+psycopg://...`. See docs/OPERATIONS.md.
   postgres:
     profiles: ["postgres"]
     image: postgres:16

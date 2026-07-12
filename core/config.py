@@ -233,7 +233,7 @@ class Settings(BaseSettings):
     # container restart in production (HF Spaces' filesystem is ephemeral); local
     # dev needs none of this. `r2_account_id` also derives the R2 S3-compatible
     # endpoint (`https://<account_id>.r2.cloudflarestorage.com`), so no separate
-    # endpoint setting is needed. See docs/DEPLOY-API.md for the Cloudflare
+    # endpoint setting is needed. See docs/DEPLOY.md for the Cloudflare
     # dashboard setup steps.
     r2_account_id: str = ""
     r2_access_key_id: str = ""

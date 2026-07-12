@@ -43,7 +43,7 @@ migrations = [
 # PostgreSQL backend (optional). The app already speaks SQLAlchemy, so switching
 # is a matter of installing the psycopg 3 driver and pointing `DATABASE_URL` at a
 # `postgresql+psycopg://...` URL. SQLite stays the zero-setup default; this extra
-# is only needed when targeting PostgreSQL. See docs/POSTGRES.md.
+# is only needed when targeting PostgreSQL. See docs/OPERATIONS.md.
 postgres = [
     "psycopg[binary]>=3.1",
 ]

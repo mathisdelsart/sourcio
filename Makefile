@@ -96,7 +96,7 @@ ingest-prod: ## Ingest a PDF into PROD Qdrant Cloud (loads .env.prod; vars: PDF=
 ask: ## Ask a question (var: Q="...")
 	uv run python -m core.ask "$(Q)"
 
-up: ## Start all services (app + qdrant)
+up: ## Start the vector store (Qdrant; the only default compose service)
 	docker compose up -d
 
 down: ## Stop all services

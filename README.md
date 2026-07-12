@@ -71,16 +71,18 @@ ONLINE — answer a question
    -> otherwise -> grounded answer with citations remapped by the code
 ```
 
-A LangGraph router classifies intent (explain / generate exercise / grade / re-explain) and dispatches
-to the matching node. Optional, opt-in retrieval boosters — a cross-encoder reranker, hybrid
-dense + BM25 fusion, multi-query expansion, HyDE, neighbor-chunk expansion — widen recall while the
-refusal guard stays intact. Full module-level walkthrough in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+The product serves explicit endpoints — `/ask`, `/exercise`, `/grade`, `/quiz` — each dispatching to
+its grounded node. The same intent-routing is also implemented agentically as a LangGraph router +
+state graph (`agent/graph.py`), kept as a tested reference of the agentic design. Optional, opt-in
+retrieval boosters — a cross-encoder reranker, hybrid dense + BM25 fusion, multi-query expansion, HyDE,
+neighbor-chunk expansion — widen recall while the refusal guard stays intact. Full module-level
+walkthrough in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## Results
 
 Benchmarked end to end on a real 123-page Master's thesis (a dense deep-RL / MicroRTS work) indexed
 into Qdrant — a 27-question suite (13 factual, 3 math, 6 synthesis, and 5 deliberately out-of-scope)
-run through the offline harness (`eval/`, see [`eval/BENCHMARK.md`](eval/BENCHMARK.md)) and graded by an
+run through the offline harness (`eval/`, see [`eval/README.md`](eval/README.md)) and graded by an
 LLM-as-a-judge. Numbers are honest and labeled, not marketing.
 
 **With OpenAI `gpt-4o-mini`:**
@@ -166,7 +168,7 @@ Each directory has its own README with a local guide to its files.
 | --- | --- |
 | [`ingestion/`](ingestion/README.md) | Offline pipeline: PDF/prose -> extraction -> chunking -> embeddings -> Qdrant |
 | [`core/`](core/README.md) | Retrieval, threshold-based refusal, citation-by-construction, the LLM factory |
-| [`agent/`](agent/README.md) | LangGraph router and the explain / generate / grade / re-explain / quiz nodes |
+| [`agent/`](agent/README.md) | The explain / generate / grade / re-explain / quiz nodes, plus a LangGraph router + state graph (agentic reference) |
 | [`api/`](api/README.md) | FastAPI service: endpoints, auth, middleware, background jobs |
 | [`web/`](web/README.md) | Next.js web app (the primary UI) |
 | [`db/`](db/README.md) | SQLAlchemy models and the engine/session layer |
@@ -180,10 +182,8 @@ Each directory has its own README with a local guide to its files.
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Design choices and a module-level walkthrough of the whole system |
 | [docs/RUN-LOCAL.md](docs/RUN-LOCAL.md) | Run the full stack (Qdrant + API + web) locally and free with Ollama |
-| [docs/DEPLOY.md](docs/DEPLOY.md) | Free-tier live deployment (Vercel + Hugging Face Spaces + Qdrant Cloud + Groq) |
-| [docs/DEPLOY-API.md](docs/DEPLOY-API.md) | The CPU-only Docker image for the API service |
-| [docs/POSTGRES.md](docs/POSTGRES.md) | Switch the relational store to PostgreSQL |
-| [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) | Opt-in LangFuse tracing |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Cloud deployment (Vercel + HF Spaces + Qdrant Cloud + Groq), the API Docker image, env-var reference, and R2 storage |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Optional ops: PostgreSQL backend and LangFuse tracing |
 
 ---
 
