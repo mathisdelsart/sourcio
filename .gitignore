@@ -28,8 +28,8 @@ __pycache__/
 .idea/
 .vscode/
 
-# Local benchmark run outputs (eval/bench_runner.py)
-eval/benchmark/
+# Local live-eval run outputs (eval/live_eval.py)
+eval/live_runs/
 .coverage
 eval/results*.json
 eval/ab_retrieval.json

@@ -14,10 +14,10 @@ in CI (via `tests/`) so a regression fails the build.
 | `ab_retrieval.py` | LLM-free A/B harness comparing retrieval configurations (dense vs hybrid) on Recall@k / MRR / NDCG. |
 | `benchmark.py` | **Offline** provider benchmark: extends `run_eval` with extra metrics (citation rate, answer-keyword, latency) over `thesis_benchmark.jsonl`, run once per LLM provider. See [Provider benchmark](#provider-benchmark) below. |
 | `compare_report.py` | Render two `benchmark.py` JSON runs into a side-by-side Markdown table. |
-| `bench_runner.py` | **Live** end-to-end runner: drives the running HTTP API (`/ask`, `/exercise`, `/quiz`) over `benchmark_cases.json` with an external LLM reviewer. A manual smoke tool, not run in CI. |
+| `live_eval.py` | **Live** end-to-end runner: drives the running HTTP API (`/ask`, `/exercise`, `/quiz`) over `live_eval_cases.json` with an external LLM reviewer, writing each run under `eval/live_runs/`. A manual smoke tool, not run in CI. |
 | `dataset.jsonl` | Reference questions for the faithfulness eval (`run_eval`, `calibrate`, `ab_retrieval`). |
 | `thesis_benchmark.jsonl` | The 27-case provider benchmark set for `benchmark.py`. |
-| `benchmark_cases.json` | Cases for the live `bench_runner.py`. |
+| `live_eval_cases.json` | Cases for the live `live_eval.py`. |
 
 ## How it fits
 

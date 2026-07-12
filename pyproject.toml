@@ -73,7 +73,7 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pre-commit>=4.0",
-    # HTTP client used by the FastAPI TestClient in tests and eval/bench_runner.py.
+    # HTTP client used by the FastAPI TestClient in tests and eval/live_eval.py.
     "httpx>=0.28",
 ]
 
@@ -102,7 +102,7 @@ omit = [
     "web/*",
     # Operational QA CLI: drives a LIVE API and an external reviewer model, so it
     # is exercised against a running server, not in unit tests.
-    "eval/bench_runner.py",
+    "eval/live_eval.py",
 ]
 
 [tool.coverage.report]

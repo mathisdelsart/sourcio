@@ -1,6 +1,6 @@
 {
   "_README": [
-    "Seed test set for eval/bench_runner.py — the manual UI benchmark, as API cases.",
+    "Seed test set for eval/live_eval.py — the manual UI benchmark, as API cases.",
     "Edit `course` / `chapter` to match your INDEXED names exactly (check GET /courses",
     "and GET /chapters?course=...). `chapter: null` means 'All chapters'; `course: null`",
     "means 'All courses'. `expect` is one of: answer | refuse | generate | behavior.",
