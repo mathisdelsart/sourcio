@@ -33,15 +33,11 @@ from typing import Any
 from core import storage
 from core.config import get_settings
 from core.errors import describe_capacity_error
+from core.qdrant import client_from_settings, iter_point_payloads
 from ingestion.chunk import chunk_pages
 from ingestion.index import index_chunks
 from ingestion.load import is_text_file, load_text_file
 from ingestion.schema import Page
-
-# Cap on how many points to scan when building the inventory, so an unexpectedly
-# large collection can never make the enumeration unbounded.
-_SCROLL_PAGE = 256
-_SCROLL_MAX_POINTS = 100_000
 
 # Where uploaded originals are kept so a user can re-open the intact file later.
 # Overridable for tests/deploys; gitignored.
@@ -264,14 +260,6 @@ def list_course_files(course: str) -> list[str]:
     return names
 
 
-def _client():
-    """Build a Qdrant client from settings (same construction as retrieval)."""
-    from qdrant_client import QdrantClient
-
-    settings = get_settings()
-    return QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
-
-
 def _format_inventory(index: dict[str, dict[Any, set[int]]]) -> list[dict[str, Any]]:
     """Render the collected ``course -> chapter -> pages`` map as the API shape.
 
@@ -315,42 +303,23 @@ def list_documents(owner: str | None = None) -> list[dict[str, Any]]:
 
     from core.retrieval import owner_scope_filter
 
-    settings = get_settings()
-    client = _client()
-    collection = settings.qdrant_collection
+    client = client_from_settings()
+    collection = get_settings().qdrant_collection
     scroll_filter = owner_scope_filter(owner)
 
-    # course -> chapter (str | None) -> set of distinct page numbers.
+    # course -> chapter (str | None) -> set of distinct page numbers. Any
+    # scroll/collection error ends the scan quietly (see iter_point_payloads),
+    # degrading to "nothing indexed" rather than failing the request.
     index: dict[str, dict[Any, set[int]]] = {}
-    offset = None
-    scanned = 0
-    try:
-        while scanned < _SCROLL_MAX_POINTS:
-            points, offset = client.scroll(
-                collection_name=collection,
-                scroll_filter=scroll_filter,
-                limit=_SCROLL_PAGE,
-                with_payload=True,
-                with_vectors=False,
-                offset=offset,
-            )
-            for point in points:
-                payload = point.payload or {}
-                course = payload.get("course")
-                if course is None:
-                    continue
-                chapter = payload.get("chapter")
-                pages = index.setdefault(str(course), {}).setdefault(chapter, set())
-                page = payload.get("page")
-                if page is not None:
-                    pages.add(int(page))
-            scanned += len(points)
-            if offset is None or not points:
-                break
-    except Exception:
-        # Treat any scroll/collection error as "nothing indexed" rather than
-        # failing the request, matching core.courses' graceful degradation.
-        pass
+    for payload in iter_point_payloads(client, collection, scroll_filter):
+        course = payload.get("course")
+        if course is None:
+            continue
+        chapter = payload.get("chapter")
+        pages = index.setdefault(str(course), {}).setdefault(chapter, set())
+        page = payload.get("page")
+        if page is not None:
+            pages.add(int(page))
     result = _format_inventory(index)
     # Attach the stored original files (if any) so the UI can offer "view".
     for course in result:
@@ -370,7 +339,6 @@ def _indexed_pages(course: str, document: str | None = None, owner: str | None =
     (their pages have a distinct owner). Any error degrades to an empty set
     (nothing skipped) rather than failing the ingest.
     """
-    settings = get_settings()
     from qdrant_client.models import FieldCondition, Filter, MatchValue
 
     conditions: list[Any] = [FieldCondition(key="course", match=MatchValue(value=course))]
@@ -378,30 +346,17 @@ def _indexed_pages(course: str, document: str | None = None, owner: str | None =
         conditions.append(FieldCondition(key="document", match=MatchValue(value=document)))
     if owner is not None:
         conditions.append(FieldCondition(key="owner", match=MatchValue(value=owner)))
+    course_filter = Filter(must=conditions)
     pages: set[int] = set()
-    offset = None
-    scanned = 0
-    try:
-        client = _client()
-        course_filter = Filter(must=conditions)
-        while scanned < _SCROLL_MAX_POINTS:
-            points, offset = client.scroll(
-                collection_name=settings.qdrant_collection,
-                scroll_filter=course_filter,
-                limit=_SCROLL_PAGE,
-                with_payload=["page"],
-                with_vectors=False,
-                offset=offset,
-            )
-            for point in points:
-                page = (point.payload or {}).get("page")
-                if page is not None:
-                    pages.add(int(page))
-            scanned += len(points)
-            if offset is None or not points:
-                break
-    except Exception:
-        return set()
+    for payload in iter_point_payloads(
+        client_from_settings(),
+        get_settings().qdrant_collection,
+        course_filter,
+        with_payload=["page"],
+    ):
+        page = payload.get("page")
+        if page is not None:
+            pages.add(int(page))
     return pages
 
 
@@ -702,7 +657,7 @@ def delete_documents(course: str, chapter: str | None = None, owner: str | None 
     from core.retrieval import owner_scope_filter
 
     settings = get_settings()
-    client = _client()
+    client = client_from_settings()
     collection = settings.qdrant_collection
 
     conditions: list[Any] = [FieldCondition(key="course", match=MatchValue(value=course))]
@@ -748,7 +703,7 @@ def _set_payload_scoped(
     from core.retrieval import owner_scope_filter
 
     settings = get_settings()
-    client = _client()
+    client = client_from_settings()
     collection = settings.qdrant_collection
 
     conditions: list[Any] = [FieldCondition(key="course", match=MatchValue(value=course))]

@@ -127,7 +127,7 @@ def _patch_retrieval_env(monkeypatch):
     _FakeQdrantClient.by_query = {}
     # The dummy "embedding" is just the embedded text, so the fake can route.
     monkeypatch.setattr(retrieval, "embed_query", lambda text: text)
-    monkeypatch.setattr(retrieval, "QdrantClient", _FakeQdrantClient)
+    monkeypatch.setattr("qdrant_client.QdrantClient", _FakeQdrantClient)
 
 
 def test_retrieve_hyde_embeds_the_hypothetical_passage(monkeypatch):

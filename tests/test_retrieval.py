@@ -55,7 +55,7 @@ def _no_model_no_network(monkeypatch):
         lambda text: retrieval.SparseVector(indices=[1, 2], values=[0.5, 0.7]),
     )
     # Never reach a real Qdrant server.
-    monkeypatch.setattr(retrieval, "QdrantClient", _FakeQdrantClient)
+    monkeypatch.setattr("qdrant_client.QdrantClient", _FakeQdrantClient)
 
 
 def _set_settings(monkeypatch, **overrides):
@@ -460,7 +460,7 @@ class _OwnerAwareClient:
 
 def test_owner_scoping_semantics_is_strict(monkeypatch):
     _set_settings(monkeypatch)
-    monkeypatch.setattr(retrieval, "QdrantClient", _OwnerAwareClient)
+    monkeypatch.setattr("qdrant_client.QdrantClient", _OwnerAwareClient)
 
     # Strict: only my own points -- never uB's, never the owner-less legacy chunk.
     mine = {r.chunk.id for r in retrieval.retrieve("q", owner="uA")}

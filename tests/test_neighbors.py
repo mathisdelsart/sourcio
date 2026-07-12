@@ -71,7 +71,7 @@ def _no_model_no_network(monkeypatch):
     _FakeQdrantClient.scroll_raises = False
     _FakeQdrantClient.has_sparse = False
     monkeypatch.setattr(retrieval, "embed_query", lambda text: [0.1, 0.2, 0.3])
-    monkeypatch.setattr(retrieval, "QdrantClient", _FakeQdrantClient)
+    monkeypatch.setattr("qdrant_client.QdrantClient", _FakeQdrantClient)
 
 
 def _set_settings(monkeypatch, **overrides):

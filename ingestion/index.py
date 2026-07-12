@@ -16,6 +16,7 @@ import logging
 from qdrant_client import QdrantClient, models
 
 from core.config import get_settings
+from core.qdrant import client_from_settings
 from ingestion.embed import embed_sparse_texts, embed_texts, embedding_dim
 from ingestion.schema import Chunk
 
@@ -28,8 +29,7 @@ DENSE_VECTOR_NAME = "dense"
 
 
 def _client() -> QdrantClient:
-    settings = get_settings()
-    return QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
+    return client_from_settings()
 
 
 def _ensure_collection(client: QdrantClient, name: str, *, sparse: bool) -> None:

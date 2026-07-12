@@ -157,7 +157,7 @@ def _patch_retrieval_env(monkeypatch):
     _FakeQdrantClient.by_query = {}
     # The dummy "embedding" is just the query text, so the fake client can route.
     monkeypatch.setattr(retrieval, "embed_query", lambda text: text)
-    monkeypatch.setattr(retrieval, "QdrantClient", _FakeQdrantClient)
+    monkeypatch.setattr("qdrant_client.QdrantClient", _FakeQdrantClient)
 
 
 def test_retrieve_multi_fuses_and_dedups_across_subqueries(monkeypatch):
