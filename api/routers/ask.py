@@ -6,6 +6,7 @@ resolved through ``api.main`` at call time so tests can swap them in place.
 """
 
 import json
+import logging
 import threading
 from collections.abc import Iterator
 from typing import Any
@@ -24,9 +25,11 @@ from api.deps import (
     require_api_key,
 )
 from api.schemas import AskRequest, AskResponse
-from core.errors import describe_capacity_error, raise_friendly_llm_error
+from core.errors import friendly_llm_error_message, raise_friendly_llm_error
 from core.jobs import create_answer_job, get_answer_job, update_job
 from db.session import add_message, get_session
+
+logger = logging.getLogger("api")
 
 router = APIRouter()
 
@@ -131,7 +134,8 @@ def _stream_ask_events(
             else:
                 yield f"data: {json.dumps(event)}\n\n"
     except Exception as exc:
-        message = describe_capacity_error(exc, used_own_key=bool(openai_key)) or str(exc)
+        logger.exception("Error while streaming /ask/stream")
+        message = friendly_llm_error_message(exc, used_own_key=bool(openai_key))
         yield f"data: {json.dumps({'type': 'error', 'message': message})}\n\n"
         return
 
@@ -256,7 +260,8 @@ def _run_answer_job(
             },
         )
     except Exception as exc:  # pragma: no cover - defensive; answer guards itself
-        message = describe_capacity_error(exc, used_own_key=bool(openai_key)) or str(exc)
+        logger.exception("Error while running /ask/async job")
+        message = friendly_llm_error_message(exc, used_own_key=bool(openai_key))
         update_job(job_id, {"status": "error", "message": message})
 
 

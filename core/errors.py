@@ -27,6 +27,11 @@ OWN_KEY_CAPACITY_MESSAGE = (
     "moment and try again, or check your account's usage limits."
 )
 
+# Client-safe fallback for a non-capacity error, mirroring the global 500 handler.
+# Never carries the raw exception text, so an unexpected error cannot leak a stack
+# trace or internal detail through a streamed ``error`` event.
+GENERIC_ERROR_MESSAGE = "An internal error occurred. Please retry later."
+
 
 def describe_capacity_error(exc: Exception, *, used_own_key: bool) -> str | None:
     """Return a friendly message when `exc` is a provider capacity error, else None.
@@ -38,6 +43,18 @@ def describe_capacity_error(exc: Exception, *, used_own_key: bool) -> str | None
     if getattr(exc, "status_code", None) not in _CAPACITY_STATUS_CODES:
         return None
     return OWN_KEY_CAPACITY_MESSAGE if used_own_key else FREE_TIER_CAPACITY_MESSAGE
+
+
+def friendly_llm_error_message(exc: Exception, *, used_own_key: bool) -> str:
+    """Client-safe message for a streamed ``error`` event.
+
+    Returns the actionable capacity message when ``exc`` is a provider capacity
+    error, otherwise a generic message that never exposes the raw exception text.
+    A streaming response cannot raise an ``HTTPException`` once the body has begun,
+    so SSE handlers emit this instead of ``str(exc)`` (and log the real error
+    server-side).
+    """
+    return describe_capacity_error(exc, used_own_key=used_own_key) or GENERIC_ERROR_MESSAGE
 
 
 def raise_friendly_llm_error(exc: Exception, *, used_own_key: bool) -> None:

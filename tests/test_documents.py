@@ -9,6 +9,7 @@ delete filter, and graceful handling of an empty/missing collection are all
 exercised in isolation.
 """
 
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -1025,6 +1026,32 @@ def test_stored_file_path_local_lookup_and_traversal_guard(monkeypatch, local_up
     # A traversal attempt is sanitized by `_safe_filename` before resolution, so
     # it never escapes the course directory.
     assert documents_mod.stored_file_path("Wavelets", "../../etc/passwd") is None
+
+
+@pytest.mark.parametrize("value", [".", "..", "../..", "  ..  ", "/", "///"])
+def test_slug_rejects_traversal_components(value):
+    # Dots survive the character filter, so a course named `.`/`..` must never
+    # yield a path-traversal component; it falls back to the default like empty.
+    assert documents_mod._slug(value) not in {".", ".."}
+    assert documents_mod._slug("..") == "course"
+
+
+@pytest.mark.parametrize("value", [".", "..", "../secret", "..\t"])
+def test_safe_filename_rejects_traversal_components(value):
+    assert documents_mod._safe_filename(value) not in {".", ".."}
+
+
+def test_save_upload_traversal_stays_inside_uploads_root(monkeypatch, local_uploads):
+    _disable_r2(monkeypatch)
+    root = os.path.abspath(str(local_uploads))
+
+    # A course named `..` and a path-like filename must both resolve to a file
+    # strictly under the uploads root -- never a sibling/parent directory.
+    path = documents_mod.save_upload(b"payload", "..", "../../evil.pdf")
+
+    resolved = os.path.abspath(path)
+    assert os.path.commonpath([root, resolved]) == root
+    assert os.path.isfile(resolved)
 
 
 def test_read_stored_file_local_only_when_r2_not_configured(monkeypatch, local_uploads):

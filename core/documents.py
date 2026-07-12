@@ -99,16 +99,40 @@ def _is_pdf_file(path: str) -> bool:
 
 
 def _slug(value: str) -> str:
-    """Filesystem-safe slug for a course directory name."""
+    """Filesystem-safe slug for a course directory name.
+
+    Dots survive the character filter, so a course named ``.`` or ``..`` would
+    otherwise become a path-traversal component that escapes ``UPLOADS_DIR`` once
+    joined. Those are rejected to the default, exactly like an empty slug.
+    """
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip("-")
-    return cleaned or "course"
+    if cleaned in {"", ".", ".."}:
+        return "course"
+    return cleaned
 
 
 def _safe_filename(name: str) -> str:
     """Keep only the basename and strip anything path-like, to prevent traversal."""
     base = os.path.basename(name).strip()
     base = re.sub(r"[^A-Za-z0-9._ -]+", "_", base)
-    return base or "document"
+    if base in {"", ".", ".."}:
+        return "document"
+    return base
+
+
+def _safe_join(directory: str, name: str) -> str | None:
+    """Join a sanitized ``name`` onto ``directory``, only if it stays inside.
+
+    Defense in depth on top of :func:`_safe_filename`: both sides are resolved to
+    absolute paths and the result must remain under ``directory``, so no crafted
+    name can ever read or write outside the course's upload folder. Returns
+    ``None`` when the resolved path would escape.
+    """
+    directory = os.path.abspath(directory)
+    path = os.path.abspath(os.path.join(directory, _safe_filename(name)))
+    if os.path.commonpath([directory, path]) != directory:
+        return None
+    return path
 
 
 def _course_dir(course: str) -> str:
@@ -147,8 +171,10 @@ def save_upload(data: bytes, course: str, filename: str) -> str:
     failing the upload/ingest request, which has already succeeded locally.
     """
     directory = _course_dir(course)
+    path = _safe_join(directory, filename)
+    if path is None:  # pragma: no cover - defensive; _safe_filename already contains it
+        raise ValueError("Invalid upload filename")
     os.makedirs(directory, exist_ok=True)
-    path = os.path.join(directory, _safe_filename(filename))
     with open(path, "wb") as handle:
         handle.write(data)
     if storage.configured():
@@ -166,9 +192,8 @@ def stored_file_path(course: str, name: str) -> str | None:
     Guards against path traversal: the resolved path must stay inside the
     course's upload directory.
     """
-    directory = os.path.abspath(_course_dir(course))
-    path = os.path.abspath(os.path.join(directory, _safe_filename(name)))
-    if os.path.commonpath([directory, path]) != directory:
+    path = _safe_join(_course_dir(course), name)
+    if path is None:
         return None
     return path if os.path.isfile(path) else None
 

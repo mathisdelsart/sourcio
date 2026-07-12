@@ -1,6 +1,7 @@
 """Re-explanation routes: rephrase the last tutor answer, plain or streamed."""
 
 import json
+import logging
 from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends
@@ -12,9 +13,11 @@ from agent.state import TutorState, to_history
 from api.auth import UserOut
 from api.deps import DataUser, OpenAIKey, _student_for_read, require_api_key
 from api.schemas import ReexplainRequest, ReexplainResponse
-from core.errors import describe_capacity_error, raise_friendly_llm_error
+from core.errors import friendly_llm_error_message, raise_friendly_llm_error
 from db.models import Student
 from db.session import add_message, get_session, recent_messages
+
+logger = logging.getLogger("api")
 
 router = APIRouter()
 
@@ -118,7 +121,8 @@ def _stream_reexplain_events(
                 final_answer = event.get("answer", "")
             yield f"data: {json.dumps(event)}\n\n"
     except Exception as exc:
-        message = describe_capacity_error(exc, used_own_key=bool(openai_key)) or str(exc)
+        logger.exception("Error while streaming /reexplain/stream")
+        message = friendly_llm_error_message(exc, used_own_key=bool(openai_key))
         yield f"data: {json.dumps({'type': 'error', 'message': message})}\n\n"
         return
 
