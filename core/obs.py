@@ -202,8 +202,8 @@ def latency_stats(samples: Iterable[LatencySample]) -> list[StageStats]:
 def stats_to_dict(stats: Iterable[StageStats]) -> dict[str, dict[str, float]]:
     """Return a JSON-serializable ``{stage: {count, mean_ms, p50_ms, p95_ms}}`` map.
 
-    Pure helper so the result round-trips through :func:`load_latency_file` and
-    feeds the metrics dashboard.
+    Pure helper so the result is JSON-serializable and feeds the metrics
+    dashboard (via :func:`write_latency`).
     """
     return {
         s.stage: {
@@ -231,22 +231,3 @@ def write_latency(
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return payload
-
-
-def load_latency_file(path: str | Path = DEFAULT_LATENCY_PATH) -> dict[str, dict[str, float]]:
-    """Load per-stage latency stats from a JSON file.
-
-    Returns an empty dict when the file is missing, unreadable or not a JSON
-    object, so the dashboard can degrade gracefully to a "no samples yet" state
-    instead of crashing.
-    """
-    file_path = Path(path)
-    try:
-        raw = file_path.read_text(encoding="utf-8")
-    except OSError:
-        return {}
-    try:
-        obj = json.loads(raw)
-    except (json.JSONDecodeError, ValueError):
-        return {}
-    return obj if isinstance(obj, dict) else {}

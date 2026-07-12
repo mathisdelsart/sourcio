@@ -144,17 +144,23 @@ def rerank(
     return rescored[:k]
 
 
-def _point_to_retrieved(point) -> Retrieved:
-    """Map a Qdrant point to a :class:`Retrieved` with citation metadata."""
-    payload = point.payload or {}
+def _to_retrieved(item, score: float) -> Retrieved:
+    """Map a Qdrant point/record to a :class:`Retrieved` with citation metadata.
+
+    ``item`` is either a search point (carries ``.score``) or a scroll record
+    (no score). The caller supplies ``score``: the point's similarity for a
+    ranked hit, or ``0.0`` for a neighbor pulled as surrounding context (never a
+    ranked match, so it sorts after the real hits).
+    """
+    payload = item.payload or {}
     chunk = Chunk(
-        id=str(point.id),
+        id=str(item.id),
         course=payload["course"],
         page=payload["page"],
         text=payload["text"],
         chapter=payload.get("chapter"),
     )
-    return Retrieved(chunk=chunk, score=point.score)
+    return Retrieved(chunk=chunk, score=score)
 
 
 def _collection_has_sparse(client: QdrantClient, collection: str, sparse_name: str) -> bool:
@@ -307,25 +313,7 @@ def _fetch_candidates(
             query_filter=query_filter,
             using=DENSE_VECTOR_NAME if has_sparse else None,
         )
-    return [_point_to_retrieved(point) for point in points]
-
-
-def _record_to_retrieved(record) -> Retrieved:
-    """Map a Qdrant scroll record (no score) to a context :class:`Retrieved`.
-
-    Neighbors come from a payload-only ``scroll`` that carries no similarity
-    score, so the score is set to 0.0: they are surrounding context, never
-    ranked matches, and downstream consumers keep them after the real hits.
-    """
-    payload = record.payload or {}
-    chunk = Chunk(
-        id=str(record.id),
-        course=payload["course"],
-        page=payload["page"],
-        text=payload["text"],
-        chapter=payload.get("chapter"),
-    )
-    return Retrieved(chunk=chunk, score=0.0)
+    return [_to_retrieved(point, point.score) for point in points]
 
 
 def _neighbor_filter(result: Retrieved, window: int, owner: str | None = None) -> Filter:
@@ -375,7 +363,7 @@ def _fetch_neighbors(
         with_payload=True,
         with_vectors=False,
     )
-    return [_record_to_retrieved(record) for record in records]
+    return [_to_retrieved(record, 0.0) for record in records]
 
 
 def _expand_with_neighbors(

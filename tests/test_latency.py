@@ -17,7 +17,6 @@ from core.obs import (
     StageStats,
     latency_enabled,
     latency_stats,
-    load_latency_file,
     percentile,
     record_sample,
     reset_samples,
@@ -183,7 +182,7 @@ def test_write_and_load_latency_round_trip(tmp_path):
     ]
     path = tmp_path / "latency.json"
     written = write_latency(samples, path)
-    loaded = load_latency_file(path)
+    loaded = json.loads(path.read_text(encoding="utf-8"))
     assert loaded == written
     assert loaded["llm"]["p50_ms"] == 100.0
 
@@ -193,19 +192,3 @@ def test_write_latency_creates_parent_directories(tmp_path):
     write_latency([LatencySample("judge", 1.0)], path)
     assert path.exists()
     assert json.loads(path.read_text(encoding="utf-8"))["judge"]["count"] == 1
-
-
-def test_load_latency_file_missing_returns_empty(tmp_path):
-    assert load_latency_file(tmp_path / "nope.json") == {}
-
-
-def test_load_latency_file_invalid_json_returns_empty(tmp_path):
-    path = tmp_path / "broken.json"
-    path.write_text("{not json", encoding="utf-8")
-    assert load_latency_file(path) == {}
-
-
-def test_load_latency_file_non_object_returns_empty(tmp_path):
-    path = tmp_path / "list.json"
-    path.write_text("[1, 2, 3]", encoding="utf-8")
-    assert load_latency_file(path) == {}
