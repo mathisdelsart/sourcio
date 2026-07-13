@@ -5,12 +5,12 @@
 **An AI tutor that answers only from your own courses — always cited, never invented.**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/mathisdelsart/sourcio/ci.yml?branch=main&label=CI&logo=github)](https://github.com/mathisdelsart/sourcio/actions/workflows/ci.yml)
-![Coverage](https://img.shields.io/badge/coverage-94%25-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.12+-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
 ![Next.js](https://img.shields.io/badge/web-Next.js-000000?logo=nextdotjs&logoColor=white)
 ![Qdrant](https://img.shields.io/badge/vectors-Qdrant-DC244C)
-![Tests](https://img.shields.io/badge/tests-841-blue)
+![Tests](https://img.shields.io/badge/tests-879-blue)
 
 </div>
 
@@ -112,7 +112,7 @@ so its run used a reduced retrieval context — fine for a demo, but the OpenAI 
 Retrieval boosters, measured separately on a slide deck: a cross-encoder reranker lifted hit-rate
 **73% -> 82%**; opt-in hybrid dense + BM25 (RRF) added **+9 pts** hit-rate and +6.6 NDCG@5.
 
-> **CI:** 852 tests, green — ruff + pytest + pyright + a coverage gate (>=84%) on every PR.
+> **CI:** 879 tests, green — ruff + pytest + pyright + a coverage gate (>=84%) on every PR.
 
 ## Tech stack
 
