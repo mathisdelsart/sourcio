@@ -10,7 +10,7 @@
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
 ![Next.js](https://img.shields.io/badge/web-Next.js-000000?logo=nextdotjs&logoColor=white)
 ![Qdrant](https://img.shields.io/badge/vectors-Qdrant-DC244C)
-![Tests](https://img.shields.io/badge/tests-879-blue)
+![Tests](https://img.shields.io/badge/tests-853-blue)
 
 </div>
 
@@ -30,7 +30,7 @@ pipeline is document-agnostic.
 | A generic chatbot… | Sourcio instead… |
 | --- | --- |
 | Loses your documents between conversations | Keeps a **persistent, indexed knowledge base** (Qdrant) — courses indexed once |
-| Drifts to methods and content outside your syllabus | Stays **strictly grounded** in your material behind a calibrated similarity threshold |
+| Drifts to methods and content outside your syllabus | Stays **strictly grounded**: retrieval only ever returns your material, and the model is shown nothing else |
 | Gives answers you cannot verify | Attaches a **citation** (course / chapter / page) to every claim |
 | Can hallucinate with confidence | **Refuses** when the course does not cover the question, instead of inventing |
 
@@ -66,7 +66,10 @@ OFFLINE — ingest once per course
 ONLINE — answer a question
   question
    -> embed + retrieve top-k from Qdrant, with a similarity threshold
-   -> if nothing clears the threshold -> refuse ("not covered in the course")
+   -> guard 1: nothing clears the threshold -> refuse, without calling the model
+   -> guard 2: the model sees ONLY those chunks, and refuses if they do not
+               cover the question (the floor is coarse; this is what catches
+               a question that is merely *adjacent* to the course)
    -> otherwise -> grounded answer with citations remapped by the code
 ```
 
@@ -79,39 +82,40 @@ walkthrough in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## Results
 
-Benchmarked end to end on a real 123-page Master's thesis (a dense deep-RL / MicroRTS work) indexed
-into Qdrant — a 27-question suite (13 factual, 3 math, 6 synthesis, and 5 deliberately out-of-scope)
-run through the offline harness (`eval/`, see [`eval/README.md`](eval/README.md)) and graded by an
-LLM-as-a-judge. Numbers are honest and labeled, not marketing.
+Every number below was measured against the **deployed** instance or the indexed corpus, with the
+harness in [`eval/`](eval/README.md), on `gpt-4o-mini`. Nothing here is an estimate, and nothing is
+carried over from an older run.
 
-**With OpenAI `gpt-4o-mini`:**
+**Endpoint benchmark** — 71 cases driven through the live HTTP API (`/ask`, `/exercise`, `/quiz`) the
+way the web app calls it, over six indexed chapters (finance, special relativity):
 
 | Metric | Result |
 | --- | --- |
-| **Refusal accuracy** — answers in-scope questions, refuses all 5 out-of-scope | **100%** |
-| **Faithfulness** — every claim supported by the retrieved sources | **100%** |
-| **Citation rate** — the answer carries a `[n]` source marker | **100%** |
-| **Retrieval hit-rate** — the relevant passage is retrieved | **100%** |
-| Answer-keyword match | 91% |
-| **Retrieval latency** | p50 **89 ms** · p95 **115 ms** |
+| **Citation rate** — every answer carries a `[n]` source marker | **28/28 — 100%** |
+| **Answer-vs-refuse decision** — answered what it should, refused what it should | **67/71 — 94%** |
+| **Cross-account isolation** — a question covered only by *another* account's corpus | **refused** |
+| Calls completed | 71/71, no errors |
 
-**Model comparison** (same suite, same fixed judge):
+**Retrieval** — 50 labelled questions (32 in-course, 18 deliberately out-of-scope), owner-scoped:
 
-| Metric | OpenAI `gpt-4o-mini` | Groq `llama-3.1-8b` (free) |
-| --- | --- | --- |
-| Refusal accuracy | **100%** | 70% |
-| Faithfulness | **100%** | 93% |
-| Citation rate | 100% | 100% |
-| Retrieval hit-rate | 100% | 100% |
+| Metric | Result |
+| --- | --- |
+| **Retrieval hit-rate** — the passage that answers the question is retrieved | **32/32 — 100%** |
+| Query rewriting (multi-query) vs plain dense | **identical** — no gain on this corpus |
 
-Retrieval is model-independent (identical hit-rate and citations either way); the gap is in *understanding*
-a dense technical thesis, where the capable model wins. The free Groq tier is token-limited (~6k tokens/min),
-so its run used a reduced retrieval context — fine for a demo, but the OpenAI numbers are the reference.
+**The refusal guard, honestly.** Calibration (`eval/calibrate.py`) puts in-course questions at
+**0.47–0.71** similarity and out-of-scope ones at **0.31–0.57** — the two **overlap**, so no threshold
+separates them cleanly. The similarity floor is therefore a *coarse* first guard: it stops the
+obviously unrelated, not everything. What catches a question that is merely *adjacent* to the course
+(the Sharpe ratio in a finance course, the Schwarzschild radius in a relativity course) is the second
+guard — the grounded prompt, shown only the retrieved chunks. That is where 23 of the benchmark's
+refusal cases are decided, and it missed one.
 
-Retrieval boosters, measured separately on a slide deck: a cross-encoder reranker lifted hit-rate
-**73% -> 82%**; opt-in hybrid dense + BM25 (RRF) added **+9 pts** hit-rate and +6.6 NDCG@5.
+> Faithfulness (is every claim supported by its cited source?) is measured by `eval/run_eval.py`, which
+> calls an LLM judge. It is not reported here because it has not been re-run against this corpus, and a
+> number you have not measured is not a result.
 
-> **CI:** 879 tests, green — ruff + pytest + pyright + a coverage gate (>=84%) on every PR.
+> **CI:** 853 tests, green — ruff + pytest + pyright + a coverage gate (>=84%) on every PR.
 
 ## Tech stack
 

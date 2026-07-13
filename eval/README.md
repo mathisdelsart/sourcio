@@ -16,6 +16,20 @@ indexed, which is the worst failure mode an eval can have: it still produces
 numbers, they are just meaningless. Everything now targets a corpus that is
 actually there.
 
+## What the harness has actually told us
+
+Two findings worth keeping, both from running it rather than reading it:
+
+- **The similarity floor is coarse, and that is fine.** `calibrate.py --owner <id>` scores in-course
+  questions at 0.47–0.71 and out-of-scope ones at 0.31–0.57. **The classes overlap**, so no threshold
+  separates them; the tool's "recommended" value maximises accuracy by falsely refusing 7 of 32
+  legitimate questions, which is the wrong trade for a tutor. The shipped floor stays deliberately low
+  and the grounded prompt does the fine-grained refusing. Read the report, do not paste its number.
+- **Query rewriting buys nothing here.** Dense retrieval already hits 32/32; `multi_query` matches it
+  exactly, at the price of an extra LLM call per question — and, because it puts a model *inside* the
+  retrieval path, it can make the same question answerable for one visitor and refused for another
+  (fixed in #228, but the setting is still not worth enabling on a corpus like this one).
+
 ## Two benchmarks, two questions
 
 - **`live_eval.py` — does the product work?** Drives the real HTTP API over
