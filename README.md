@@ -16,6 +16,8 @@
   <img src="docs/assets/README-header.png" alt="Sourcio answering a course question with a citation to (Mathematics, Ch. 3, p.21), and refusing an out-of-course question with 'Not in the course material'." width="100%">
 </a>
 
+**[▶ Watch the demo](#demo)** &nbsp;·&nbsp; [Try it live](https://sourcio-tutor.vercel.app) &nbsp;·&nbsp; [Architecture](docs/ARCHITECTURE.md)
+
 </div>
 
 Sourcio indexes your course material once — slides, exercise sets, summaries — into a persistent
@@ -204,6 +206,73 @@ Each directory has its own README with a local guide to its files.
 | [docs/RUN-LOCAL.md](docs/RUN-LOCAL.md) | Run the full stack (Qdrant + API + web) locally and free with Ollama |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | Cloud deployment (Vercel + HF Spaces + Qdrant Cloud + Groq), the API Docker image, env-var reference, and R2 storage |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Optional ops: PostgreSQL backend and LangFuse tracing |
+
+---
+
+## Demo
+
+Five clips, in the order you would actually use the product. Every one is recorded against
+the deployed app, on two real documents — a CV and a 123-page master's thesis — with no
+cuts and no staging.
+
+Each section is collapsed so the page stays light; open the one you care about. Full-quality
+video is attached to the [latest release](https://github.com/mathisdelsart/sourcio/releases/latest).
+
+<details>
+<summary><b>1 · Documents</b> — create an account, import a CV and a 123-page thesis</summary>
+<br>
+
+Upload, background ingestion, and the course appearing with its chapters. The thesis is a
+dense, math-heavy PDF: pages that a plain parser would mangle are routed to a vision model
+and transcribed with their LaTeX intact.
+
+<img src="docs/assets/demo/document.gif" alt="Creating an account and importing two documents, which are ingested in the background and appear as courses with chapters." width="100%">
+</details>
+
+<details>
+<summary><b>2 · Ask</b> — grounded answers, and honest refusals</summary>
+<br>
+
+Questions that the documents cover are answered with a citation to the exact chapter and
+page. Questions they do not cover are refused — including ones that *sound* like they belong,
+which is the case that actually matters. A tutor that only refuses absurd questions has
+proved nothing.
+
+<img src="docs/assets/demo/ask.gif" alt="Asking questions about the indexed documents: in-scope questions are answered with chapter and page citations, out-of-scope questions are refused." width="100%">
+</details>
+
+<details>
+<summary><b>3 · Exercise</b> — generated from the material, then auto-graded</summary>
+<br>
+
+The exercise is built only from retrieved passages, and the reference solution never leaves
+the server. Note that the generator adapts to the material: a technical document yields a
+worked problem, a factual one yields recall questions.
+
+<img src="docs/assets/demo/exercise.gif" alt="Generating a grounded exercise from the indexed material and having a submitted answer graded with feedback." width="100%">
+</details>
+
+<details>
+<summary><b>4 · Quiz</b> — multi-question, with server-side solutions</summary>
+<br>
+
+Same grounding rules, plus format control (multiple choice, N options). Exactly one option is
+correct, and the distractors are checked not to be equivalent restatements of it — a student
+who is right is never marked wrong.
+
+<img src="docs/assets/demo/quiz.gif" alt="Generating a grounded multi-question quiz and grading the answers." width="100%">
+</details>
+
+<details>
+<summary><b>5 · History</b> — the full conversation, and deleting it</summary>
+<br>
+
+Threads, the activity feed, and a delete that actually deletes: removing a course removes its
+chunks from the vector store *and* the stored original from object storage. Nothing is left
+behind.
+
+<img src="docs/assets/demo/history.gif" alt="Browsing the full conversation history and then deleting it." width="100%">
+</details>
 
 ---
 
