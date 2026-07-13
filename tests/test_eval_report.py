@@ -22,7 +22,7 @@ from eval.run_eval import (
 
 # --- dataset still parses and validates after the expansion ---------------
 
-_ALLOWED_FIELDS = {"question", "expect_refusal", "note", "expect_keywords"}
+_ALLOWED_FIELDS = {"question", "expect_refusal", "note", "expect_keywords", "category"}
 
 
 def test_expanded_dataset_every_line_parses_and_validates():
@@ -60,7 +60,7 @@ def test_expanded_dataset_has_no_duplicate_questions():
 
 def test_expanded_dataset_loads_into_eval_cases():
     cases = load_dataset()
-    assert len(cases) >= 50
+    assert len(cases) >= 40
     assert any(c.expect_refusal for c in cases)
     assert any(not c.expect_refusal for c in cases)
 

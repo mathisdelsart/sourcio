@@ -1,4 +1,4 @@
-"""API-driven benchmark runner for Sourcio, with an independent LLM reviewer.
+"""API-driven benchmark runner for Sourcio, with an optional independent reviewer.
 
 Replaces slow, one-at-a-time manual UI testing with a single command that drives
 the real backend (local or deployed) the same way the web app does — hitting
@@ -6,11 +6,21 @@ the real backend (local or deployed) the same way the web app does — hitting
 chapter filter, max sources, prompt) — over a predefined list of cases
 (``eval/live_eval_cases.json``), and writes every result to a timestamped file.
 
-An optional second, *external* model acts as an automated first-pass QA reviewer:
-it reads Sourcio's actual output (answer + cited sources, or the generated
-exercise/quiz, plus any grading) and flags likely issues — unsupported claims,
-citation mismatches, chapter-scope violations, self-contradictory feedback,
-missing scores. It never replaces Sourcio's own generation; it only reviews it.
+Each cited source is hydrated with its full chunk text (via ``/source/{id}``), so a
+result carries the evidence needed to check it, not just a citation label.
+
+An **opt-in** (``--judge``) second, *external* model can act as an automated
+first-pass QA reviewer: it reads Sourcio's actual output (answer + cited sources,
+or the generated exercise/quiz, plus any grading) and flags likely issues. It
+never replaces Sourcio's own generation; it only reviews it.
+
+It is off by default, and that is deliberate. A reviewer is only worth having if it
+is *right*: measured on this suite, ``gpt-4o-mini`` reported missing citations that
+were plainly present in the sources it had been handed, and rejected correct
+algebra as unsupported. Most of its failures were false. A wrong verdict is worse
+than no verdict, because it sends you hunting a bug that does not exist. Enable the
+reviewer only with a strong model, ideally with ``--judge-votes 3``; otherwise read
+the outputs, which now carry their own evidence.
 
 This is a personal debugging tool: it authenticates as *your* account (so it sees
 your indexed courses) and calls the reviewer with *your* key. Nothing is exposed
@@ -25,16 +35,16 @@ Usage
     export SOURCIO_API_KEY=...         # optional: X-API-Key gate, if the deployment is gated
     export SOURCIO_JUDGE_KEY=sk-...    # optional: OpenAI key for the independent reviewer
 
-    # Run everything, review each result, write eval/live_runs/run-<UTC>/{results.json,report.md}
+    # Run everything -> eval/live_runs/run-<UTC>/{results.json,report.md}
+    # No reviewer: you get the real outputs plus the text of every source they cite.
     uv run python -m eval.live_eval
 
-    # A subset (id / mode / course substring), no reviewer, more quiz questions
+    # A subset (id / mode / course substring)
     uv run python -m eval.live_eval --filter Relativity
-    uv run python -m eval.live_eval --mode exercise --no-judge
-    uv run python -m eval.live_eval --filter R-all --judge-model gpt-4o
+    uv run python -m eval.live_eval --mode exercise
 
-    # Steady the reviewer: run it 3x per case and take the majority verdict
-    uv run python -m eval.live_eval --judge-votes 3
+    # Opt in to the reviewer — only with a strong model, ideally best-of-3
+    uv run python -m eval.live_eval --judge --judge-model gpt-4o --judge-votes 3
 
     # Just list the cases (no calls)
     uv run python -m eval.live_eval --list
@@ -143,6 +153,40 @@ class SourcioClient:
             data = {"raw": resp.text}
         return resp.status_code, data
 
+    def hydrate_sources(self, output: dict[str, Any]) -> None:
+        """Attach each cited chunk's *text* to the output, in place.
+
+        The API returns citations as labels only ((Course, Chapter, p.N) plus a
+        chunk id) -- enough for a human, who can open the source, but not for the
+        reviewer, which is handed the JSON and nothing else. Asked to check that a
+        claim is supported, it can only see that *a* source was cited, never what
+        that source says, so a correct, correctly-cited figure gets flagged as
+        unsupported. Fetching the text via /source/{id} is what makes the grounding
+        verdict mean anything.
+
+        A failed fetch is recorded rather than raised: a missing source is itself a
+        finding (a citation pointing at a chunk that no longer exists), and it must
+        not abort the run.
+        """
+        # `sources` is a list of display labels; `citations` carries the chunk ids.
+        for citation in output.get("citations") or []:
+            chunk_id = citation.get("id") if isinstance(citation, dict) else None
+            if not chunk_id:
+                continue
+            try:
+                # /source is owner-scoped like every read: without student_id it 404s.
+                resp = self._client.get(
+                    f"{self.base_url}/source/{chunk_id}",
+                    params={"student_id": self.student_id},
+                    headers=self._headers(),
+                )
+                citation["text"] = resp.json().get("text", "") if resp.status_code == 200 else None
+                if resp.status_code != 200:
+                    citation["fetch_error"] = f"HTTP {resp.status_code}"
+            except Exception as exc:  # noqa: BLE001 - a bad source must not kill the run
+                citation["text"] = None
+                citation["fetch_error"] = type(exc).__name__
+
     def ask(self, case: Case) -> tuple[int, dict[str, Any]]:
         payload = {
             "student_id": self.student_id,
@@ -215,6 +259,9 @@ def run_case(client: SourcioClient, case: Case) -> Result:
             status, output = client.quiz(case)
         else:
             return Result(case, False, None, error=f"unknown mode {case.mode!r}")
+        # Give the reviewer the text behind each citation, not just its label, so a
+        # grounding verdict is a real check rather than a guess.
+        client.hydrate_sources(output)
         return Result(case, 200 <= status < 300, status, output=output)
     except httpx.HTTPError as exc:
         return Result(case, False, None, error=f"{type(exc).__name__}: {exc}")
@@ -244,6 +291,21 @@ JUDGE_SYSTEM = (
     "accurate by construction (the model never types page numbers). Do NOT flag a "
     "page as invented from a [n] marker; only flag a page the answer's PROSE states "
     "that plainly contradicts its cited source label.\n"
+    "SOURCE-TEXT RULE — each citation carries the full `text` of the chunk it points "
+    "at. Check every factual claim, and every number, against that text. A figure that "
+    "appears in the cited text is GROUNDED. A figure that contradicts it, or that has "
+    "no basis in any cited text, is the defect worth reporting.\n"
+    "DERIVATION RULE — a number the answer computes from a formula that IS in the "
+    "cited text is grounded, not unsupported. Applying A = P(1 + rt) to the numbers in "
+    "the question is arithmetic, not invention. Flag it only if the arithmetic is "
+    "WRONG. Recompute it before you object.\n"
+    "SEVERITY RULE — you are looking for defects a user would care about: a wrong or "
+    "unsupported number, a claim no cited source backs, a scope violation, an answer "
+    "where an honest refusal was required (or the reverse), contradictory or missing "
+    "grading. Style is NOT a defect. Do not fail an output for being terse, for not "
+    "restating a formula, for not spelling out its derivation, or for any other "
+    'presentation preference. If the substance is right, it is a "pass" — even if you '
+    "would have phrased it differently.\n"
     "EVIDENCE RULE — reason ONLY about content that literally appears in the given "
     "system_output. Never invent, assume, or hallucinate question numbers, symbols, "
     "formulas, page labels, or wording that is not actually present in "
@@ -502,7 +564,16 @@ def main(argv: list[str] | None = None) -> int:
         metavar="N",
         help="run the reviewer N times per case and take the majority verdict (default 1)",
     )
-    parser.add_argument("--no-judge", action="store_true", help="skip the external reviewer")
+    parser.add_argument(
+        "--judge",
+        action="store_true",
+        help=(
+            "Enable the external reviewer (off by default). Use a STRONG model: a weak "
+            "one invents failures. Measured on this suite, gpt-4o-mini asserted missing "
+            "citations that were present in the very sources it was handed, so most of "
+            "its 'fail' verdicts were false. Pair with --judge-votes 3 to steady it."
+        ),
+    )
     parser.add_argument("--list", action="store_true", help="list selected cases and exit")
     args = parser.parse_args(argv)
 
@@ -530,9 +601,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    judge_key = None if args.no_judge else os.getenv("SOURCIO_JUDGE_KEY")
-    if not args.no_judge and not judge_key:
-        print("No SOURCIO_JUDGE_KEY set — running without the external reviewer.", file=sys.stderr)
+    # The reviewer is opt-in. It used to run by default, which quietly made a weak
+    # model the arbiter of every verdict -- and a wrong verdict is worse than none,
+    # because it sends you hunting a bug that is not there. Off by default, the run
+    # collects the real outputs (with their cited source text) and leaves the
+    # judgement to whoever reads them.
+    judge_key = os.getenv("SOURCIO_JUDGE_KEY") if args.judge else None
+    if args.judge and not judge_key:
+        print(
+            "--judge given but no SOURCIO_JUDGE_KEY set — skipping the reviewer.", file=sys.stderr
+        )
 
     client = SourcioClient(
         args.base_url,

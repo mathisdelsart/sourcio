@@ -18,7 +18,6 @@ prompting.
 | `sources.py` | Fetch a single chunk by id for the "view source" feature. |
 | `jobs.py` | In-process registry of background jobs (document ingestion, streamed answers) so long uploads survive an HTTP request and can be polled. |
 | `storage.py` | Durable object storage (Cloudflare R2) for uploaded originals; falls back to local disk when unset. |
-| `scheduling.py` | The SM-2 spaced-repetition scheduler (LLM-free). |
 | `obs.py` | Opt-in LangFuse callbacks and the per-stage latency timer (zero-cost when off). |
 | `budget.py` | Token-budget callback that raises `BudgetExceeded` at a configured cap. |
 | `errors.py` | Turns opaque provider capacity errors into an actionable message. |

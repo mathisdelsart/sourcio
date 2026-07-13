@@ -357,13 +357,6 @@ export const en = {
   "threadSelect.all": "All history (no thread)",
   "threadSelect.new": "+ New thread",
 
-  // Review panel (spaced repetition)
-  "review.description":
-    "Rate how well you recalled each notion. Your rating reschedules it for the right time.",
-  "review.empty.description":
-    "You're all caught up. Add a notion above to start tracking it.",
-  "review.helper":
-    "Spaced repetition shows each notion just before you would forget it. Rate your recall (Again, Hard, Good, Easy) and it is rescheduled for the optimal time.",
 
   // Export actions
   "export.copy": "Copy as Markdown",

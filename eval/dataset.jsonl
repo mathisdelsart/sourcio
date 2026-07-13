@@ -1,61 +1,50 @@
-{"question": "What is a wavelet transform?", "expect_refusal": false, "note": "Core topic of the indexed slide deck.", "expect_keywords": ["wavelet", "transform"]}
-{"question": "How does a piecewise constant approximation represent a signal?", "expect_refusal": false, "note": "Piecewise constant approximation is covered in the deck.", "expect_keywords": ["piecewise constant", "approximation"]}
-{"question": "What is the approximation space in multiresolution analysis?", "expect_refusal": false, "note": "Approximation spaces are introduced with the nested-subspace construction.", "expect_keywords": ["approximation space", "subspace"]}
-{"question": "What is multi-resolution analysis?", "expect_refusal": false, "note": "Multi-resolution is a central wavelet concept in the deck.", "expect_keywords": ["multiresolution", "resolution"]}
-{"question": "How do scaling functions relate to wavelet functions?", "expect_refusal": false, "note": "Scaling vs wavelet functions are covered.", "expect_keywords": ["scaling function", "wavelet function"]}
-{"question": "What is the scaling function used for in a multiresolution analysis?", "expect_refusal": false, "note": "Scaling function defines the approximation spaces.", "expect_keywords": ["scaling function"]}
-{"question": "How is the fast wavelet transform computed?", "expect_refusal": false, "note": "The fast wavelet transform (filter-bank recursion) is presented.", "expect_keywords": ["fast wavelet transform", "filter"]}
-{"question": "What is the Haar wavelet?", "expect_refusal": false, "note": "Haar is the introductory example of the deck.", "expect_keywords": ["haar"]}
-{"question": "How does the Haar scaling function build a piecewise constant approximation?", "expect_refusal": false, "note": "Haar links scaling functions and piecewise constant approximation.", "expect_keywords": ["haar", "piecewise constant"]}
-{"question": "Why are the approximation subspaces nested in multiresolution analysis?", "expect_refusal": false, "note": "Nested subspaces are an axiom of multiresolution analysis.", "expect_keywords": ["nested", "subspace"]}
-{"question": "What are detail coefficients in the wavelet decomposition?", "expect_refusal": false, "note": "Detail (wavelet) coefficients complement the approximation coefficients.", "expect_keywords": ["detail", "coefficient"]}
-{"question": "What is the capital of Australia?", "expect_refusal": true, "note": "Geography, clearly outside the wavelet course."}
-{"question": "How do I bake a sourdough bread at home?", "expect_refusal": true, "note": "Cooking, unrelated to the course material."}
-{"question": "Who won the football world cup in 2018?", "expect_refusal": true, "note": "Sports trivia, out of scope."}
-{"question": "What is the boiling point of water at sea level?", "expect_refusal": true, "note": "General physics, not in the wavelet deck."}
-{"question": "What were the main causes of the French Revolution?", "expect_refusal": true, "note": "History, clearly outside the wavelet course."}
-{"question": "How do I configure a VPN on my laptop?", "expect_refusal": true, "note": "IT how-to, unrelated to the course material."}
-{"question": "What is the best way to invest in the stock market?", "expect_refusal": true, "note": "Personal finance, out of scope."}
-{"question": "How does the Fourier transform relate to the wavelet transform?", "expect_refusal": false, "note": "Fourier analysis is the classical baseline contrasted with wavelets in the deck.", "expect_keywords": ["fourier", "transform"]}
-{"question": "What is the role of a filter bank in the discrete wavelet transform?", "expect_refusal": false, "note": "Filter banks implement the fast wavelet transform.", "expect_keywords": ["filter bank", "filter"]}
-{"question": "How does downsampling work in the wavelet decomposition?", "expect_refusal": false, "note": "Decimation by two is part of the filter-bank recursion.", "expect_keywords": ["downsampling", "downsample"]}
-{"question": "What is the synthesis step in the inverse wavelet transform?", "expect_refusal": false, "note": "Reconstruction (synthesis) is the inverse of the analysis filter bank.", "expect_keywords": ["synthesis", "reconstruction"]}
-{"question": "What does orthogonality of a wavelet basis imply?", "expect_refusal": false, "note": "Orthogonal wavelet bases are introduced alongside the scaling function.", "expect_keywords": ["orthogonal", "basis"]}
-{"question": "How are approximation and detail coefficients combined to reconstruct a signal?", "expect_refusal": false, "note": "Perfect reconstruction combines approximation and detail coefficients.", "expect_keywords": ["approximation", "detail"]}
-{"question": "What is the dilation equation for the scaling function?", "expect_refusal": false, "note": "The two-scale (dilation) relation defines the scaling function.", "expect_keywords": ["scaling function", "dilation"]}
-{"question": "Why is a wavelet localized in both time and frequency?", "expect_refusal": false, "note": "Time-frequency localization is a defining property of wavelets.", "expect_keywords": ["frequency", "wavelet"]}
-{"question": "What is the continuous wavelet transform?", "expect_refusal": false, "note": "The continuous wavelet transform is contrasted with the discrete one.", "expect_keywords": ["continuous wavelet transform", "transform"]}
-{"question": "How does scale relate to frequency in a wavelet analysis?", "expect_refusal": false, "note": "Scale-frequency correspondence is part of the multiresolution view.", "expect_keywords": ["scale", "frequency"]}
-{"question": "What is a quadrature mirror filter?", "expect_refusal": false, "note": "Quadrature mirror filters underpin the two-channel filter bank.", "expect_keywords": ["filter"]}
-{"question": "How do you train a convolutional neural network for image classification?", "expect_refusal": true, "note": "Deep learning, plausibly adjacent to signal processing but not in the wavelet deck."}
-{"question": "What is the time complexity of the quicksort algorithm?", "expect_refusal": true, "note": "Algorithms / computer science, outside the course."}
-{"question": "How does mitochondrial DNA replication work?", "expect_refusal": true, "note": "Biology, clearly outside the wavelet course."}
-{"question": "What are the assumptions of ordinary least squares regression?", "expect_refusal": true, "note": "Statistics / ML, adjacent but not covered by the wavelet deck."}
-{"question": "How do I deploy a Kubernetes cluster on a cloud provider?", "expect_refusal": true, "note": "DevOps how-to, unrelated to the course material."}
-{"question": "What is the chemical formula of table salt?", "expect_refusal": true, "note": "Chemistry, clearly outside the wavelet course."}
-{"question": "Who painted the Mona Lisa and in which century?", "expect_refusal": true, "note": "Art history, clearly outside the wavelet course."}
-{"question": "What is the two-channel analysis filter bank in the wavelet transform?", "expect_refusal": false, "note": "Two-channel filter banks implement the analysis stage of the DWT.", "expect_keywords": ["filter bank", "analysis"]}
-{"question": "How does perfect reconstruction work in a filter bank?", "expect_refusal": false, "note": "Perfect reconstruction is the design goal of the synthesis filter bank.", "expect_keywords": ["reconstruction", "filter bank"]}
-{"question": "What is the low-pass filter associated with the scaling function?", "expect_refusal": false, "note": "The scaling function corresponds to a low-pass filter in the filter bank.", "expect_keywords": ["low-pass", "scaling function"]}
-{"question": "What is the high-pass filter associated with the wavelet function?", "expect_refusal": false, "note": "The wavelet function corresponds to a high-pass filter in the filter bank.", "expect_keywords": ["high-pass", "wavelet function"]}
-{"question": "How is upsampling used in the synthesis stage of the wavelet transform?", "expect_refusal": false, "note": "Upsampling by two precedes the synthesis filters during reconstruction.", "expect_keywords": ["upsampling", "synthesis"]}
-{"question": "What does the refinement equation tell us about the scaling function?", "expect_refusal": false, "note": "The refinement (two-scale) equation expresses the scaling function recursively.", "expect_keywords": ["refinement", "scaling function"]}
-{"question": "How are the wavelet coefficients obtained at each level of decomposition?", "expect_refusal": false, "note": "Wavelet coefficients come from the high-pass branch at each decomposition level.", "expect_keywords": ["wavelet coefficient", "decomposition"]}
-{"question": "What is the difference between the analysis and synthesis filters?", "expect_refusal": false, "note": "Analysis decomposes the signal while synthesis reconstructs it.", "expect_keywords": ["analysis", "synthesis"]}
-{"question": "Why does the wavelet transform offer better time localization than the Fourier transform?", "expect_refusal": false, "note": "Wavelets trade frequency resolution for time localization, unlike the Fourier basis.", "expect_keywords": ["time", "localization"]}
-{"question": "What is the role of the mother wavelet in the continuous wavelet transform?", "expect_refusal": false, "note": "The mother wavelet is dilated and translated to form the CWT basis.", "expect_keywords": ["mother wavelet", "continuous wavelet transform"]}
-{"question": "How does translation of a wavelet shift it along the signal?", "expect_refusal": false, "note": "Translation moves the wavelet in time to analyze different positions.", "expect_keywords": ["translation", "wavelet"]}
-{"question": "What is the approximation coefficient at the coarsest scale?", "expect_refusal": false, "note": "The coarsest approximation coefficients summarize the low-frequency content.", "expect_keywords": ["approximation", "coefficient"]}
-{"question": "How does a wavelet basis achieve orthonormality?", "expect_refusal": false, "note": "Orthonormal wavelet bases combine orthogonality with unit norm.", "expect_keywords": ["orthonormal", "basis"]}
-{"question": "What is a vanishing moment of a wavelet?", "expect_refusal": false, "note": "Vanishing moments control how many polynomial degrees a wavelet annihilates.", "expect_keywords": ["vanishing moment", "wavelet"]}
-{"question": "How is decimation by two applied after the analysis filters?", "expect_refusal": false, "note": "Decimation by two follows the analysis filters in the fast wavelet transform.", "expect_keywords": ["decimation", "downsampling"]}
-{"question": "What is the recipe for a classic French ratatouille?", "expect_refusal": true, "note": "Cooking, unrelated to the course material."}
-{"question": "How do I change a flat tire on my car?", "expect_refusal": true, "note": "Automotive how-to, outside the course."}
-{"question": "What is the capital city of Japan?", "expect_refusal": true, "note": "Geography, clearly outside the wavelet course."}
-{"question": "Who wrote the novel War and Peace?", "expect_refusal": true, "note": "Literature, clearly outside the wavelet course."}
-{"question": "What is the average distance from the Earth to the Moon?", "expect_refusal": true, "note": "Astronomy, clearly outside the wavelet course."}
-{"question": "How do I write a for loop in JavaScript?", "expect_refusal": true, "note": "General programming how-to, unrelated to the course material."}
-{"question": "What are the symptoms of the common cold?", "expect_refusal": true, "note": "Medicine, clearly outside the wavelet course."}
-{"question": "How does photosynthesis convert light into energy?", "expect_refusal": true, "note": "Biology, clearly outside the wavelet course."}
-{"question": "What is the exchange rate between the euro and the dollar?", "expect_refusal": true, "note": "Finance, out of scope and time-varying."}
-{"question": "Who is the current president of the United States?", "expect_refusal": true, "note": "Current affairs, clearly outside the wavelet course."}
+{"question": "What is the difference between simple and compound interest?", "expect_refusal": false, "category": "factual", "note": "Ch1: linear vs interest-on-interest.", "expect_keywords": ["simple interest", "compound interest"]}
+{"question": "What does $1000 grow to after 30 years at 5% with annual compounding?", "expect_refusal": false, "category": "factual", "note": "Ch1 worked example. Single verifiable number.", "expect_keywords": ["4321.94"]}
+{"question": "What is the Rule of 72 and which constant explains the choice of 72?", "expect_refusal": false, "category": "factual", "note": "Ch1: ln(2) ~ 0.693; 72 chosen for divisibility.", "expect_keywords": ["rule of 72", "0.693"]}
+{"question": "What is the present value formula for a sum received in n years?", "expect_refusal": false, "category": "factual", "note": "Ch2: PV = FV/(1+r)^n.", "expect_keywords": ["present value", "discount"]}
+{"question": "In the mortgage example, what is the monthly payment?", "expect_refusal": false, "category": "factual", "note": "Ch2 worked example.", "expect_keywords": ["1199.10"]}
+{"question": "In the mortgage example, how much of the total paid is interest?", "expect_refusal": false, "category": "factual", "note": "Ch2: interest exceeds the principal.", "expect_keywords": ["231,676", "431,676"]}
+{"question": "How is the expected return of a risky asset defined?", "expect_refusal": false, "category": "factual", "note": "Ch3: probability-weighted sum.", "expect_keywords": ["expected return"]}
+{"question": "How is investment risk measured in this material?", "expect_refusal": false, "category": "factual", "note": "Ch3: variance and standard deviation.", "expect_keywords": ["standard deviation", "variance"]}
+{"question": "What are the two postulates of special relativity?", "expect_refusal": false, "category": "factual", "note": "Rel Ch1.", "expect_keywords": ["postulates"]}
+{"question": "Which experiment showed light does not obey the usual addition of velocities?", "expect_refusal": false, "category": "factual", "note": "Rel Ch1.", "expect_keywords": ["michelson"]}
+{"question": "What is the Lorentz factor and how is it defined?", "expect_refusal": false, "category": "factual", "note": "Rel Ch1.", "expect_keywords": ["lorentz"]}
+{"question": "What does the light-clock thought experiment demonstrate?", "expect_refusal": false, "category": "factual", "note": "Rel Ch2.", "expect_keywords": ["light clock", "time dilation"]}
+{"question": "What is the Lorentz factor at v = 0.99c?", "expect_refusal": false, "category": "factual", "note": "Rel Ch2. Single verifiable number.", "expect_keywords": ["7.09"]}
+{"question": "Which particle's survival is explained by time dilation in this material?", "expect_refusal": false, "category": "factual", "note": "Rel Ch2.", "expect_keywords": ["muon"]}
+{"question": "What is the relativistic expression for momentum?", "expect_refusal": false, "category": "factual", "note": "Rel Ch3: p = gamma m v.", "expect_keywords": ["momentum"]}
+{"question": "What does the energy-momentum relation give for a photon?", "expect_refusal": false, "category": "factual", "note": "Rel Ch3: E = pc.", "expect_keywords": ["photon"]}
+{"question": "Name a real technology that must account for relativistic effects.", "expect_refusal": false, "category": "factual", "note": "Rel Ch3: GPS, LHC, solar sails.", "expect_keywords": ["gps", "large hadron collider", "solar sails"]}
+{"question": "Give the compound interest formula for n compounding periods per year.", "expect_refusal": false, "category": "math", "note": "Ch1: A = P(1 + r/n)^(nt).", "expect_keywords": ["compound interest"]}
+{"question": "Give the formula for a fixed periodic loan payment.", "expect_refusal": false, "category": "math", "note": "Ch2: PMT formula.", "expect_keywords": ["amortization"]}
+{"question": "Write the variance of a two-asset portfolio, including the cross term.", "expect_refusal": false, "category": "math", "note": "Ch3: the cross term is the whole point of diversification.", "expect_keywords": ["correlation", "diversification"]}
+{"question": "At 6% annual growth, roughly how many years does money take to double?", "expect_refusal": false, "category": "math", "note": "Ch1: 72/6 = 12 years.", "expect_keywords": ["rule of 72"]}
+{"question": "Write the Lorentz transformation for x' and t'.", "expect_refusal": false, "category": "math", "note": "Rel Ch1.", "expect_keywords": ["lorentz"]}
+{"question": "State the energy-momentum relation.", "expect_refusal": false, "category": "math", "note": "Rel Ch3: E^2 = (pc)^2 + (mc^2)^2.", "expect_keywords": ["photon", "momentum"]}
+{"question": "How does length contraction relate a moving length to its proper length?", "expect_refusal": false, "category": "math", "note": "Rel Ch2: L = L0/gamma.", "expect_keywords": ["length contraction"]}
+{"question": "Why is a dollar today worth more than a dollar tomorrow?", "expect_refusal": false, "category": "synthesis", "note": "Ch1: the core idea of the time value of money.", "expect_keywords": ["time value of money"]}
+{"question": "Why does starting to invest early matter more than the exact rate of return?", "expect_refusal": false, "category": "synthesis", "note": "Ch1: compounding widens the gap over long horizons.", "expect_keywords": ["compound interest"]}
+{"question": "Show that discounting is the inverse of compounding.", "expect_refusal": false, "category": "synthesis", "note": "Interchapter Ch1 + Ch2.", "expect_keywords": ["present value", "compound interest"]}
+{"question": "Why does combining imperfectly correlated assets reduce portfolio risk?", "expect_refusal": false, "category": "synthesis", "note": "Ch3: the cross term shrinks when rho < 1.", "expect_keywords": ["diversification", "correlation"]}
+{"question": "Why can a massive object never reach the speed of light?", "expect_refusal": false, "category": "synthesis", "note": "Rel Ch3: gamma -> infinity.", "expect_keywords": ["momentum"]}
+{"question": "How does the same Lorentz factor govern both time dilation and length contraction?", "expect_refusal": false, "category": "synthesis", "note": "Interchapter Rel Ch1 + Ch2.", "expect_keywords": ["time dilation", "length contraction"]}
+{"question": "Why did classical mechanics need fixing at the end of the 19th century?", "expect_refusal": false, "category": "synthesis", "note": "Rel Ch1: Newton vs Maxwell on the speed of light.", "expect_keywords": ["michelson", "postulates"]}
+{"question": "Explain the muon puzzle from both the Earth frame and the muon frame.", "expect_refusal": false, "category": "synthesis", "note": "Rel Ch2: time dilation vs length contraction, same observable.", "expect_keywords": ["muon", "length contraction"]}
+{"question": "How do I compute the Sharpe ratio of a portfolio?", "expect_refusal": true, "category": "refuse", "note": "Near-miss: sounds like Ch3 risk/return, absent from the material."}
+{"question": "What is the Capital Asset Pricing Model and how is beta estimated?", "expect_refusal": true, "category": "refuse", "note": "Near-miss: canonical finance, absent here."}
+{"question": "What is the Black-Scholes formula for a European call option?", "expect_refusal": true, "category": "refuse", "note": "Near-miss: finance, absent."}
+{"question": "How do I build an amortization schedule in Excel with the PMT function?", "expect_refusal": true, "category": "refuse", "note": "Tooling question: the maths is covered, the tool is not."}
+{"question": "What is the Schwarzschild radius of a black hole?", "expect_refusal": true, "category": "refuse", "note": "Near-miss: relativity-flavoured, general relativity, absent."}
+{"question": "How does gravitational lensing bend starlight?", "expect_refusal": true, "category": "refuse", "note": "Near-miss: general relativity, absent."}
+{"question": "Derive the relativistic Doppler shift formula.", "expect_refusal": true, "category": "refuse", "note": "Near-miss: special relativity but not in these three chapters."}
+{"question": "How does self-attention work in a Transformer network?", "expect_refusal": true, "category": "refuse", "note": "ISOLATION: another account's corpus covers this. An answer here is a cross-tenant leak."}
+{"question": "What is the time complexity of quicksort?", "expect_refusal": true, "category": "refuse", "note": "Plainly out of scope."}
+{"question": "Who won the 2022 FIFA World Cup?", "expect_refusal": true, "category": "refuse", "note": "Plainly out of scope."}
+{"question": "How is the internal rate of return of a project computed?", "expect_refusal": true, "category": "refuse", "note": "Near-miss: discounting is covered, IRR is not."}
+{"question": "How do I value a bond from its coupon rate and yield to maturity?", "expect_refusal": true, "category": "refuse", "note": "Near-miss: canonical finance, absent from these three chapters."}
+{"question": "What is the efficient frontier in modern portfolio theory?", "expect_refusal": true, "category": "refuse", "note": "Near-miss: the material stops at two-asset variance."}
+{"question": "How does dollar-cost averaging reduce timing risk?", "expect_refusal": true, "category": "refuse", "note": "Near-miss: an investing strategy, not in the material."}
+{"question": "How does inflation change the real return of an investment?", "expect_refusal": true, "category": "refuse", "note": "Near-miss: rates are covered, inflation is not."}
+{"question": "What is the twin paradox and how is it resolved?", "expect_refusal": true, "category": "refuse", "note": "Near-miss: time dilation is covered, this scenario is not."}
+{"question": "Derive the relativistic velocity addition formula.", "expect_refusal": true, "category": "refuse", "note": "Near-miss: special relativity, absent from these three chapters."}
+{"question": "What is the Minkowski metric and how does it define the spacetime interval?", "expect_refusal": true, "category": "refuse", "note": "Near-miss: relativity formalism, absent."}

@@ -23,7 +23,7 @@ request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 # Marker so ``configure_logging`` only attaches one formatter/handler per
 # process even if called repeatedly (startup, tests, re-imports).
-_HANDLER_FLAG = "_grounded_rag_json_handler"
+_HANDLER_FLAG = "_sourcio_json_handler"
 
 # Standard ``LogRecord`` attributes; anything else on the record is treated as
 # structured "extra" context and merged into the JSON payload.

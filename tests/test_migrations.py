@@ -114,13 +114,18 @@ def test_sessions_table_upgrade_and_downgrade(database_url: str) -> None:
         engine.dispose()
 
 
-def test_reviews_table_upgrade_and_downgrade(database_url: str) -> None:
-    """The 0007 migration adds the ``reviews`` table, and ``downgrade`` drops it."""
-    cfg = _make_config(database_url)
-    command.upgrade(cfg, "head")
+def test_reviews_table_is_dropped_at_head(database_url: str) -> None:
+    """``reviews`` exists at 0007 but is gone at head, dropped by 0011.
 
+    The spaced-repetition feature was removed. 0007 is kept -- migrations are an
+    append-only ledger and 0008 chains off it -- so the table is created by 0007
+    and dropped forward by 0011. This pins both ends of that: it must exist at
+    0007 (the ledger is intact) and be absent at head (the drop actually ran).
+    """
+    cfg = _make_config(database_url)
     engine = create_engine(database_url, future=True)
     try:
+        command.upgrade(cfg, "0007")
         assert "reviews" in set(inspect(engine).get_table_names())
         columns = {c["name"] for c in inspect(engine).get_columns("reviews")}
         assert {
@@ -135,8 +140,12 @@ def test_reviews_table_upgrade_and_downgrade(database_url: str) -> None:
             "created_at",
         } <= columns
 
-        command.downgrade(cfg, "0006")
+        command.upgrade(cfg, "head")
         assert "reviews" not in set(inspect(engine).get_table_names())
+
+        # 0011 stays reversible even though its application code is gone.
+        command.downgrade(cfg, "0010")
+        assert "reviews" in set(inspect(engine).get_table_names())
     finally:
         engine.dispose()
 

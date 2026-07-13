@@ -45,7 +45,6 @@ never handles page numbers, so it cannot invent one.
 - **Streaming responses** — answers render token by token over Server-Sent Events.
 - **Re-explain by level** — beginner / intermediate / advanced rephrasing that keeps conversation memory.
 - **Exercises and quizzes** — course-grounded practice with automatic grading (reference solutions stay server-side).
-- **Spaced-repetition review** — SM-2 scheduling to revisit notions at the right time.
 - **Threads, history and feedback** — named conversation threads, an activity feed, and per-answer ratings.
 - **Multi-format ingestion** — PDF slides via a vision model (math/LaTeX preserved), plus `.md` / `.txt` prose.
 - **Multi-user by design** — JWT auth with per-account document isolation and background ingestion.

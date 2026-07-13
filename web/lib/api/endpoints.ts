@@ -1,5 +1,5 @@
 /**
- * Typed client for the grounded-rag FastAPI backend.
+ * Typed client for the sourcio FastAPI backend.
  *
  * One function per endpoint. The base URL and an optional API key are read from
  * public environment variables; the key may also be overridden at runtime via
@@ -34,8 +34,6 @@ import type {
   QuizReview,
   QuizSummaryResponse,
   ReexplainResponse,
-  ReviewItem,
-  ReviewQuality,
   Rigor,
   SessionOut,
   SourceChunk,
@@ -694,60 +692,6 @@ export async function deleteSession(
   return request<{ deleted: boolean }>(
     `/sessions/${encodeURIComponent(studentId)}/${sessionId}`,
     { method: "DELETE", headers: buildHeaders(config) },
-    config,
-  );
-}
-
-/** List the notions due for spaced-repetition review now, soonest first. */
-export async function getDueReviews(
-  studentId: string,
-  config?: ConnectionConfig,
-): Promise<ReviewItem[]> {
-  return request<ReviewItem[]>(
-    `/reviews/due?student_id=${encodeURIComponent(studentId)}`,
-    { method: "GET", headers: buildHeaders(config) },
-    config,
-  );
-}
-
-/**
- * Record a recall rating for a notion and reschedule it. `quality` is 0..5;
- * the response carries the updated ease, interval and next due date.
- */
-export async function recordReview(
-  studentId: string,
-  notion: string,
-  quality: ReviewQuality,
-  config?: ConnectionConfig,
-): Promise<ReviewItem> {
-  return request<ReviewItem>(
-    "/reviews",
-    {
-      method: "POST",
-      headers: buildHeaders(config, true),
-      body: JSON.stringify({ student_id: studentId, notion, quality }),
-    },
-    config,
-  );
-}
-
-/**
- * Add a notion to the spaced-repetition queue, due immediately. Unlike
- * {@link recordReview} this applies no SM-2 step: the notion is seeded at the
- * defaults with `due_at` set to now, so it appears in the due queue right away.
- */
-export async function enqueueReview(
-  studentId: string,
-  notion: string,
-  config?: ConnectionConfig,
-): Promise<ReviewItem> {
-  return request<ReviewItem>(
-    "/reviews/enqueue",
-    {
-      method: "POST",
-      headers: buildHeaders(config, true),
-      body: JSON.stringify({ student_id: studentId, notion }),
-    },
     config,
   );
 }

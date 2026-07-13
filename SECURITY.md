@@ -1,6 +1,6 @@
 # Security Policy
 
-grounded-rag is a course tutor grounded in your own material: it answers only
+sourcio is a course tutor grounded in your own material: it answers only
 from indexed course documents, always cites its sources, and refuses when a
 question is not covered. This document describes how to report a vulnerability,
 the threat model the project is built against, the controls in place, and how to
@@ -64,7 +64,7 @@ Isolation is enforced in two layers that must agree.
   to "everything". Uploads require a `student_id` so every indexed chunk is
   owner-stamped and never left globally invisible.
 - **Relational store (SQLAlchemy), ownership-scoped.** Students, history,
-  sessions, exercises, quizzes, feedback and reviews hang off `Student`, and
+  sessions, exercises, quizzes and feedback hang off `Student`, and
   `Student.user_id` links a student to a user account. Every write resolves the
   student through `_resolve_student` and every read through `_student_for_read` /
   `_scoped_read_owner`.
@@ -87,8 +87,9 @@ deployment.
 - **Access tokens** are **JWTs signed with HS256** carrying a `sub` claim and an
   `exp` expiry (`JWT_EXPIRE_MINUTES`, default 60). Expired, malformed, or
   bad-signature tokens are rejected with 401.
-- **Generic login errors.** `/auth/login` returns the same 401 message for an
-  unknown email and a wrong password, so it does not reveal which accounts exist.
+- **Generic login errors.** `/auth/login` returns the same 401 for an unknown
+  username and for a wrong password, so it does not reveal which accounts exist.
+  (Accounts are keyed by username, not email — there is no email on file.)
 - **`JWT_SECRET` must be overridden.** The shipped default
   (`dev-insecure-change-me`) is a placeholder for local development only. Anyone
   who knows it can forge valid tokens. To prevent a public deploy from silently
@@ -113,8 +114,10 @@ deployment.
   default is the local frontend only). Set it to the exact deployed frontend
   origin(s) in production — do not use a wildcard, since credentialed requests
   are allowed.
-- **Rate limiting** is applied per client when `RATE_LIMIT_PER_MINUTE` is
-  positive; it is a no-op (unthrottled) by default for local dev.
+- **Rate limiting** is applied per client IP. `RATE_LIMIT_PER_MINUTE=0` (the
+  default) means *auto*, not *off*: unthrottled locally, but **60 requests/minute
+  as soon as `REQUIRE_AUTH=true`**, so a public deployment is never accidentally
+  unlimited. A positive value always wins as an explicit override.
 - **Optional API key.** When `API_KEY` is set, data endpoints additionally
   require a matching `X-API-Key` header (401 otherwise). This guard is
   independent of user auth; the two coexist.
@@ -141,7 +144,7 @@ Before exposing the API to the network, set **all** of the following:
       short.
 - [ ] `CORS_ORIGINS` = the exact deployed frontend origin(s), no wildcard.
 - [ ] Serve over **TLS** and set `ENABLE_HSTS=true`.
-- [ ] `RATE_LIMIT_PER_MINUTE` set to a sane positive value.
+- [ ] `RATE_LIMIT_PER_MINUTE` — only if you want something other than the 60/min that `REQUIRE_AUTH=true` already enforces.
 - [ ] Provider key (`OPENAI_API_KEY`) is **capped/budgeted** on the provider side
       (or the deployment is gated by `API_KEY`) to bound cost exposure.
 - [ ] `QDRANT_API_KEY` set when using a hosted/Qdrant Cloud instance.

@@ -24,9 +24,6 @@ Endpoints:
     GET  /sessions/{id}/{sid}/messages  messages of one thread (chronological)
     POST /feedback          record a thumbs up/down on a tutor answer
     GET  /feedback/summary  thumbs up/down counts for a student
-    POST /reviews           record a recall rating and reschedule a notion (SM-2)
-    POST /reviews/enqueue   add a notion to the review queue, due immediately
-    GET  /reviews/due       notions due for spaced-repetition review
 
 The layer stays thin: each route delegates to the existing grounded functions
 and graph nodes. No retrieval or prompting logic is reimplemented here. The API
@@ -72,7 +69,6 @@ from api.routers import (
     health,
     history,
     quiz,
-    reviews,
     sessions,
     source,
 )
@@ -98,7 +94,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="grounded-rag",
+    title="sourcio",
     description="Course tutor grounded in your own material.",
     lifespan=lifespan,
 )
@@ -217,7 +213,6 @@ app.include_router(source.router)
 app.include_router(history.router)
 app.include_router(sessions.router)
 app.include_router(feedback.router)
-app.include_router(reviews.router)
 
 
 if __name__ == "__main__":

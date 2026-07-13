@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for working on `grounded-rag`. This guide covers local setup, the test
+Thanks for working on `sourcio`. This guide covers local setup, the test
 and lint workflow, and the branch / PR conventions enforced by CI. For the
 system design, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -30,10 +30,21 @@ cap, API-key auth, LangFuse) is documented in `.env.example`.
 
 ### Optional extras
 
-Dependencies are split into extras so each part can be installed independently:
-`ingestion` (PDF extraction + embeddings), `agent` (LangGraph), `api` (FastAPI +
-SQLAlchemy), `obs` (LangFuse), `migrations` (Alembic). Install
-a subset with, e.g., `uv sync --extra api --extra agent --group dev`.
+Dependencies are split into extras so each part can be installed independently.
+`make install` (`uv sync --all-extras --group dev`) pulls the lot; install a
+subset with, e.g., `uv sync --extra api --extra agent --group dev`.
+
+| Extra | What it adds | When you need it |
+| --- | --- | --- |
+| `api` | FastAPI, uvicorn, SQLAlchemy, bcrypt, PyJWT | Running the API |
+| `agent` | LangGraph | The agent graph (the nodes themselves need nothing extra) |
+| `ingestion` | PyMuPDF, sentence-transformers | Ingesting PDFs, and any local embedding — so also **retrieval** |
+| `obs` | LangFuse | Opt-in tracing |
+| `migrations` | Alembic | Changing the DB schema |
+| `postgres` | psycopg 3 | Targeting a managed Postgres (what production runs on) |
+| `groq` | langchain-groq | The free hosted provider (`LLM_PROVIDER=groq`) |
+| `local` | langchain-ollama | Fully local, zero-cost runs (`LLM_PROVIDER=ollama`) |
+| `storage` | boto3 | Durable upload storage on Cloudflare R2 |
 
 ## Running tests
 
@@ -114,16 +125,20 @@ descriptions) is in professional English.
 
 ## Continuous integration
 
-CI is defined in `.github/workflows/ci.yml` and runs on every PR and on pushes to
-`main`. It has two jobs:
+Four workflows live in `.github/workflows/`. Only the first two run on a PR, and
+only the first one blocks a merge.
 
-- **quality** — installs the dev group and the `api`, `agent`, and `obs` extras,
-  then enforces the quality gate: `ruff check`, `ruff format --check`,
-  `pyright` (static type check), and `pytest` with a coverage floor
-  (`--cov-fail-under`). The pre-commit hooks cover the ruff half of this gate
-  locally; run `make check` for the rest.
-- **docker** — builds the serving image from the `Dockerfile` (build only, not
-  pushed).
+| Workflow | Runs on | Blocks merge |
+| --- | --- | --- |
+| `ci.yml` (job: **quality**) | every PR, and pushes to `main` | **yes** — the required check |
+| `codeql.yml` | every PR, and pushes to `main` | no |
+| `docker-publish.yml` | a `v*` **tag**, or manually | no — never on a PR |
+| `smoke.yml` | manually only | no — it needs a live deployment |
 
-A PR does not merge unless both jobs pass, so enable the hooks (`make hooks`) and
-run `make check` locally first.
+**quality** installs the dev group plus the `api`, `agent` and `obs` extras, then
+enforces the gate: `ruff check`, `ruff format --check`, `pyright`, and `pytest`
+with a coverage floor (`--cov-fail-under`).
+
+Reproduce it locally before opening a PR: the pre-commit hooks cover the ruff half,
+and `make check` covers lint + format + tests. Note `make check` does **not** run
+`pyright` — run `uvx pyright` if you changed types.

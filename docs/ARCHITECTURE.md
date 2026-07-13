@@ -37,32 +37,67 @@ offline / in CI.
   ingestion/embed.py       local multilingual embeddings (BAAI/bge-m3)
       |
       v
-  ingestion/index.py  -->  [ Qdrant ]  collection "courses": {vector, payload}
-                                |
-================================|=====================================
-                                |        ONLINE SERVING (per request)
-  client (web app or HTTP)      |
-      |                         |
-      v                         |
-  api/  (FastAPI: app + routers)|
-      |   \                     |
-      |    \---------> core/retrieval.py --> [ Qdrant ]  top-k + threshold (+ opt-in hybrid RRF)
-      |   /                          \
-      v  v                            +--> core/answer.py  citation-by-construction
-  agent/nodes/* + core/answer.py           (explicit endpoints dispatch straight to a node)
-      |
-   explain | generate | grade | reexplain | quiz   (agent/nodes/*; also composed by agent/graph.py — agentic reference)
-      |              |        |        |
-      |              v        v        v
-      |          [ SQL store: students, exercises, grades, messages ]
-      |                                (db/, via agent/persistence.py)
-      v
-  core/config.get_llm(role)  model-agnostic factory  (+ core/obs.py LangFuse, core/budget.py)
+  ingestion/index.py  -->  [ Qdrant ]  collection "courses"
+                                       point = one chunk:
+                                         vector  -> the embedding (what search ranks on)
+                                         payload -> {text, course, chapter, page, document, owner}
 
-                         QUALITY LAYER (offline / CI)
-  eval/run_eval.py     faithfulness + relevance + refusal + retrieval-hit
-  eval/calibrate.py    empirically calibrate the similarity threshold
+
+                         ONLINE SERVING (per request)
+
+  client (web app or HTTP)
+      |
+      v
+  api/routers/*            auth resolves the caller's `owner` id
+      |
+      v
+  core/retrieval.py  ---->  [ Qdrant ]   top-k, filtered by owner + course + chapter
+      |                                  (opt-in: reranker, hybrid BM25/RRF, HyDE, multi-query)
+      |
+      +-- nothing clears SIMILARITY_THRESHOLD --> REFUSAL  (the LLM is never called)
+      |
+      v
+  agent/nodes/{explain,generate,grade,reexplain,quiz}
+      |          the node is shown only the chunk TEXT, numbered [1] [2] [3]
+      |          -- never a page number, so it cannot invent one
+      v
+  core/answer.py           remaps each [n] -> (course, chapter, page) read from the payload
+      |
+      +-->  [ SQL: students, exercises, grades, messages ]  (db/, via agent/persistence.py)
+      |
+      v
+  cited answer
+
+  core/llm.py     get_llm(role)  model-agnostic factory   (+ core/obs.py, core/budget.py)
+  agent/graph.py  LangGraph router + state graph -- an agentic *reference*, NOT the serving
+                  path: every endpoint dispatches straight to its node above.
+
+
+                         QUALITY LAYER
+
+  OFFLINE (library-level, no HTTP)         corpus: eval/dataset.jsonl (50 cases)
+    eval/run_eval.py      faithfulness + relevance + refusal + retrieval-hit  (LLM judge)
+    eval/benchmark.py     the same, per LLM provider (+ citation rate, latency)
+    eval/calibrate.py     derives SIMILARITY_THRESHOLD empirically         [no LLM, free]
+    eval/ab_retrieval.py  dense vs hybrid on Recall@k / MRR / NDCG         [no LLM, free]
+
+  LIVE (endpoint-level, real HTTP)         corpus: eval/live_eval_cases.json (71 cases)
+    eval/live_eval.py     drives /ask, /exercise, /quiz against a running deployment --
+                          the only harness that exercises the product rather than the library
 ```
+
+Two things this diagram is drawn to make unmissable, because they are the whole
+argument of the project:
+
+- **Refusal is a retrieval decision, not a model decision.** When nothing clears the
+  threshold, the pipeline stops *before* the LLM. A model instructed to "refuse when
+  unsure" eventually caves; a model that is never called cannot.
+- **Citations cannot be hallucinated.** The node sees chunk text under opaque indices
+  `[1] [2] [3]`. Page numbers live in the Qdrant payload and are stitched in afterwards
+  by `core/answer.py`. The model never handles a page number, so it cannot invent one.
+
+And one thing it is drawn to prevent: reading `agent/graph.py` as the request path. It
+is not. It is a tested reference implementation of the same routing done agentically.
 
 ## Offline ingestion pipeline
 
@@ -289,8 +324,6 @@ nodes — no retrieval or prompting is reimplemented. Endpoints group by area:
 | Quiz | `POST /quiz/{quiz_id}/grade` | grade one quiz answer against its stored reference solution (404 on unknown question) |
 | Feedback | `POST /feedback` | record a thumbs up/down on a tutor answer (rating validated to ±1) |
 | Feedback | `GET /feedback/summary` | aggregate up/down counts for a student |
-| Spaced repetition | `POST /reviews` | record a recall rating (`0..5`) and reschedule a notion (SM-2); 422 out of range |
-| Spaced repetition | `GET /reviews/due` | notions whose `due_at` has passed, soonest first (empty for an unknown student) |
 | Sessions | `POST /sessions` | open a named conversation thread for a student |
 | Sessions | `GET /sessions/{student_id}` | list a student's threads, newest first |
 | Sessions | `GET /sessions/{student_id}/{session_id}/messages` | one thread's messages, chronological (404 if not the student's) |
@@ -317,12 +350,6 @@ Two **independent** auth layers coexist (`api/auth.py`, `api/main.py`):
   resolved student is linked to that account (`_resolve_student`), so its turns,
   exercises, quizzes and feedback become the user's own data, without changing any
   answer. Anonymous, `external_id`-keyed students stay unlinked.
-
-**Spaced repetition** (`core/scheduling.py`) is a small, LLM-free scheduler: `schedule(ease,
-interval_days, repetitions, quality)` applies one **SM-2** step (a recall `quality` below 3 resets the
-streak). `POST /reviews` keeps at most one `Review` row per `(student, notion)`, updates it in place,
-and stores the next `due_at`; `GET /reviews/due` returns the rows already due. No retrieval, no model
-call.
 
 The database engine is bound on startup (or injected by tests via
 `configure_engine`).
@@ -352,7 +379,7 @@ product-side grading of a student's answer.
 | Where | What |
 | --- | --- |
 | **Qdrant** | course chunks as `{vector, payload}` (collection `courses`) |
-| **SQL** (SQLite in dev, managed PostgreSQL in production) | users, students, exercises + reference solutions, grades, quizzes, conversation messages, threads, feedback, spaced-repetition reviews |
+| **SQL** (SQLite in dev, managed PostgreSQL in production) | users, students, exercises + reference solutions, grades, quizzes, conversation messages, threads, feedback |
 | **LangFuse** (optional) | traces and per-step evaluation signals |
 
 The relational layer uses SQLAlchemy 2.0 declarative models (`db/models.py`):
@@ -372,9 +399,6 @@ The relational layer uses SQLAlchemy 2.0 declarative models (`db/models.py`):
 - `Message` — one conversation turn.
 - `Feedback` — a student's thumbs up/down (±1) on a tutor answer, capturing the
   question and answer verbatim for later offline evaluation.
-- `Review` — one notion's spaced-repetition state for a student (ease, interval,
-  repetitions, `last_reviewed`, `due_at`); at most one row per `(student,
-  notion)`, advanced by the SM-2 scheduler.
 
 The engine is created lazily from `Settings.database_url` (`db/session.py`), so
 swapping SQLite for PostgreSQL is just a URL change — which is exactly how the
@@ -491,7 +515,6 @@ guard apply transparently when enabled.
 | HTTP API | `api/` (`main.py` app + per-domain routers) |
 | User auth (bcrypt + JWT) | `api/auth.py` |
 | Logging / middleware (request-id, security headers, rate limit) | `api/logging_config.py`, `api/middleware.py` |
-| Spaced-repetition scheduler (SM-2) | `core/scheduling.py` |
 | Next.js web frontend (premium UI) | `web/` (`web/app/`, `web/components/`, `web/lib/`) |
 | Relational store | `db/models.py`, `db/session.py`, `alembic/` |
 | LLM factory, settings, cache | `core/config.py` |

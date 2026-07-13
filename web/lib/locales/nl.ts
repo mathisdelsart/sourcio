@@ -353,12 +353,6 @@ export const nl: Record<TranslationKey, string> = {
   "threadSelect.all": "Volledige geschiedenis (geen gesprek)",
   "threadSelect.new": "+ Nieuw gesprek",
 
-  // Review panel (spaced repetition)
-  "review.description":
-    "Beoordeel hoe goed je elk begrip onthield. Je beoordeling plant het opnieuw op het juiste moment.",
-  "review.empty.description": "Je bent helemaal bij. Voeg hierboven een begrip toe om het te volgen.",
-  "review.helper":
-    "Gespreide herhaling toont elk begrip net voordat je het zou vergeten. Beoordeel je herinnering (Opnieuw, Moeilijk, Goed, Makkelijk) en het wordt op het optimale moment opnieuw ingepland.",
 
   // Export actions
   "export.copy": "Kopiëren als Markdown",

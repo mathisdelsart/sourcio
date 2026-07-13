@@ -20,9 +20,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
-    UniqueConstraint,
     func,
-    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -90,9 +88,6 @@ class Student(Base):
         back_populates="student", cascade="all, delete-orphan"
     )
     sessions: Mapped[list[Session]] = relationship(
-        back_populates="student", cascade="all, delete-orphan"
-    )
-    reviews: Mapped[list[Review]] = relationship(
         back_populates="student", cascade="all, delete-orphan"
     )
 
@@ -255,36 +250,6 @@ class Feedback(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     student: Mapped[Student] = relationship(back_populates="feedback")
-
-
-class Review(Base):
-    """A spaced-repetition schedule for one notion a student is revising.
-
-    Exactly one row exists per ``(student, notion)`` pair (enforced by a unique
-    constraint): each recall rating upserts this row rather than appending a new
-    one. The SM-2 state (``ease``, ``interval_days``, ``repetitions``) is updated
-    by :func:`core.scheduling.schedule`, and ``due_at`` is the next moment the
-    notion should be reviewed. ``last_reviewed`` is ``NULL`` until the first
-    recall is recorded. This model is purely additive and does not touch any
-    existing table.
-    """
-
-    __tablename__ = "reviews"
-    __table_args__ = (UniqueConstraint("student_id", "notion", name="uq_reviews_student_notion"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    student_id: Mapped[int] = mapped_column(
-        ForeignKey("students.id", ondelete="CASCADE"), index=True
-    )
-    notion: Mapped[str] = mapped_column(Text)
-    ease: Mapped[float] = mapped_column(Float, default=2.5, server_default=text("2.5"))
-    interval_days: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
-    repetitions: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
-    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    last_reviewed: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    student: Mapped[Student] = relationship(back_populates="reviews")
 
 
 class IngestJob(Base):

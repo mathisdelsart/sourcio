@@ -1,7 +1,9 @@
-# The persistent vector store runs in Docker; the FastAPI API and the Streamlit
-# UI run on the host (`make api`), where the local embedding model
-# (bge-m3 via torch) is already set up. This keeps the container light and avoids
-# shipping multi-gigabyte ML wheels — the standard split for an ML app.
+# Local development services.
+#
+# Only the vector store runs in Docker. The API (`make api`) and the Next.js web
+# app (`make web`) run on the host, where the local embedding model (bge-m3 via
+# torch) already lives — containerizing them locally would pull multi-gigabyte ML
+# wheels for no benefit. The production API *is* containerized; see `Dockerfile`.
 services:
   qdrant:
     image: qdrant/qdrant:latest
@@ -20,12 +22,20 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Optional PostgreSQL backend for the relational store (students, exercises,
-  # grades, history). Gated behind the `postgres` compose profile so it is NOT
-  # started by the default `docker compose up -d qdrant`; bring it up explicitly
-  # with `docker compose --profile postgres up -d postgres`. The development
-  # default remains local SQLite (`sqlite:///./app.db`); switch by setting
-  # `DATABASE_URL=postgresql+psycopg://...`. See docs/OPERATIONS.md.
+  # PostgreSQL for the relational store (users, students, exercises, grades,
+  # history).
+  #
+  # Local dev defaults to SQLite and needs none of this. A DEPLOYMENT does: a
+  # container's filesystem is ephemeral, so a SQLite file inside it -- and every
+  # account in it -- is wiped on the next rebuild or sleep/wake. Production runs on
+  # a managed Postgres (Neon), and this service exists so that path can be
+  # exercised locally before shipping it.
+  #
+  # It sits behind the `postgres` profile, so `docker compose up -d qdrant` does not
+  # start it. Bring it up explicitly:
+  #   docker compose --profile postgres up -d postgres
+  # then point the app at it: DATABASE_URL=postgresql+psycopg://...
+  # See docs/OPERATIONS.md.
   postgres:
     profiles: ["postgres"]
     image: postgres:16

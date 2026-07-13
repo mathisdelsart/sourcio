@@ -1,4 +1,4 @@
-# Developer Makefile for grounded-rag.
+# Developer Makefile for sourcio.
 # Common dev tasks wrapped behind short, self-documenting targets.
 # Run `make` or `make help` to list everything.
 
@@ -7,7 +7,7 @@ SHELL := /bin/sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install local-install local qdrant hooks lint fmt fmt-check test check api web dev eval eval-report ingest ingest-prod ask up down clean reset-db
+.PHONY: help install local-install local qdrant hooks lint fmt fmt-check test check api web dev eval eval-report bench ingest ingest-prod ask up down clean reset-db
 
 help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*##"; printf "Available targets:\n"} \
@@ -70,13 +70,27 @@ dev: qdrant ## Start the full local stack (Qdrant up + the two commands to run)
 	@echo "Prereqs: 'ollama serve' running with models pulled (see docs/RUN-LOCAL.md)."
 	@echo "Full guide: docs/RUN-LOCAL.md"
 
-eval: ## Run the offline evaluation (faithfulness judge)
-	uv run python -m eval.run_eval
+# Offline evaluation over eval/dataset.jsonl (the six benchmark chapters).
+#
+# OWNER scopes retrieval to the account that owns those documents, exactly as the
+# API does on every request. Without it the whole Qdrant collection is queried, so
+# an out-of-scope question gets answered from *another* account's course and the
+# harness scores the missing refusal as a product failure. Override if your
+# benchmark corpus is owned by a different account: make eval OWNER=u7
+OWNER ?= u4
 
-# Run the eval and write metrics to eval/results.json for the dashboard.
-# NOTE: this calls the OpenAI API (judge), unlike the pure unit tests.
+# NOTE: eval and eval-report call the LLM (answer + judge), unlike the unit tests.
+eval: ## Run the offline evaluation (faithfulness judge; calls the API)
+	uv run python -m eval.run_eval --owner $(OWNER)
+
 eval-report: ## Run the eval and write eval/results.json (calls the API)
-	uv run python -m eval.run_eval --out eval/results.json
+	uv run python -m eval.run_eval --owner $(OWNER) --out eval/results.json
+
+# Drive the deployed API over the 71 endpoint cases. Needs SOURCIO_BASE_URL,
+# SOURCIO_USER and SOURCIO_PASSWORD in the environment. The external reviewer is
+# opt-in (--judge) because a weak judge invents failures; see eval/live_eval.py.
+bench: ## Run the endpoint benchmark against a live deployment
+	uv run python -m eval.live_eval
 
 # Ingest a PDF into the local Qdrant.
 # Usage: make ingest PDF=path/to/file.pdf COURSE="Course Name"

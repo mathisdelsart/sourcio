@@ -48,7 +48,7 @@ from eval.run_eval import (
     retrieval_hit,
 )
 
-DATASET_PATH = Path(__file__).with_name("thesis_benchmark.jsonl")
+DATASET_PATH = Path(__file__).with_name("dataset.jsonl")
 
 # Matches an inline citation marker such as ``[1]`` or ``[12]``. A grounded
 # answer produced by the citation-by-construction pipeline always carries at

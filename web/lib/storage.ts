@@ -1,23 +1,69 @@
 /** Small, SSR-safe localStorage helpers used for client-persisted preferences. */
 
-export const KEYS = {
-  studentId: "grounded-rag:student_id",
-  baseUrl: "grounded-rag:base_url",
-  apiKey: "grounded-rag:api_key",
+const PREFIX = "sourcio:";
+/** The pre-rename prefix. Kept only so existing browsers can be migrated once. */
+const LEGACY_PREFIX = "grounded-rag:";
+
+const NAMES = [
+  "student_id",
+  "base_url",
+  "api_key",
   // The visitor's own OpenAI key. When set it is sent on every request so all
   // LLM calls (Ask, re-explain, exercises, quizzes, grading, the router and
   // scanned-PDF import) run on their premium model. Kept in the browser only,
   // never stored on the server; cleared on sign-out.
-  openaiKey: "grounded-rag:openai_key",
-  authToken: "grounded-rag:auth_token",
-  authUsername: "grounded-rag:auth_username",
-  theme: "grounded-rag:theme",
-  locale: "grounded-rag:locale",
-  course: "grounded-rag:course",
-  sessionId: "grounded-rag:session_id",
-  sourcesMax: "grounded-rag:sources_max",
-  activeAskJob: "grounded-rag:active_ask_job",
+  "openai_key",
+  "auth_token",
+  "auth_username",
+  "theme",
+  "locale",
+  "course",
+  "session_id",
+  "sources_max",
+  "active_ask_job",
+] as const;
+
+export const KEYS = {
+  studentId: `${PREFIX}student_id`,
+  baseUrl: `${PREFIX}base_url`,
+  apiKey: `${PREFIX}api_key`,
+  openaiKey: `${PREFIX}openai_key`,
+  authToken: `${PREFIX}auth_token`,
+  authUsername: `${PREFIX}auth_username`,
+  theme: `${PREFIX}theme`,
+  locale: `${PREFIX}locale`,
+  course: `${PREFIX}course`,
+  sessionId: `${PREFIX}session_id`,
+  sourcesMax: `${PREFIX}sources_max`,
+  activeAskJob: `${PREFIX}active_ask_job`,
 } as const;
+
+/**
+ * Carry pre-rename values over to the new key prefix, once.
+ *
+ * The project was renamed grounded-rag -> sourcio. These keys hold the auth
+ * token, the student id and every preference, so simply renaming them would sign
+ * out every existing visitor and drop their settings on the next deploy — a
+ * rename is not supposed to be a logout. Each value is copied only when the new
+ * key is absent, so this never overwrites fresher state, and it is a no-op once
+ * every browser has been through it.
+ */
+function migrateLegacyKeys(): void {
+  if (typeof window === "undefined") return;
+  try {
+    for (const name of NAMES) {
+      const legacy = window.localStorage.getItem(`${LEGACY_PREFIX}${name}`);
+      if (legacy !== null && window.localStorage.getItem(`${PREFIX}${name}`) === null) {
+        window.localStorage.setItem(`${PREFIX}${name}`, legacy);
+      }
+      window.localStorage.removeItem(`${LEGACY_PREFIX}${name}`);
+    }
+  } catch {
+    /* ignore: storage may be disabled */
+  }
+}
+
+migrateLegacyKeys();
 
 /** Read a string from localStorage, returning `fallback` when unavailable. */
 export function readLocal(key: string, fallback = ""): string {
