@@ -153,7 +153,7 @@ The Next.js app lives in `web/`. `web/vercel.json` pins the framework to Next.js
    | `NEXT_PUBLIC_API_KEY` | the same value you set as the API `API_KEY` secret | **open demo:** leave unset. **Password-gated:** see below |
 
    `NEXT_PUBLIC_*` variables are inlined into the client bundle at build time. If
-   you change either value, **redeploy**. The base URL is read in `web/lib/api.ts`;
+   you change either value, **redeploy**. The base URL is read in `web/lib/api/client.ts`;
    a trailing slash is fine (it is trimmed).
 
    > **Do not bake `NEXT_PUBLIC_API_KEY` when you want a password gate.** Inlining it
