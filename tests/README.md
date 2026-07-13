@@ -10,7 +10,7 @@ Tests mirror the packages they cover, one file per area:
 
 - **Ingestion** — `test_extract.py`, `test_ingest_text.py`
 - **Retrieval and grounding** — `test_retrieval.py`, `test_grounding.py`, `test_hybrid.py`, `test_hyde.py`, `test_neighbors.py`, `test_query.py`, `test_source.py`, `test_courses.py`, `test_documents.py`
-- **Agent** — `test_agent.py`, `test_quiz.py`, `test_spaced_repetition.py`
+- **Agent** — `test_agent.py`, `test_quiz.py`
 - **API** — `test_api.py`, `test_auth.py`, `test_ownership.py`, `test_multiuser.py`, `test_sessions.py`, `test_feedback.py`, `test_cors.py`, `test_middleware.py`, `test_errors.py`
 - **Storage** — `test_db.py`, `test_migrations.py`, `test_storage.py`, `test_postgres_backend.py`
 - **Config and observability** — `test_config.py`, `test_budget.py`, `test_obs.py`, `test_observability.py`, `test_latency.py`

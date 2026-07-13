@@ -1,199 +1,743 @@
 {
   "_README": [
-    "Seed test set for eval/live_eval.py — the manual UI benchmark, as API cases.",
-    "Edit `course` / `chapter` to match your INDEXED names exactly (check GET /courses",
-    "and GET /chapters?course=...). `chapter: null` means 'All chapters'; `course: null`",
-    "means 'All courses'. `expect` is one of: answer | refuse | generate | behavior.",
+    "Benchmark cases for eval/live_eval.py — the endpoint benchmark.",
+    "",
+    "One corpus, one case list: Finance (ch.1-3) and Relativity (ch.1-3), the six",
+    "chapters indexed under the benchmark account. Every case drives the real HTTP API the",
+    "way the web app does (/ask, /exercise, /quiz), so this measures the product, not a",
+    "library in isolation.",
+    "",
+    "Run:  uv run python -m eval.live_eval",
+    "",
+    "`expect` is one of: answer | refuse | generate | behavior.",
     "  - answer   : grounded, cited, in-scope reply expected (Ask).",
     "  - refuse   : an honest refusal expected.",
     "  - generate : an exercise/quiz should be produced (not refused), in-scope.",
     "  - behavior : discovery only; the judge documents what happens, no pass/fail.",
     "Optional per-case fields: `k` (Ask max sources), `n` (quiz questions),",
-    "`student_answer` (Exercise: submit it to /grade and capture the verdict)."
+    "`student_answer` (Exercise: submit it to /grade and capture the verdict).",
+    "",
+    "`chapter: null` means 'All chapters'; `course: null` means 'All courses'.",
+    "",
+    "What the set is built to catch, beyond 'does it answer':",
+    "  1. SCOPE     — a chapter filter must refuse content that lives in a sibling chapter,",
+    "                 even though the course as a whole covers it. Silently widening scope is",
+    "                 the most likely regression, and the least visible.",
+    "  2. ISOLATION — NX-leak asks about Transformer self-attention. Another account's corpus",
+    "                 (a MicroRTS deep-RL thesis) covers exactly that; this account does not own",
+    "                 it, so retrieval must refuse. An answer there is a cross-tenant leak, which",
+    "                 is a security bug, not a quality miss.",
+    "  3. ARITHMETIC — several cases have a single verifiable number in the source (4321.94,",
+    "                 231,676, 7.09, ln 2 ~ 0.693). A confidently wrong number is a grounding",
+    "                 failure that a purely qualitative reviewer tends to wave through.",
+    "  4. NEAR-MISS  — refusal cases are deliberately adjacent to the material (Sharpe ratio,",
+    "                 CAPM, Schwarzschild radius), not absurd ones. Refusing 'the capital of",
+    "                 Belgium' proves nothing; refusing CAPM inside a finance course does."
   ],
   "courses": {
     "finance": "Finance",
-    "relativity": "Special Relativity"
+    "relativity": "Relativity"
   },
   "cases": [
     {
-      "id": "F1", "mode": "ask", "course": "Finance", "chapter": null, "k": 5,
+      "id": "F1",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": null,
+      "k": 5,
       "prompt": "If I deposit money today that grows at compound interest, how would I calculate the present value needed today to reach a specific future goal, and how are the compound interest formula and the present value formula mathematically related?",
       "expect": "answer",
       "note": "Interchapter: must cite BOTH Ch1 (compound interest) and Ch2 (present value)."
     },
     {
-      "id": "F1-control", "mode": "ask", "course": "Finance", "chapter": "Chapter 1", "k": 3,
+      "id": "F1-control",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": "Chapter 1",
+      "k": 3,
       "prompt": "What is the compound interest formula and how does increasing the compounding frequency n affect the result?",
-      "expect": "answer", "note": "Should cite Ch1 only."
+      "expect": "answer",
+      "note": "Should cite Ch1 only."
     },
     {
-      "id": "F2", "mode": "ask", "course": "Finance", "chapter": "Chapter 2", "k": 3,
+      "id": "F2",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": "Chapter 2",
+      "k": 3,
       "prompt": "How is the monthly payment for a fixed-rate loan calculated, and what happens to the total interest paid if the loan term is extended?",
-      "expect": "answer", "note": "PMT formula, Ch2 only."
+      "expect": "answer",
+      "note": "PMT formula, Ch2 only."
     },
     {
-      "id": "F3", "mode": "ask", "course": "Finance", "chapter": null, "k": 5,
+      "id": "F3",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": null,
+      "k": 5,
       "prompt": "What is the Black-Scholes formula for pricing a European call option?",
-      "expect": "refuse", "note": "Out of scope."
+      "expect": "refuse",
+      "note": "Out of scope."
     },
     {
-      "id": "R1", "mode": "ask", "course": "Special Relativity", "chapter": null, "k": 5,
+      "id": "R1",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": null,
+      "k": 5,
       "prompt": "How does the Lorentz factor from the postulates relate to the time dilation formula, and why does gamma approach infinity as velocity approaches the speed of light?",
-      "expect": "answer", "note": "Interchapter: gamma (Ch1/Ch2) + infinite-energy reasoning (Ch3)."
+      "expect": "answer",
+      "note": "Interchapter: gamma (Ch1/Ch2) + infinite-energy reasoning (Ch3)."
     },
     {
-      "id": "R2", "mode": "ask", "course": "Special Relativity", "chapter": "Chapter 3", "k": 3,
+      "id": "R2",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 3",
+      "k": 3,
       "prompt": "What is the energy-momentum relation, and why does it simplify to E = pc for a photon?",
-      "expect": "answer", "note": "E^2=(pc)^2+(mc^2)^2, Ch3 only."
+      "expect": "answer",
+      "note": "E^2=(pc)^2+(mc^2)^2, Ch3 only."
     },
     {
-      "id": "R3", "mode": "ask", "course": "Special Relativity", "chapter": null, "k": 5,
+      "id": "R3",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": null,
+      "k": 5,
       "prompt": "What is the Einstein field equation from general relativity, and how does it describe the curvature of spacetime caused by mass?",
-      "expect": "refuse", "note": "GR is out of scope (adjacent-topic trap)."
+      "expect": "refuse",
+      "note": "GR is out of scope (adjacent-topic trap)."
     },
     {
-      "id": "X1", "mode": "ask", "course": null, "chapter": null, "k": 5,
+      "id": "X1",
+      "mode": "ask",
+      "course": null,
+      "chapter": null,
+      "k": 5,
       "prompt": "What does gamma the symbol represent in this material?",
-      "expect": "answer", "note": "Ambiguous shared symbol -> Lorentz factor."
+      "expect": "answer",
+      "note": "Ambiguous shared symbol -> Lorentz factor."
     },
     {
-      "id": "X3", "mode": "ask", "course": null, "chapter": null, "k": 5,
+      "id": "X3",
+      "mode": "ask",
+      "course": null,
+      "chapter": null,
+      "k": 5,
       "prompt": "Is there a mathematical relationship between the Lorentz factor in relativity and portfolio risk in finance?",
-      "expect": "answer", "note": "Must deny any forced analogy while citing both domains' real formulas."
+      "expect": "answer",
+      "note": "Must deny any forced analogy while citing both domains' real formulas."
     },
     {
-      "id": "X5", "mode": "ask", "course": null, "chapter": null, "k": 5,
+      "id": "X5",
+      "mode": "ask",
+      "course": null,
+      "chapter": null,
+      "k": 5,
       "prompt": "What is the CAP theorem in distributed systems design?",
-      "expect": "refuse", "note": "Fully out of scope."
+      "expect": "refuse",
+      "note": "Fully out of scope."
     },
-
     {
-      "id": "ExF1", "mode": "exercise", "course": "Finance", "chapter": "Chapter 1",
+      "id": "ExF1",
+      "mode": "exercise",
+      "course": "Finance",
+      "chapter": "Chapter 1",
       "prompt": "Give me a practice problem where I compare simple interest and compound interest on the same principal over a long time horizon.",
-      "expect": "generate", "note": "Stays within Ch1."
+      "expect": "generate",
+      "note": "Stays within Ch1."
     },
     {
-      "id": "ExR2", "mode": "exercise", "course": "Special Relativity", "chapter": "Chapter 3",
+      "id": "ExR2",
+      "mode": "exercise",
+      "course": "Relativity",
+      "chapter": "Chapter 3",
       "prompt": "Create an exercise where I calculate total relativistic energy and momentum for a particle given its rest mass and velocity (or gamma).",
-      "expect": "generate", "note": "Ch3 content, in scope."
+      "expect": "generate",
+      "note": "Ch3 content, in scope."
     },
     {
-      "id": "ExR3", "mode": "exercise", "course": "Special Relativity", "chapter": "Chapter 2",
+      "id": "ExR3",
+      "mode": "exercise",
+      "course": "Relativity",
+      "chapter": "Chapter 2",
       "prompt": "Create an exercise where I calculate total relativistic energy and momentum for a particle given its rest mass and velocity (or gamma).",
-      "expect": "refuse", "note": "BUG under test: Ch3 content requested while filtered to Ch2 -> must refuse / flag."
+      "expect": "refuse",
+      "note": "BUG under test: Ch3 content requested while filtered to Ch2 -> must refuse / flag."
     },
     {
-      "id": "ExR4", "mode": "exercise", "course": "Special Relativity", "chapter": "Chapter 1",
+      "id": "ExR4",
+      "mode": "exercise",
+      "course": "Relativity",
+      "chapter": "Chapter 1",
       "prompt": "Create an exercise where I calculate total relativistic energy and momentum for a particle given its rest mass and velocity (or gamma).",
-      "expect": "refuse", "note": "BUG under test: same, filtered to Ch1."
+      "expect": "refuse",
+      "note": "BUG under test: same, filtered to Ch1."
     },
     {
-      "id": "ExF-control", "mode": "exercise", "course": "Finance", "chapter": "Chapter 1",
+      "id": "ExF-control",
+      "mode": "exercise",
+      "course": "Finance",
+      "chapter": "Chapter 1",
       "prompt": "Create an exercise where I calculate the variance and standard deviation of a portfolio with two assets given their correlation coefficient.",
-      "expect": "refuse", "note": "Ch3 content while filtered to Ch1 -> must refuse (isolates the bug to Relativity)."
+      "expect": "refuse",
+      "note": "Ch3 content while filtered to Ch1 -> must refuse (isolates the bug to Relativity)."
     },
-
     {
-      "id": "Quiz-F-scope", "mode": "quiz", "course": "Finance", "chapter": "Chapter 1", "n": 3,
+      "id": "Quiz-F-scope",
+      "mode": "quiz",
+      "course": "Finance",
+      "chapter": "Chapter 1",
+      "n": 3,
       "prompt": "Quiz me on portfolio diversification and correlation between assets.",
-      "expect": "refuse", "note": "Ch3 content while filtered to Ch1."
+      "expect": "refuse",
+      "note": "Ch3 content while filtered to Ch1."
     },
     {
-      "id": "Quiz-F-all", "mode": "quiz", "course": "Finance", "chapter": null, "n": 3,
+      "id": "Quiz-F-all",
+      "mode": "quiz",
+      "course": "Finance",
+      "chapter": null,
+      "n": 3,
       "prompt": "Quiz me on portfolio diversification and correlation between assets.",
-      "expect": "generate", "note": "All chapters -> Ch3 in scope, should generate."
+      "expect": "generate",
+      "note": "All chapters -> Ch3 in scope, should generate."
     },
     {
-      "id": "Quiz-coverage", "mode": "quiz", "course": "Finance", "chapter": null, "n": 3,
+      "id": "Quiz-coverage",
+      "mode": "quiz",
+      "course": "Finance",
+      "chapter": null,
+      "n": 3,
       "prompt": "Quiz me with questions covering all three chapters of this course.",
-      "expect": "generate", "note": "BUG under test: meta-phrased scope request must NOT be read as a content search."
+      "expect": "generate",
+      "note": "BUG under test: meta-phrased scope request must NOT be read as a content search."
     },
     {
-      "id": "Quiz-R-scope", "mode": "quiz", "course": "Special Relativity", "chapter": "Chapter 1", "n": 3,
+      "id": "Quiz-R-scope",
+      "mode": "quiz",
+      "course": "Relativity",
+      "chapter": "Chapter 1",
+      "n": 3,
       "prompt": "Quiz me on relativistic energy and momentum.",
-      "expect": "refuse", "note": "Ch3 content while filtered to Ch1."
+      "expect": "refuse",
+      "note": "Ch3 content while filtered to Ch1."
     },
     {
-      "id": "Quiz-R-all", "mode": "quiz", "course": "Special Relativity", "chapter": null, "n": 3,
+      "id": "Quiz-R-all",
+      "mode": "quiz",
+      "course": "Relativity",
+      "chapter": null,
+      "n": 3,
       "prompt": "Quiz me on relativistic energy and momentum.",
-      "expect": "generate", "note": "BUG under test: All chapters -> Ch3 in scope, must generate (currently refuses)."
+      "expect": "generate",
+      "note": "BUG under test: All chapters -> Ch3 in scope, must generate (currently refuses)."
     },
-
     {
-      "id": "FT1", "mode": "ask", "course": "Special Relativity", "chapter": "Chapter 2", "k": 5,
+      "id": "FT1",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 2",
+      "k": 5,
       "prompt": "What is the compound interest formula?",
-      "expect": "refuse", "note": "Course filter must block Finance content."
+      "expect": "refuse",
+      "note": "Course filter must block Finance content."
     },
     {
-      "id": "FT2", "mode": "ask", "course": null, "chapter": "Chapter 3", "k": 5,
+      "id": "FT2",
+      "mode": "ask",
+      "course": null,
+      "chapter": "Chapter 3",
+      "k": 5,
       "prompt": "What formulas are covered in chapter 3?",
-      "expect": "behavior", "note": "All courses + numbered chapter: document whether it pulls Finance Ch3, Relativity Ch3, or both."
+      "expect": "behavior",
+      "note": "All courses + numbered chapter: document whether it pulls Finance Ch3, Relativity Ch3, or both."
     },
     {
-      "id": "FT3", "mode": "ask", "course": "Finance", "chapter": "Chapter 3", "k": 5,
+      "id": "FT3",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": "Chapter 3",
+      "k": 5,
       "prompt": "What is the Lorentz factor?",
-      "expect": "refuse", "note": "Wrong course AND wrong content -> refuse."
+      "expect": "refuse",
+      "note": "Wrong course AND wrong content -> refuse."
     },
     {
-      "id": "FT4", "mode": "ask", "course": "Special Relativity", "chapter": "Chapter 1", "k": 5,
+      "id": "FT4",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 1",
+      "k": 5,
       "prompt": "What are the two postulates of special relativity, and why is simultaneity relative?",
-      "expect": "answer", "note": "Positive control: legitimate in-scope content must pass, cites Ch1 only."
+      "expect": "answer",
+      "note": "Positive control: legitimate in-scope content must pass, cites Ch1 only."
     },
-
     {
-      "id": "Quiz-X-all", "mode": "quiz", "course": null, "chapter": null, "n": 7,
+      "id": "Quiz-X-all",
+      "mode": "quiz",
+      "course": null,
+      "chapter": null,
+      "n": 7,
       "prompt": "Quiz me with questions covering both courses.",
       "expect": "generate",
       "note": "Cross-course: must mix Finance AND Special Relativity questions without refusing. Report the split across the two courses (7 requested); flag a near-total imbalance (e.g. 6/1, 7/0) as biased retrieval, not a clean pass."
     },
     {
-      "id": "Ask-Format1", "mode": "ask", "course": "Finance", "chapter": "Chapter 3", "k": 5,
+      "id": "Ask-Format1",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": "Chapter 3",
+      "k": 5,
       "prompt": "In exactly one sentence, what does portfolio diversification achieve?",
       "expect": "answer",
       "note": "Format constraint: PASS only if the answer is EXACTLY ONE sentence AND grounded/cited. FAIL if it runs to multiple sentences or paragraphs despite the instruction."
     },
     {
-      "id": "Ask-PageCite", "mode": "ask", "course": "Special Relativity", "chapter": "Chapter 2", "k": 5,
+      "id": "Ask-PageCite",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 2",
+      "k": 5,
       "prompt": "What page discusses the muon decay example, and what does it say?",
       "expect": "answer",
       "note": "Citation precision: the page it names must match the cited source chunk's real page for the muon-decay example. Flag an invented or approximate page number that the sources do not support."
     },
     {
-      "id": "Ex-Structure", "mode": "exercise", "course": "Finance", "chapter": "Chapter 1",
+      "id": "Ex-Structure",
+      "mode": "exercise",
+      "course": "Finance",
+      "chapter": "Chapter 1",
       "prompt": "Give me an exercise with exactly 3 sub-questions: one on simple interest, one on compound interest, and one comparing the two.",
       "expect": "generate",
       "note": "Structure compliance: PASS only if the exercise has EXACTLY 3 sub-questions, in that order, covering those three angles. FAIL if it improvises a different count or structure."
     },
     {
-      "id": "Quiz-NumericOnly", "mode": "quiz", "course": "Special Relativity", "chapter": "Chapter 3", "n": 5,
+      "id": "Quiz-NumericOnly",
+      "mode": "quiz",
+      "course": "Relativity",
+      "chapter": "Chapter 3",
+      "n": 5,
       "prompt": "Quiz me with numerical calculation questions only, no conceptual or definition questions, on relativistic energy and momentum.",
       "expect": "generate",
       "note": "Content-style instruction: PASS only if ALL 5 questions require a numeric calculation (give concrete values, ask for a computed result). FAIL if any is conceptual/definition-style."
     },
     {
-      "id": "Quiz-MCQ", "mode": "quiz", "course": "Finance", "chapter": "Chapter 2", "n": 3,
+      "id": "Quiz-MCQ",
+      "mode": "quiz",
+      "course": "Finance",
+      "chapter": "Chapter 2",
+      "n": 3,
       "prompt": "Quiz me with multiple-choice questions with 4 options each on loan amortization.",
       "expect": "generate",
       "note": "Format compliance: PASS only if every question is MCQ with exactly 4 plausible options and one correct answer, grounded in real Chapter 2 loan-amortization content. FAIL otherwise."
     },
     {
-      "id": "Ask-BoundaryAware", "mode": "ask", "course": "Special Relativity", "chapter": "Chapter 1", "k": 5,
+      "id": "Ask-BoundaryAware",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 1",
+      "k": 5,
       "prompt": "Does Chapter 1 cover time dilation? If not, what does it actually cover?",
       "expect": "answer",
       "note": "Boundary awareness (adjacent-but-absent topic): PASS only if it says time dilation is NOT in Chapter 1 AND accurately describes what Chapter 1 covers (postulates, relativity of simultaneity), grounded/cited. FAIL if it claims Ch1 covers time dilation, or refuses outright."
     },
     {
-      "id": "Ask-MaxSources-Low", "mode": "ask", "course": "Finance", "chapter": null, "k": 1,
+      "id": "Ask-MaxSources-Low",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": null,
+      "k": 1,
       "prompt": "If I deposit money today that grows at compound interest, how would I calculate the present value needed today to reach a specific future goal, and how are the compound interest formula and the present value formula mathematically related?",
       "expect": "answer",
       "note": "Max sources=1 (same question as F1, which needs Ch1 compound-interest AND Ch2 present-value formulas). With one retrieval slot it likely can't get both; check for uncited gap-fill/hallucination vs an honest partial answer. Flag any formula stated without a supporting citation."
     },
     {
-      "id": "Ask-MaxSources-High", "mode": "ask", "course": "Finance", "chapter": null, "k": 10,
+      "id": "Ask-MaxSources-High",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": null,
+      "k": 10,
       "prompt": "If I deposit money today that grows at compound interest, how would I calculate the present value needed today to reach a specific future goal, and how are the compound interest formula and the present value formula mathematically related?",
       "expect": "answer",
       "note": "Max sources=10 (same question as F1): check the answer stays accurate and grounded, citing both Ch1 and Ch2, and is not diluted or confused by extra irrelevant chunks."
+    },
+    {
+      "id": "NF-A1",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": "Chapter 1",
+      "k": 3,
+      "prompt": "What is the Rule of 72, and which mathematical constant explains why the numerator is roughly that value?",
+      "expect": "answer",
+      "note": "Ch1 only. Must surface ln(2) ~ 0.693 and say 72 is chosen for divisibility, not precision."
+    },
+    {
+      "id": "NF-A2",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": "Chapter 1",
+      "k": 3,
+      "prompt": "Using the worked example in the course, what does $1000 at 5% grow to after 30 years with annual compounding, and how does that compare to simple interest?",
+      "expect": "answer",
+      "note": "Verifiable number: 4321.94. A wrong figure here is a grounding failure, not a style issue."
+    },
+    {
+      "id": "NF-A3",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": "Chapter 2",
+      "k": 3,
+      "prompt": "In the mortgage worked example, how much of the total amount paid over the full term is interest rather than principal?",
+      "expect": "answer",
+      "note": "Verifiable: ~231,676 of ~431,676 total on a 200,000 loan. Interest exceeds principal."
+    },
+    {
+      "id": "NF-A4",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": "Chapter 3",
+      "k": 3,
+      "prompt": "How does the correlation between two assets affect the variance of a portfolio holding both, and what becomes possible when the correlation is -1?",
+      "expect": "answer",
+      "note": "Ch3. Must reach the cross term and the zero-variance case at rho = -1."
+    },
+    {
+      "id": "NF-A5",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": null,
+      "k": 5,
+      "prompt": "A loan payment uses a fixed periodic rate, but an investment's return is uncertain. How does this material define the expected return of a risky asset, and how is that different in kind from the rate r in the loan payment formula?",
+      "expect": "answer",
+      "note": "Interchapter Ch2 + Ch3: must cite both. The distinction is deterministic rate vs random variable."
+    },
+    {
+      "id": "NF-A6",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": null,
+      "k": 5,
+      "prompt": "Chapter 1 grows a present sum forward in time and Chapter 2 brings a future sum back. Show algebraically that these are inverse operations.",
+      "expect": "answer",
+      "note": "Interchapter Ch1 + Ch2. PV = FV/(1+r)^n is the compound formula solved for P."
+    },
+    {
+      "id": "NF-R1",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": null,
+      "k": 5,
+      "prompt": "How do I compute the Sharpe ratio of a portfolio, and what counts as a good value?",
+      "expect": "refuse",
+      "note": "Plausibly adjacent to Ch3 (risk/return) but absent from the material. The tempting near-miss."
+    },
+    {
+      "id": "NF-R2",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": null,
+      "k": 5,
+      "prompt": "What is the Capital Asset Pricing Model, and how is an asset's beta estimated?",
+      "expect": "refuse",
+      "note": "Out of scope. Same trap: sounds like it belongs in a finance course."
+    },
+    {
+      "id": "NR-A1",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 1",
+      "k": 3,
+      "prompt": "Why did Maxwell's electromagnetism conflict with Newtonian velocity addition, and which experiment confirmed that light does not obey the usual addition of velocities?",
+      "expect": "answer",
+      "note": "Ch1. Must name Michelson-Morley."
+    },
+    {
+      "id": "NR-A2",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 1",
+      "k": 3,
+      "prompt": "State the Lorentz transformation for x' and t', and explain what happens to the Lorentz factor when the relative velocity is far below the speed of light.",
+      "expect": "answer",
+      "note": "Ch1. gamma -> 1, recovering Newtonian behavior."
+    },
+    {
+      "id": "NR-A3",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 2",
+      "k": 3,
+      "prompt": "In the light-clock thought experiment, why does a moving clock tick more slowly? Ground the reasoning in the second postulate.",
+      "expect": "answer",
+      "note": "Ch2. The photon's diagonal path is longer, and c is frame-invariant, so the tick takes longer."
+    },
+    {
+      "id": "NR-A4",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 2",
+      "k": 3,
+      "prompt": "At a speed of 0.99c, what value does the course give for the Lorentz factor, and what does that imply for the length of an object along its direction of travel?",
+      "expect": "answer",
+      "note": "Verifiable: gamma ~ 7.09; object appears ~7x shorter. Perpendicular dimensions unaffected."
+    },
+    {
+      "id": "NR-A5",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 3",
+      "k": 3,
+      "prompt": "Using the relativistic definition of momentum, explain why an object with mass can never reach the speed of light.",
+      "expect": "answer",
+      "note": "Ch3. gamma -> infinity, so infinite momentum and energy would be required."
+    },
+    {
+      "id": "NR-A6",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 3",
+      "k": 3,
+      "prompt": "What does the energy-momentum relation reduce to for a photon, and name one real-world consequence of that result.",
+      "expect": "answer",
+      "note": "E = pc for m = 0; solar sails / radiation pressure."
+    },
+    {
+      "id": "NR-A7",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": null,
+      "k": 5,
+      "prompt": "The Lorentz factor is introduced in one chapter and then reused in the next. Show how the same factor governs both time dilation and length contraction, and note how it enters each formula differently.",
+      "expect": "answer",
+      "note": "Interchapter Ch1 + Ch2: gamma multiplies for time, divides for length."
+    },
+    {
+      "id": "NR-R1",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": null,
+      "k": 5,
+      "prompt": "How does gravitational lensing bend the path of starlight around a massive object?",
+      "expect": "refuse",
+      "note": "General relativity, out of scope. The material mentions GR only in passing (GPS)."
+    },
+    {
+      "id": "NR-R2",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": null,
+      "k": 5,
+      "prompt": "What is the Schwarzschild radius, and how do I compute it for a given mass?",
+      "expect": "refuse",
+      "note": "Out of scope. Near-miss: relativity-flavored but absent."
+    },
+    {
+      "id": "NX-A1",
+      "mode": "ask",
+      "course": null,
+      "chapter": null,
+      "k": 5,
+      "prompt": "Which formulas in my material involve a square root, and what does each one measure?",
+      "expect": "answer",
+      "note": "Cross-course: standard deviation (Finance Ch3) and the Lorentz factor (Relativity Ch1). Must cite both courses."
+    },
+    {
+      "id": "NX-A2",
+      "mode": "ask",
+      "course": null,
+      "chapter": null,
+      "k": 5,
+      "prompt": "Both of my courses have a quantity that blows up as its variable grows. Compare how (1+r)^n behaves as n increases with how the Lorentz factor behaves as v approaches c.",
+      "expect": "answer",
+      "note": "Cross-course synthesis. Growth without bound vs a genuine asymptote at v = c."
+    },
+    {
+      "id": "NX-leak",
+      "mode": "ask",
+      "course": null,
+      "chapter": null,
+      "k": 5,
+      "prompt": "How does self-attention work in a Transformer, and why is it better than a convolution for long-range reasoning?",
+      "expect": "refuse",
+      "note": "ISOLATION TEST. Another account's indexed corpus (a MicroRTS deep-RL thesis) covers exactly this. This account does not own it, so retrieval must refuse. An answer here is a cross-tenant leak, not a quality miss."
+    },
+    {
+      "id": "NX-R1",
+      "mode": "ask",
+      "course": null,
+      "chapter": null,
+      "k": 5,
+      "prompt": "What is a Nash equilibrium, and how do I find one in a two-player game?",
+      "expect": "refuse",
+      "note": "Out of scope for both courses."
+    },
+    {
+      "id": "NX-B1",
+      "mode": "ask",
+      "course": null,
+      "chapter": null,
+      "k": 5,
+      "prompt": "What topics do I have indexed, and which chapters cover which formulas?",
+      "expect": "behavior",
+      "note": "Discovery only: a meta-question the corpus does not literally answer. Documents whether the tutor refuses or inventories."
+    },
+    {
+      "id": "NFT-1",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 1",
+      "k": 3,
+      "prompt": "What is the energy-momentum relation?",
+      "expect": "refuse",
+      "note": "SCOPE: the course covers it (Ch3) but the filter pins Ch1. Must refuse, not silently widen scope."
+    },
+    {
+      "id": "NFT-2",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": "Chapter 1",
+      "k": 3,
+      "prompt": "How do I compute the variance of a portfolio made of two correlated assets?",
+      "expect": "refuse",
+      "note": "SCOPE: lives in Ch3, filter pins Ch1."
+    },
+    {
+      "id": "NFT-3",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": "Chapter 3",
+      "k": 3,
+      "prompt": "What is the formula for a fixed monthly loan payment?",
+      "expect": "refuse",
+      "note": "SCOPE: PMT lives in Ch2, filter pins Ch3."
+    },
+    {
+      "id": "NFT-4",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 2",
+      "k": 3,
+      "prompt": "Does Chapter 2 state the two postulates of relativity? If not, say what it actually covers.",
+      "expect": "answer",
+      "note": "Boundary awareness: must answer about Ch2's real content (time dilation, length contraction) rather than refuse outright."
+    },
+    {
+      "id": "NFmt-1",
+      "mode": "ask",
+      "course": "Finance",
+      "chapter": "Chapter 1",
+      "k": 3,
+      "prompt": "In exactly two sentences, state the difference between simple and compound interest.",
+      "expect": "answer",
+      "note": "Format adherence under a grounding constraint: two sentences, still cited."
+    },
+    {
+      "id": "NFmt-2",
+      "mode": "ask",
+      "course": "Relativity",
+      "chapter": "Chapter 2",
+      "k": 3,
+      "prompt": "Which page covers the muon, and what numeric value does that page give for the Lorentz factor?",
+      "expect": "answer",
+      "note": "Citation precision: must name the page and the value 7.09 from it."
+    },
+    {
+      "id": "NEx-1",
+      "mode": "exercise",
+      "course": "Finance",
+      "chapter": "Chapter 2",
+      "prompt": "Give me a practice problem where I compute a fixed monthly loan payment from a principal, a monthly rate and a number of periods, ending in a single numeric answer.",
+      "expect": "generate",
+      "note": "In-scope generation (PMT, Ch2)."
+    },
+    {
+      "id": "NEx-2",
+      "mode": "exercise",
+      "course": "Relativity",
+      "chapter": "Chapter 1",
+      "prompt": "Create an exercise where I compute the Lorentz factor for a given velocity.",
+      "expect": "generate",
+      "note": "In-scope generation (gamma, Ch1)."
+    },
+    {
+      "id": "NEx-3",
+      "mode": "exercise",
+      "course": "Finance",
+      "chapter": "Chapter 3",
+      "prompt": "Create an exercise where I compute the variance of a two-asset portfolio given weights, standard deviations and a correlation.",
+      "expect": "generate",
+      "student_answer": "I add the two variances weighted by w1 and w2 and ignore the correlation, because correlation only matters for expected return.",
+      "note": "Generation + grading: the submitted answer is deliberately WRONG (it drops the cross term). /grade must mark it incorrect and say why. A pass here would be a false positive from the grader."
+    },
+    {
+      "id": "NEx-scope-1",
+      "mode": "exercise",
+      "course": "Relativity",
+      "chapter": "Chapter 1",
+      "prompt": "Create an exercise where I compute the relativistic momentum p = gamma*m*v of a moving particle.",
+      "expect": "refuse",
+      "note": "SCOPE: momentum is Ch3; the filter pins Ch1. Must refuse rather than generate from memory."
+    },
+    {
+      "id": "NEx-scope-2",
+      "mode": "exercise",
+      "course": "Finance",
+      "chapter": "Chapter 1",
+      "prompt": "Create an exercise where I discount a future cash flow back to its present value.",
+      "expect": "refuse",
+      "note": "SCOPE: present value is Ch2; the filter pins Ch1."
+    },
+    {
+      "id": "NQ-1",
+      "mode": "quiz",
+      "course": "Finance",
+      "chapter": null,
+      "n": 4,
+      "prompt": "Quiz me across all three chapters: one question on interest growth, one on discounting, one on loan payments, one on portfolio risk.",
+      "expect": "generate",
+      "note": "Coverage: the four questions should span Ch1, Ch2 and Ch3 rather than clustering in one."
+    },
+    {
+      "id": "NQ-2",
+      "mode": "quiz",
+      "course": "Relativity",
+      "chapter": "Chapter 3",
+      "n": 3,
+      "prompt": "Quiz me on mass-energy equivalence with numerical calculation questions only, no conceptual ones.",
+      "expect": "generate",
+      "note": "In-scope + format constraint (numeric only)."
+    },
+    {
+      "id": "NQ-scope-1",
+      "mode": "quiz",
+      "course": "Relativity",
+      "chapter": "Chapter 1",
+      "n": 3,
+      "prompt": "Quiz me on length contraction and the muon decay experiment.",
+      "expect": "refuse",
+      "note": "SCOPE: both live in Ch2; the filter pins Ch1."
+    },
+    {
+      "id": "NQ-scope-2",
+      "mode": "quiz",
+      "course": "Finance",
+      "chapter": "Chapter 2",
+      "n": 3,
+      "prompt": "Quiz me on expected return, variance and standard deviation.",
+      "expect": "refuse",
+      "note": "SCOPE: all Ch3; the filter pins Ch2."
+    },
+    {
+      "id": "NQ-X",
+      "mode": "quiz",
+      "course": null,
+      "n": 4,
+      "chapter": null,
+      "prompt": "Quiz me with questions drawn from both of my courses, mixing finance and physics.",
+      "expect": "generate",
+      "note": "Cross-course generation: questions should come from both, not collapse into one."
     }
   ]
 }

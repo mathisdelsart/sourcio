@@ -37,25 +37,25 @@ _ALLOWED_FIELDS = {"question", "expect_refusal", "note", "expect_keywords", "cat
 _CATEGORIES = {"factual", "math", "synthesis", "refuse"}
 
 
-def test_bundled_thesis_dataset_has_27_cases():
+def test_bundled_dataset_has_the_expected_case_mix():
     cases = load_dataset()
-    assert len(cases) == 27
+    assert len(cases) == 50
     refuse = [c for c in cases if c.case.expect_refusal]
     answer = [c for c in cases if not c.case.expect_refusal]
-    assert len(refuse) == 5
-    assert len(answer) == 22
+    assert len(refuse) == 18
+    assert len(answer) == 32
 
 
-def test_bundled_thesis_dataset_parses_with_plain_eval_loader():
+def test_bundled_dataset_parses_with_plain_eval_loader():
     # The shipped file must also parse through the base EvalCase loader, proving
     # the extra ``category`` key does not break the reused schema.
     cases = load_eval_dataset(DATASET_PATH)
-    assert len(cases) == 27
+    assert len(cases) == 50
     assert any(c.expect_refusal for c in cases)
     assert any(not c.expect_refusal for c in cases)
 
 
-def test_bundled_thesis_dataset_every_line_matches_schema():
+def test_bundled_dataset_every_line_matches_schema():
     seen = 0
     categories: set[str] = set()
     for raw in DATASET_PATH.read_text(encoding="utf-8").splitlines():
@@ -74,7 +74,7 @@ def test_bundled_thesis_dataset_every_line_matches_schema():
         else:
             assert obj.get("expect_keywords"), "answer-case should declare keywords"
             assert all(isinstance(k, str) for k in obj["expect_keywords"])
-    assert seen == 27
+    assert seen == 50
     assert categories == _CATEGORIES
 
 

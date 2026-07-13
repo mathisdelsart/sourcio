@@ -27,7 +27,6 @@ modules.
 | Courses / Sources | List indexed courses; fetch a single source chunk by id. |
 | Sessions / History | Named conversation threads and their messages; recent turns. |
 | Feedback | Record and summarize thumbs up/down on answers. |
-| Reviews | SM-2 spaced repetition: record a recall rating and list what is due. |
 | Auth | Register, login (returns a bearer token), and the current user. |
 | Config | Non-secret runtime configuration the web app reads. |
 

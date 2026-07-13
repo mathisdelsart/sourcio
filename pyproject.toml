@@ -1,7 +1,7 @@
 [project]
-name = "grounded-rag"
+name = "sourcio"
 version = "0.1.0"
-description = "A grounded RAG-LLM that answers strictly from your own documents, with citations and a faithfulness guard."
+description = "An AI tutor that answers only from your own courses -- always cited, never invented."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -40,10 +40,12 @@ obs = [
 migrations = [
     "alembic>=1.13",
 ]
-# PostgreSQL backend (optional). The app already speaks SQLAlchemy, so switching
-# is a matter of installing the psycopg 3 driver and pointing `DATABASE_URL` at a
-# `postgresql+psycopg://...` URL. SQLite stays the zero-setup default; this extra
-# is only needed when targeting PostgreSQL. See docs/OPERATIONS.md.
+# PostgreSQL driver. Optional locally (SQLite is the zero-setup default), but
+# REQUIRED for any real deployment: a container's SQLite file is ephemeral, so
+# accounts and history do not survive a restart without a managed Postgres. The
+# app already speaks SQLAlchemy, so switching is a driver install plus a
+# `postgresql+psycopg://...` DATABASE_URL. Already baked into the Docker image.
+# See docs/OPERATIONS.md.
 postgres = [
     "psycopg[binary]>=3.1",
 ]

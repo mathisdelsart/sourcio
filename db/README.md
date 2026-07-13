@@ -2,7 +2,7 @@
 
 The relational store: SQLAlchemy 2.0 declarative models and the engine/session layer. Holds accounts,
 students, exercises with their reference solutions, grades, quizzes, conversation history, threads,
-feedback, and spaced-repetition state. Vectors live in Qdrant, not here.
+and feedback. Vectors live in Qdrant, not here.
 
 ## Files
 

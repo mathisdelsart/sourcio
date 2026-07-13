@@ -1,4 +1,4 @@
-# Pre-commit hooks for grounded-rag.
+# Pre-commit hooks for sourcio.
 #
 # These run on `git commit` once enabled with `make hooks` (or
 # `uv run pre-commit install`). They mirror the checks the `quality` CI job

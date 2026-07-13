@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# CPU-only production image for the grounded-rag API service.
+# CPU-only production image for the sourcio API service.
 #
 # This image is for CLOUD DEPLOYMENT only (e.g. Hugging Face Spaces, Render).
 # Local development stays host-based: `docker compose up -d qdrant` runs only the
@@ -62,10 +62,10 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.12.*"
 #        ingestion CLI (not the API), so it is installed directly to keep the image
 #        lean. torch is already present from the CPU index above, so this resolves
 #        against it instead of re-downloading the CUDA build.
-#    NOT installed: `ui` (Streamlit, served separately), `local` (Ollama client,
-#    only for fully-local runs), `migrations` (the API creates tables via
-#    SQLAlchemy on startup, not Alembic). Image PDF pages still need a vision LLM
-#    (OPENAI_API_KEY); text PDFs and .md/.txt work with the deps above.
+#    NOT installed: `local` (the Ollama client, only for fully-local runs) and
+#    `migrations` (Alembic runs from a developer machine against the managed
+#    database, never from the container). Image-only PDF pages still need a vision
+#    LLM (OPENAI_API_KEY); text PDFs and .md/.txt import with the deps above.
 RUN pip install \
     "langchain>=0.3" \
     "langchain-core>=1.4" \

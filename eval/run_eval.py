@@ -244,15 +244,23 @@ def aggregate(results: Sequence[CaseResult]) -> Metrics:
     )
 
 
-def _default_answer_fn() -> AnswerFn:
+def _default_answer_fn(owner: str | None = None) -> AnswerFn:
     """Wire the real grounded answer function, imported lazily.
 
     Importing inside the function keeps this module importable in CI (dev-only
     sync) without pulling retrieval/embedding dependencies at import time.
+
+    ``owner`` scopes retrieval to one account's material, exactly as the API does
+    on every request. Leaving it None queries the whole collection, which is only
+    meaningful when the collection holds nothing but the evaluated corpus: with
+    several accounts' courses indexed side by side, an unscoped run silently
+    answers out-of-scope questions from *someone else's* documents and reports the
+    refusal as a failure. Pass the benchmark account's id to measure the corpus
+    the dataset was actually written against.
     """
     from core.answer import answer
 
-    return lambda question: answer(question)
+    return lambda question: answer(question, owner=owner)
 
 
 def _default_judge_fn() -> JudgeFn:
@@ -276,12 +284,16 @@ def _default_judge_fn() -> JudgeFn:
     return judge
 
 
-def _default_retrieve_fn() -> RetrieveFn:
-    """Wire the real retrieval step, imported lazily to keep CI import-light."""
+def _default_retrieve_fn(owner: str | None = None) -> RetrieveFn:
+    """Wire the real retrieval step, imported lazily to keep CI import-light.
+
+    ``owner`` scopes retrieval the same way as :func:`_default_answer_fn`, so the
+    retrieval-hit metric is measured over the same corpus the answers came from.
+    """
     from core.retrieval import retrieve
 
     def fetch(question: str) -> list[str]:
-        return [r.chunk.text for r in retrieve(question)]
+        return [r.chunk.text for r in retrieve(question, owner=owner)]
 
     return fetch
 
@@ -389,6 +401,7 @@ def run_eval(
     judge_fn: JudgeFn | None = None,
     retrieve_fn: RetrieveFn | None = None,
     thresholds: Metrics | None = None,
+    owner: str | None = None,
 ) -> tuple[Metrics, bool]:
     """Run the full evaluation and return the metrics and the pass/fail flag.
 
@@ -404,11 +417,11 @@ def run_eval(
             DEFAULT_RETRIEVAL_HIT_RATE,
         )
     if answer_fn is None:
-        answer_fn = _default_answer_fn()
+        answer_fn = _default_answer_fn(owner)
     if judge_fn is None:
         judge_fn = _default_judge_fn()
     if retrieve_fn is None:
-        retrieve_fn = _default_retrieve_fn()
+        retrieve_fn = _default_retrieve_fn(owner)
 
     cases = load_dataset(dataset_path)
     results = evaluate(cases, answer_fn, judge_fn, retrieve_fn)
@@ -421,6 +434,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point. Exits non-zero when a metric falls below threshold."""
     parser = argparse.ArgumentParser(description="Run the offline faithfulness evaluation.")
     parser.add_argument("--dataset", type=Path, default=DATASET_PATH)
+    parser.add_argument(
+        "--owner",
+        default=None,
+        help=(
+            "Scope retrieval to this account's material, as the API does on every "
+            "request. Without it the whole collection is queried, so an out-of-scope "
+            "question can be answered from another account's documents and the missing "
+            "refusal is scored as a product failure. Pass the account owning the "
+            "benchmark corpus (e.g. u4)."
+        ),
+    )
     parser.add_argument("--min-refusal-accuracy", type=float, default=DEFAULT_REFUSAL_ACCURACY)
     parser.add_argument("--min-faithfulness", type=float, default=DEFAULT_FAITHFULNESS_RATE)
     parser.add_argument("--min-relevance", type=float, default=DEFAULT_RELEVANCE_RATE)
@@ -454,7 +478,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         relevance_rate=args.min_relevance,
         retrieval_hit_rate=args.min_retrieval_hit_rate,
     )
-    metrics, ok = run_eval(dataset_path=args.dataset, thresholds=thresholds)
+    metrics, ok = run_eval(dataset_path=args.dataset, thresholds=thresholds, owner=args.owner)
     print(format_summary(metrics, thresholds, ok))
     if args.out is not None:
         write_results(metrics, args.out)

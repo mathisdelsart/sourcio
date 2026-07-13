@@ -1,4 +1,4 @@
-/** Data shapes for the grounded-rag API client (requests, responses, config). */
+/** Data shapes for the sourcio API client (requests, responses, config). */
 
 export type Level = "beginner" | "intermediate" | "advanced";
 
@@ -136,17 +136,6 @@ export interface QuizQuestionReview {
 export interface QuizReview {
   notion: string;
   questions: QuizQuestionReview[];
-}
-
-/** Spaced-repetition recall quality, from 0 (forgot) to 5 (perfect). */
-export type ReviewQuality = 0 | 1 | 2 | 3 | 4 | 5;
-
-/** A notion scheduled for spaced-repetition review. */
-export interface ReviewItem {
-  notion: string;
-  ease: number;
-  interval_days: number;
-  due_at: string;
 }
 
 /** A student's thumbs up (1) or down (-1) on a tutor answer. */

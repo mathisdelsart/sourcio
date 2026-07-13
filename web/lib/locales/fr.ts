@@ -367,13 +367,6 @@ export const fr: Record<TranslationKey, string> = {
   "threadSelect.all": "Tout l'historique (aucun fil)",
   "threadSelect.new": "+ Nouveau fil",
 
-  // Review panel (spaced repetition)
-  "review.description":
-    "Évaluez votre rappel de chaque notion. Votre note la replanifie au bon moment.",
-  "review.empty.description":
-    "Vous êtes à jour. Ajoutez une notion ci-dessus pour commencer à la suivre.",
-  "review.helper":
-    "La répétition espacée présente chaque notion juste avant que vous l'oubliiez. Notez votre mémorisation (À revoir, Difficile, Bien, Facile) et elle est replanifiée au moment optimal.",
 
   // Export actions
   "export.copy": "Copier en Markdown",

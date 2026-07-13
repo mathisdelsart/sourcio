@@ -1,4 +1,4 @@
-name: "grounded-rag CodeQL config"
+name: "sourcio CodeQL config"
 
 # Keep the security-and-quality suite (see codeql.yml) but stop scanning code
 # that is not part of the running application:

@@ -51,7 +51,6 @@ from api.schemas.quiz import (
     QuizReviewResponse,
     QuizSummaryResponse,
 )
-from api.schemas.reviews import EnqueueReviewRequest, ReviewRequest, ReviewSchedule
 
 __all__ = [
     "AskRequest",
@@ -64,7 +63,6 @@ __all__ = [
     "DocumentDeleteResponse",
     "DocumentRenameRequest",
     "DocumentRenameResponse",
-    "EnqueueReviewRequest",
     "ExerciseGradeReview",
     "ExerciseRequest",
     "ExerciseResponse",
@@ -87,8 +85,6 @@ __all__ = [
     "QuizSummaryResponse",
     "ReexplainRequest",
     "ReexplainResponse",
-    "ReviewRequest",
-    "ReviewSchedule",
     "SessionCreateRequest",
     "SessionOut",
     "SourceResponse",

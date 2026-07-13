@@ -102,7 +102,9 @@ def test_bundled_dataset_every_line_matches_schema():
 
     from eval.run_eval import DATASET_PATH
 
-    allowed = {"question", "expect_refusal", "note", "expect_keywords"}
+    # `category` is benchmark.py's addition; the base loader ignores it, and the
+    # shipped file is shared by both, so it is a valid field here too.
+    allowed = {"question", "expect_refusal", "note", "expect_keywords", "category"}
     seen = 0
     for raw in DATASET_PATH.read_text(encoding="utf-8").splitlines():
         raw = raw.strip()

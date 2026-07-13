@@ -288,7 +288,7 @@ provider key are required for a minimal run; the rest are opt-in.
 | `CORS_ORIGINS` | yes (browser client) | Comma-separated allowed origins (e.g. the Vercel web URL); the browser app cannot call the API without it. |
 | `API_KEY` | no | When set, clients must send a matching `X-API-Key` header on the mutating endpoints and `/history`; `/health` stays open. See [Access modes](#access-modes-open-demo-vs-password-gated). |
 | `RATE_LIMIT_PER_MINUTE` | no | Per-IP request cap. **Auto-defaults to 60/min when `REQUIRE_AUTH=true`**; set a higher value to raise the ceiling. `0`/unset means "auto" (off locally, 60 in public mode). |
-| `MAX_UPLOAD_MB` | no | Maximum accepted upload size in MB (default 25); larger files are rejected with HTTP 413. |
+| `MAX_UPLOAD_MB` | no | Maximum accepted upload size in MB (default 100); larger files are rejected with HTTP 413. |
 | `ENABLE_HSTS` | no | `true` to send the HSTS header (HTTPS deployments). |
 | `RERANKER_MODEL` | no | Enables the cross-encoder reranker (e.g. `cross-encoder/ms-marco-MiniLM-L-6-v2`); adds CPU cost per query. |
 | `MULTI_QUERY` / `HYDE` | no | Opt-in retrieval strategies (query rewriting / hypothetical-doc embedding). |
@@ -362,7 +362,7 @@ entirely optional.
 - **Built-in per-IP throttle.** With `REQUIRE_AUTH=true` the API auto-applies a
   60/min per-IP cap (excess → HTTP 429), so a public deployment is protected
   without extra config. Raise it with an explicit `RATE_LIMIT_PER_MINUTE`. Uploads
-  are additionally capped at `MAX_UPLOAD_MB` (default 25 MB, rejected with 413).
+  are additionally capped at `MAX_UPLOAD_MB` (default 100 MB, rejected with 413).
 - **Ingestion is the one paid touchpoint** — and only if you ingest scanned/slide
   PDFs, whose math-aware vision extraction uses OpenAI. Run it once, locally,
   against the cloud cluster (section 2). `.md`/`.txt` prose ingestion uses no LLM at
