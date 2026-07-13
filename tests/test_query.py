@@ -301,4 +301,8 @@ def test_answer_uses_multi_query_when_enabled(monkeypatch):
     )
     out = answer_mod.answer("q")
     assert out["refused"] is True
-    assert called == {"single": 0, "multi": 1}
+    # multi-query ran (that is what this test is about). `single` is 1 rather than
+    # 0 because multi came back empty and the dense fallback ran after it -- a
+    # booster is never allowed to narrow recall below the plain query. The refusal
+    # stands, since the fallback found nothing either. See tests/test_hyde.py.
+    assert called == {"single": 1, "multi": 1}

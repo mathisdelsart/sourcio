@@ -152,17 +152,50 @@ def _retrieve(
     is set, :func:`retrieve` runs with ``hyde=True``. In every case the
     threshold/refusal and reranker behave identically. ``owner`` strictly scopes
     retrieval to the caller's own material (no shared/legacy visibility).
+
+    **A booster never narrows recall.** Both boosters rewrite the query with an
+    LLM, so what they retrieve depends on which model does the rewriting -- and a
+    rewrite can drift far enough that nothing clears the similarity threshold. The
+    caller then gets "not covered in the course material" for a question the plain
+    dense query answers perfectly well, and, worse, *whether* they get it depends
+    on the model: with ``multi_query`` on, a visitor who supplies their own API key
+    is answered by a different model than the free-tier default, so the same
+    question is answered for one visitor and refused for the next.
+
+    A refusal must mean "the course does not cover this", never "the rewriter had a
+    bad day". So when a booster comes back empty, fall back to the plain dense
+    query. These are opt-in *recall* boosters: widening recall is the only thing
+    they are allowed to do, and returning fewer results than the baseline is
+    strictly a regression. The fallback costs one extra Qdrant round-trip on a path
+    that was about to refuse anyway.
     """
     settings = get_settings()
+
+    def plain() -> list[Retrieved]:
+        """The dense baseline: no LLM in the loop, so no model-dependent drift."""
+        return retrieve(question, k=k, course=course, chapter=chapter, owner=owner)
+
     if settings.multi_query:
-        return retrieve_multi(
-            question, k=k, course=course, chapter=chapter, owner=owner, api_key=api_key
+        return (
+            retrieve_multi(
+                question, k=k, course=course, chapter=chapter, owner=owner, api_key=api_key
+            )
+            or plain()
         )
     if settings.hyde:
-        return retrieve(
-            question, k=k, course=course, chapter=chapter, owner=owner, hyde=True, api_key=api_key
+        return (
+            retrieve(
+                question,
+                k=k,
+                course=course,
+                chapter=chapter,
+                owner=owner,
+                hyde=True,
+                api_key=api_key,
+            )
+            or plain()
         )
-    return retrieve(question, k=k, course=course, chapter=chapter, owner=owner)
+    return plain()
 
 
 def _cited_indices(text: str, count: int) -> list[int]:

@@ -248,11 +248,11 @@ def test_retrieve_hyde_uses_hypothetical_for_dense_question_for_sparse(monkeypat
 
 
 def test_answer_uses_hyde_when_enabled(monkeypatch):
-    called = {"single": 0, "multi": 0, "hyde_flag": None}
+    called = {"single": 0, "multi": 0, "hyde_flags": []}
 
     def fake_retrieve(q, *, k=5, course=None, chapter=None, owner=None, hyde=False, api_key=None):
         called["single"] += 1
-        called["hyde_flag"] = hyde
+        called["hyde_flags"].append(hyde)
         return []
 
     def fake_multi(q, *, k=5, course=None, chapter=None, owner=None, api_key=None):
@@ -268,8 +268,11 @@ def test_answer_uses_hyde_when_enabled(monkeypatch):
     )
     out = answer_mod.answer("q")
     assert out["refused"] is True
-    assert called["single"] == 1 and called["multi"] == 0
-    assert called["hyde_flag"] is True
+    assert called["multi"] == 0
+    # HyDE runs first; it comes back empty here, so the dense fallback runs after
+    # it. Both calls are recorded, in order -- and the refusal still stands,
+    # because the fallback found nothing either.
+    assert called["hyde_flags"] == [True, False]
 
 
 def test_answer_multi_query_takes_precedence_over_hyde(monkeypatch):
@@ -292,8 +295,10 @@ def test_answer_multi_query_takes_precedence_over_hyde(monkeypatch):
     )
     out = answer_mod.answer("q")
     assert out["refused"] is True
-    # multi_query wins; HyDE path is not taken.
-    assert called == {"single": 0, "multi": 1}
+    # multi_query wins: the HyDE branch is not taken. `single` is 1, not 0, because
+    # multi came back empty and the dense fallback ran -- see the fallback tests
+    # below. What matters here is that HyDE never got a turn.
+    assert called == {"single": 1, "multi": 1}
 
 
 def test_answer_default_off_uses_plain_single_query(monkeypatch):
@@ -315,3 +320,122 @@ def test_answer_default_off_uses_plain_single_query(monkeypatch):
     assert out["refused"] is True
     assert called["single"] == 1 and called["multi"] == 0
     assert called["hyde_flag"] is False
+
+
+# --- a booster must never narrow recall ------------------------------------
+# Both boosters rewrite the query with an LLM, so what they retrieve depends on
+# which model rewrites it. A rewrite can drift far enough that nothing clears the
+# threshold, and the caller is then told the course does not cover a question the
+# plain dense query answers fine. Worse, it is model-dependent: with multi_query
+# on, a visitor supplying their own API key is served by a different model than
+# the free-tier default, so the same question is answered for one visitor and
+# refused for the next. Observed in production, reproducibly. A refusal must mean
+# "the course does not cover this", never "the rewriter had a bad day".
+
+
+def _chunk(text: str):
+    return SimpleNamespace(
+        chunk=SimpleNamespace(text=text, course="C", chapter="1", page=1, id="x"),
+        score=0.9,
+    )
+
+
+def test_multi_query_returning_nothing_falls_back_to_dense(monkeypatch):
+    """An empty multi-query result must not become a refusal on its own."""
+    called = {"single": 0, "multi": 0}
+
+    def fake_retrieve(q, *, k=5, course=None, chapter=None, owner=None, hyde=False, api_key=None):
+        called["single"] += 1
+        return [_chunk("the dense query finds this just fine")]
+
+    def fake_multi(q, *, k=5, course=None, chapter=None, owner=None, api_key=None):
+        called["multi"] += 1
+        return []  # the rewrite drifted; nothing cleared the threshold
+
+    monkeypatch.setattr(answer_mod, "retrieve", fake_retrieve)
+    monkeypatch.setattr(answer_mod, "retrieve_multi", fake_multi)
+    monkeypatch.setattr(
+        answer_mod,
+        "get_settings",
+        lambda: SimpleNamespace(multi_query=True, multi_query_n=3, hyde=False),
+    )
+
+    results = answer_mod._retrieve("q", k=5, course=None, chapter=None)
+
+    assert called == {"single": 1, "multi": 1}
+    assert [r.chunk.text for r in results] == ["the dense query finds this just fine"]
+
+
+def test_hyde_returning_nothing_falls_back_to_dense(monkeypatch):
+    """Same guarantee on the HyDE branch."""
+    seen_hyde_flags = []
+
+    def fake_retrieve(q, *, k=5, course=None, chapter=None, owner=None, hyde=False, api_key=None):
+        seen_hyde_flags.append(hyde)
+        return [] if hyde else [_chunk("dense hit")]
+
+    monkeypatch.setattr(answer_mod, "retrieve", fake_retrieve)
+    monkeypatch.setattr(
+        answer_mod,
+        "get_settings",
+        lambda: SimpleNamespace(multi_query=False, hyde=True),
+    )
+
+    results = answer_mod._retrieve("q", k=5, course=None, chapter=None)
+
+    # HyDE first, then the plain dense retry.
+    assert seen_hyde_flags == [True, False]
+    assert [r.chunk.text for r in results] == ["dense hit"]
+
+
+def test_fallback_does_not_run_when_the_booster_found_something(monkeypatch):
+    """The fallback is a safety net, not a second query on every request."""
+    called = {"single": 0, "multi": 0}
+
+    def fake_retrieve(q, *, k=5, course=None, chapter=None, owner=None, hyde=False, api_key=None):
+        called["single"] += 1
+        return [_chunk("dense")]
+
+    def fake_multi(q, *, k=5, course=None, chapter=None, owner=None, api_key=None):
+        called["multi"] += 1
+        return [_chunk("multi found it")]
+
+    monkeypatch.setattr(answer_mod, "retrieve", fake_retrieve)
+    monkeypatch.setattr(answer_mod, "retrieve_multi", fake_multi)
+    monkeypatch.setattr(
+        answer_mod,
+        "get_settings",
+        lambda: SimpleNamespace(multi_query=True, multi_query_n=3, hyde=False),
+    )
+
+    results = answer_mod._retrieve("q", k=5, course=None, chapter=None)
+
+    assert called == {"single": 0, "multi": 1}, "no wasted round-trip on the happy path"
+    assert [r.chunk.text for r in results] == ["multi found it"]
+
+
+def test_a_genuinely_uncovered_question_is_still_refused(monkeypatch):
+    """The fallback must not turn a real refusal into an answer.
+
+    When the dense baseline finds nothing either, the course really does not cover
+    the question, and the refusal stands. This is the guarantee the whole product
+    rests on; the fallback must not erode it.
+    """
+
+    def fake_retrieve(q, *, k=5, course=None, chapter=None, owner=None, hyde=False, api_key=None):
+        return []
+
+    def fake_multi(q, *, k=5, course=None, chapter=None, owner=None, api_key=None):
+        return []
+
+    monkeypatch.setattr(answer_mod, "retrieve", fake_retrieve)
+    monkeypatch.setattr(answer_mod, "retrieve_multi", fake_multi)
+    monkeypatch.setattr(
+        answer_mod,
+        "get_settings",
+        lambda: SimpleNamespace(multi_query=True, multi_query_n=3, hyde=False),
+    )
+
+    out = answer_mod.answer("what is the capital of Mars?")
+    assert out["refused"] is True
+    assert out["sources"] == []
