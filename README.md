@@ -196,6 +196,7 @@ Each directory has its own README with a local guide to its files.
 | Guide | Topic |
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Design choices and a module-level walkthrough of the whole system |
+| [docs/tech/](docs/tech/README.md) | **Technology decision records** — one note per dependency: why it was chosen, what it costs, what was measured |
 | [docs/RUN-LOCAL.md](docs/RUN-LOCAL.md) | Run the full stack (Qdrant + API + web) locally and free with Ollama |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | Cloud deployment (Vercel + HF Spaces + Qdrant Cloud + Groq), the API Docker image, env-var reference, and R2 storage |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Optional ops: PostgreSQL backend and LangFuse tracing |

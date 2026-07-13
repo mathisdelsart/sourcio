@@ -6,6 +6,9 @@ never leave the course, always cite the source, and refuse when a question is
 not covered. This document explains how the system is put together so a new
 contributor can find their way around.
 
+Per-dependency decision records — why each technology was chosen, what it costs, and what
+was measured — live in [tech/](tech/README.md).
+
 ## Guiding principle
 
 | Risk with a general assistant | How `sourcio` addresses it |
