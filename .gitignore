@@ -35,3 +35,8 @@ eval/results*.json
 eval/ab_retrieval.json
 eval/latency.json
 eval/bench-*.json
+
+# Demo source videos: published as GitHub Release assets, not committed.
+# Keeping 78 MB of MP4 in git history would be permanent -- the GIFs in
+# docs/assets/demo/ are what the README actually renders.
+/demo/
