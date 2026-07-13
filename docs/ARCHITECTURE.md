@@ -13,7 +13,7 @@ contributor can find their way around.
 | Documents are lost between conversations | A persistent vector store (Qdrant), courses indexed once |
 | Answers drift to out-of-course methods | Retrieval is restricted to the course; nothing else is in context |
 | No verifiable sources | Citations (course, chapter, page) are produced by construction |
-| The model may hallucinate | A similarity threshold refuses uncovered questions, and an offline faithfulness judge guards against unsupported claims |
+| The model may hallucinate | Refusal is guarded twice: a similarity floor drops clearly-unrelated questions before any LLM runs, and the grounded prompt refuses when the retrieved sources do not cover the request. An offline faithfulness judge checks the rest |
 
 ## Component overview
 
@@ -55,6 +55,7 @@ offline / in CI.
       |                                  (opt-in: reranker, hybrid BM25/RRF, HyDE, multi-query)
       |
       +-- nothing clears SIMILARITY_THRESHOLD --> REFUSAL  (the LLM is never called)
+      |   (a coarse floor -- it stops the obviously unrelated, not everything)
       |
       v
   agent/nodes/{explain,generate,grade,reexplain,quiz}
@@ -89,9 +90,33 @@ offline / in CI.
 Two things this diagram is drawn to make unmissable, because they are the whole
 argument of the project:
 
-- **Refusal is a retrieval decision, not a model decision.** When nothing clears the
-  threshold, the pipeline stops *before* the LLM. A model instructed to "refuse when
-  unsure" eventually caves; a model that is never called cannot.
+- **Refusal is guarded twice, and the first guard is not a model.** When nothing
+  clears the similarity floor, the pipeline stops *before* the LLM: a model that is
+  never called cannot be talked into answering.
+
+  Be precise about what that floor does, though. It is **coarse**. Measured on the
+  benchmark corpus (`eval/calibrate.py`, 32 in-course vs 18 out-of-course
+  questions), in-course questions score 0.47-0.71 and out-of-course ones score
+  0.31-0.57: **the two overlap.** No threshold separates them cleanly, and the
+  shipped default (0.35) is set low on purpose, to favour recall on real,
+  heterogeneous documents. So most out-of-scope questions *do* reach the model.
+
+  What refuses them is the **second** guard: the grounded prompt, which is shown
+  only the retrieved chunks and instructed to refuse when they do not cover the
+  request. That guard carries the bulk of the work, and it holds — 23 refusal cases
+  in the endpoint benchmark, one miss.
+
+  And a **third** guard backs it, the only one that cannot be argued with: an answer
+  that cites **no source at all** is converted to a refusal (`core/answer.py`). That
+  is not a request to the model, it is a fact about its output — zero `[n]` markers
+  means it answered from its own memory rather than from the course, so the answer
+  is dropped. It is also why the citation rate is 100% and not merely high: an
+  uncited answer cannot leave the system.
+
+  Claiming the model "is never called" would be a nicer story. It is not the true
+  one, and a guarantee you have not measured is not a guarantee. The real design —
+  a cheap deterministic floor, a semantic judgement, and a deterministic backstop —
+  is stronger than the story it was replacing.
 - **Citations cannot be hallucinated.** The node sees chunk text under opaque indices
   `[1] [2] [3]`. Page numbers live in the Qdrant payload and are stitched in afterwards
   by `core/answer.py`. The model never handles a page number, so it cannot invent one.

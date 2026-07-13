@@ -178,27 +178,36 @@ def score_cases(cases: Sequence[EvalCase], score_fn: ScoreFn) -> tuple[list[floa
     return in_course, out_course
 
 
-def _default_score_fn(k: int = 5) -> ScoreFn:
+def _default_score_fn(k: int = 5, owner: str | None = None) -> ScoreFn:
     """Wire the real top-score scorer, imported lazily.
 
     Queries Qdrant with no score threshold and returns the best chunk's
     similarity, or 0.0 when nothing is retrieved. The retrieval and embedding
     imports happen inside the function so this module stays importable without
     them (CI lint/tests do not load the embedding model).
+
+    ``owner`` scopes the query to one account's material, exactly as the API does.
+    Without it the whole collection is scored, so an out-of-course question can
+    score highly against *another account's* documents — and the threshold gets
+    calibrated to separate classes it will never actually see. Pass the account
+    that owns the benchmark corpus.
     """
     from qdrant_client import QdrantClient
 
     from core.config import get_settings
+    from core.retrieval import owner_scope_filter
     from ingestion.embed import embed_query
 
     settings = get_settings()
     client = QdrantClient(url=settings.qdrant_url)
+    query_filter = owner_scope_filter(owner) if owner else None
 
     def top_score(question: str) -> float:
         response = client.query_points(
             collection_name=settings.qdrant_collection,
             query=embed_query(question),
             limit=k,
+            query_filter=query_filter,
             # No score_threshold: we want the raw top similarity to calibrate it.
             with_payload=False,
         )
@@ -280,11 +289,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=5,
         help="Top-k chunks to consider when taking each question's top score.",
     )
+    parser.add_argument(
+        "--owner",
+        default=None,
+        help=(
+            "Scope scoring to this account's material, as the API does. Without it "
+            "the whole collection is scored and the threshold is calibrated against "
+            "documents the caller will never be shown."
+        ),
+    )
     args = parser.parse_args(argv)
 
     from core.config import get_settings
 
-    calibration = calibrate(dataset_path=args.dataset, score_fn=_default_score_fn(k=args.k))
+    calibration = calibrate(
+        dataset_path=args.dataset, score_fn=_default_score_fn(k=args.k, owner=args.owner)
+    )
     print(format_report(calibration, get_settings().similarity_threshold))
     return 0
 
