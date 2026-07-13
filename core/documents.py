@@ -660,15 +660,27 @@ def _delete_orphaned_originals(
 
     Best-effort throughout: the points are already deleted by the time this runs,
     and a storage failure must not turn a successful delete into a failed request.
+
+    No path handed to the filesystem is ever *built* from the request. Both the
+    course name and the document name arrive from outside, so instead of joining
+    them onto a root they are only ever **compared** against entries the code
+    itself enumerated from the confined uploads root (:func:`_entry_in`). A crafted
+    name therefore cannot name a path — at worst it matches nothing. That is
+    stronger than sanitising and joining, and unlike a sanitiser it is verifiable
+    by inspection: the argument to ``rmtree``/``remove`` provably originates from a
+    directory scan, not from user input.
     """
     from qdrant_client.models import FieldCondition, MatchValue
 
     with contextlib.suppress(Exception):
         remaining = client.count(collection_name=collection, count_filter=scope(), exact=True).count
 
+        course_dir = _entry_in(UPLOADS_DIR, _slug(course), want_dir=True)
+
         if remaining == 0:
             # Nothing of this course is left: drop the whole directory and prefix.
-            shutil.rmtree(_course_dir(course), ignore_errors=True)
+            if course_dir is not None:
+                shutil.rmtree(course_dir, ignore_errors=True)
             if storage.configured():
                 storage.delete_prefix(_slug(course) + "/")
             return
@@ -682,12 +694,31 @@ def _delete_orphaned_originals(
             ).count
             if still_used:
                 continue
-            path = _safe_join(_course_dir(course), name)
-            if path is not None:
-                with contextlib.suppress(OSError):
-                    os.remove(path)
+            if course_dir is not None:
+                path = _entry_in(course_dir, _safe_filename(name), want_dir=False)
+                if path is not None:
+                    with contextlib.suppress(OSError):
+                        os.remove(path)
             if storage.configured():
                 storage.delete_object(_r2_key(course, name))
+
+
+def _entry_in(root: str, name: str, *, want_dir: bool) -> str | None:
+    """Return the path of the entry called ``name`` directly inside ``root``.
+
+    The returned path comes from scanning ``root`` — it is never constructed by
+    joining ``name`` onto anything. ``name`` is used only as an equality test on
+    the entries found, so it cannot contribute a path component, and a traversal
+    attempt (``../..``) simply matches nothing.
+
+    Returns ``None`` when there is no such entry, which callers treat as "nothing
+    to delete".
+    """
+    with contextlib.suppress(OSError):
+        for entry in os.scandir(os.path.abspath(root)):
+            if entry.name == name and entry.is_dir() == want_dir:
+                return entry.path
+    return None
 
 
 def _set_payload_scoped(
