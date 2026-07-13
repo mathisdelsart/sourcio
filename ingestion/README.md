@@ -13,7 +13,9 @@ PDF / .md / .txt -> extract/load -> chunk -> embed -> index -> Qdrant
 | File | Responsibility |
 | --- | --- |
 | `run.py` | Entry point (`python -m ingestion.run <path> --course "..."`). Processes pages in batches (extract -> chunk -> index) so a mid-run crash keeps earlier progress. |
-| `extract.py` | Math-aware PDF extraction with per-page routing: plain pages go through PyMuPDF (free); math/figure pages are rasterized and transcribed by a vision model into Markdown with LaTeX preserved. Parallel vision calls with 429-retry backoff. |
+| `extract.py` | Orchestrates extraction: routes each page, runs the vision calls in parallel (bounded), and keeps output order. |
+| `mathdetect.py` | The routing decision itself — `needs_vision(PageFeatures)`. A page needs the vision model when it embeds images, exposes math-like symbols, or yields too little recoverable text. Pure, so it is unit-testable without a PDF. |
+| `retry.py` | `with_rate_limit_retry` — retries **only** HTTP 429 with exponential backoff. Any other exception is re-raised, so a real bug surfaces instead of being retried into silence. The sleep is injectable, so tests wait for nothing. |
 | `load.py` | Plain-text loading for `.md` / `.txt` prose — no vision model; split into overlapping windows, emitting the same `Page` contract. |
 | `chunk.py` | Adaptive chunking by `doc_type`: one slide -> one chunk; prose -> ~500-token windows with overlap. Stable `uuid5` chunk ids make re-ingestion idempotent. |
 | `embed.py` | Local multilingual embeddings (`BAAI/bge-m3`), L2-normalized, model cached. Also exposes bge-m3 lexical (sparse) weights for hybrid retrieval. |

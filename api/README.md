@@ -10,6 +10,11 @@ modules.
 | File | Responsibility |
 | --- | --- |
 | `main.py` | Builds the app, binds the database engine on startup, and mounts the routers. |
+| `routers/` | One module per domain (`ask`, `exercise`, `grade`, `quiz`, `documents`, `sessions`, `history`, `feedback`, `courses`, `source`, `health`, `account`). Each is a thin adapter over `core/` and `agent/`. |
+| `schemas/` | Pydantic request/response models, split by domain. Validation and the OpenAPI schema are both derived from them. |
+| `deps.py` | Shared FastAPI dependencies: the caller's identity from the JWT, the optional per-request visitor API key, the `X-API-Key` gate. |
+| `runtime.py` | A leaf module holding the bound engine and the node/answer functions the routers call. It exists to break the import cycle between `main.py` and the routers, and it is the seam tests monkeypatch. |
+| `jobs.py` | In-process registry of background jobs (document ingestion, streamed answers) so a long upload survives the HTTP request and can be polled. |
 | `auth.py` | JWT account auth (HS256) and bcrypt password hashing; the opt-in `X-API-Key` gate. |
 | `middleware.py` | Request-id propagation, security headers (HSTS when enabled), and an in-process per-IP rate limiter. |
 | `logging_config.py` | JSON structured logging at `Settings.log_level`; a global handler turns unhandled errors into a generic 500 without leaking a stack trace. |

@@ -70,8 +70,12 @@ web/
 │   ├── CitationChip, HealthBadge, LevelSelector, Markdown, SettingsPanel, AuthMenu ...
 │   └── Hero, Features, HowItWorks, StatsBand ...   # landing-page sections
 └── lib/
-    ├── api.ts            # typed client, one function per endpoint
-    ├── i18n.tsx          # English / French / Dutch strings and locale toggle
+    ├── api/              # the typed client, split by concern
+    │   ├── client.ts     #   transport: base URL, headers, error mapping
+    │   ├── types.ts      #   request/response types
+    │   └── endpoints.ts  #   one function per endpoint
+    ├── i18n.tsx          # locale context and the toggle
+    ├── locales/          # en.ts / fr.ts / nl.ts — the strings themselves
     ├── storage.ts        # SSR-safe localStorage helpers + id generation
     ├── exportAnswer.ts   # export a grounded answer as clean Markdown
     ├── highlight.ts      # highlight the source excerpt an answer relied on

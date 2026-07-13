@@ -50,7 +50,7 @@ Two findings worth keeping, both from running it rather than reading it:
 | `benchmark.py` | **Offline** provider benchmark: extends `run_eval` with extra metrics (citation rate, answer-keyword, latency) over the same `dataset.jsonl`, run once per LLM provider. See [Provider benchmark](#provider-benchmark) below. |
 | `compare_report.py` | Render two `benchmark.py` JSON runs into a side-by-side Markdown table. |
 | `live_eval.py` | **Live** end-to-end runner: drives the running HTTP API (`/ask`, `/exercise`, `/quiz`) over `live_eval_cases.json` with an external LLM reviewer, writing each run under `eval/live_runs/`. A manual smoke tool, not run in CI. |
-| `dataset.jsonl` | The 42-case labeled set (`run_eval`, `benchmark`, `calibrate`, `ab_retrieval`). |
+| `dataset.jsonl` | The 50-case labeled set (`run_eval`, `benchmark`, `calibrate`, `ab_retrieval`). |
 | `live_eval_cases.json` | The 71-case endpoint set for `live_eval.py`. |
 
 ## How it fits
@@ -76,8 +76,12 @@ a free-tier (Groq) model.
 
 `dataset.jsonl` carries `question`, `expect_refusal`, `note`, `expect_keywords`
 plus a `category`: **factual** (17) single-fact questions, **math** (7)
-formulas/arithmetic, **synthesis** (8) short reasoning, **refuse** (10)
-out-of-scope. That is 32 answer-cases + 10 refuse-cases.
+formulas/arithmetic, **synthesis** (8) short reasoning, **refuse** (18)
+out-of-scope. That is 32 answer-cases + 18 refuse-cases.
+
+The refuse-cases outnumber what a pass/fail suite would need on purpose: `calibrate.py`
+separates two score distributions, and estimating the out-of-scope one from a handful of
+questions gives a threshold you cannot trust.
 
 The refusal cases are deliberately **adjacent** to the material — the Sharpe ratio,
 CAPM, the Schwarzschild radius — not absurd ones. Refusing "the capital of Belgium"

@@ -1,6 +1,6 @@
 # tests/
 
-The pytest suite: 841 tests, green in CI behind a coverage gate (>=84%). Tests run with **no paid API
+The pytest suite: 853 tests, green in CI behind a coverage gate (>=84%). Tests run with **no paid API
 calls** — every LLM, judge, retriever, sleep, and database session is injectable, so the suite stubs
 them and exercises real code paths deterministically.
 
@@ -9,12 +9,17 @@ them and exercises real code paths deterministically.
 Tests mirror the packages they cover, one file per area:
 
 - **Ingestion** — `test_extract.py`, `test_ingest_text.py`
+- **CLI** — `test_ask_cli.py` (`python -m core.ask`, the one consumer of `core.answer` outside the API)
 - **Retrieval and grounding** — `test_retrieval.py`, `test_grounding.py`, `test_hybrid.py`, `test_hyde.py`, `test_neighbors.py`, `test_query.py`, `test_source.py`, `test_courses.py`, `test_documents.py`
 - **Agent** — `test_agent.py`, `test_quiz.py`
-- **API** — `test_api.py`, `test_auth.py`, `test_ownership.py`, `test_multiuser.py`, `test_sessions.py`, `test_feedback.py`, `test_cors.py`, `test_middleware.py`, `test_errors.py`
+- **API** — `test_api.py`, `test_router_errors.py` (the error and refusal branches of every router), `test_auth.py`, `test_ownership.py`, `test_multiuser.py`, `test_sessions.py`, `test_feedback.py`, `test_cors.py`, `test_middleware.py`, `test_errors.py`
 - **Storage** — `test_db.py`, `test_migrations.py`, `test_storage.py`, `test_postgres_backend.py`
 - **Config and observability** — `test_config.py`, `test_budget.py`, `test_obs.py`, `test_observability.py`, `test_latency.py`
 - **Eval** — `test_eval.py`, `test_eval_report.py`, `test_benchmark.py`, `test_calibrate.py`, `test_ab_retrieval.py`
+
+`conftest.py` holds an autouse fixture that clears the ambient environment (LangFuse keys, a
+token budget). Without it, a developer's `.env` leaks into the suite and changes what the code
+under test does — locally the tests would fail while CI, which has no `.env`, stayed green.
 
 ## Run it
 
